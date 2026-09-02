@@ -1339,3 +1339,54 @@ body.arrastando-aba .aba { cursor: grabbing; }
    mesma fechou. */
 .aba.solta .aba-nome { color: var(--aviso); }
 .aba-solta { color: var(--aviso); margin-right: 4px; font-size: 11px; }
+
+/* ------------------------------------------------ T14: as ações destrutivas */
+
+/* Não podem parecer irmãs de "Colunas" e "Filtro". */
+.ferramenta.risco { color: var(--erro); }
+.ferramenta.risco:hover { background: color-mix(in srgb, var(--erro) 12%, transparent); }
+
+/* ---- SweetAlert vestido com o tema do app ----
+   Sem isto ele chega branco sobre uma tela escura, com a fonte dele. O ponto
+   de usá-lo é justamente ser DA APLICAÇÃO, e não do sistema como o confirm(). */
+.swal2-popup.dbu-swal {
+  background: var(--bg2);
+  color: var(--txt1);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+}
+.swal2-popup.dbu-swal .swal2-title { color: var(--txt1); font-size: 15px; }
+.swal2-popup.dbu-swal .swal2-html-container { color: var(--txt2); font-size: 12.5px; line-height: 1.55; }
+.swal2-popup.dbu-swal .swal2-actions { gap: 8px; }
+.swal2-popup.dbu-swal .swal2-styled { border-radius: 5px; font-size: 12.5px; box-shadow: none; }
+/* A HIERARQUIA VISUAL SEGUE A SEGURANÇA, e isso só apareceu no screenshot.
+   Na primeira versão "Não, seguir sem cópia" saía em vermelho preenchido e
+   "Sim, copiar antes" sem preenchimento nenhum: o olho ia direto para a opção
+   que perde dado. Vermelho sinaliza perigo, mas também ATRAI — e num diálogo
+   destrutivo atrair é o efeito errado. */
+/* `--amber` e `--acento-texto`, que e o par que o `.primario` do app já usa.
+   A primeira versão escrevia `var(--acento)` — variável que NÃO EXISTE: o fundo
+   saía transparente e o texto, escuro sobre escuro, ficava ilegível. Medido com
+   getComputedStyle, não visto no olho. */
+.swal2-popup.dbu-swal .swal2-styled.swal2-confirm {
+  background: var(--amber);
+  color: var(--acento-texto);
+  font-weight: 600;
+}
+/* A saída destrutiva: contorno e texto vermelhos, sem preenchimento. Continua
+   legível e marcada como risco, sem competir pelo clique. */
+.swal2-popup.dbu-swal .swal2-styled.swal2-deny {
+  background: transparent;
+  color: var(--erro);
+  border: 1px solid var(--erro);
+}
+.swal2-popup.dbu-swal .swal2-styled.swal2-cancel { background: var(--bg3); color: var(--txt1); }
+.swal2-container.dbu-swal-fundo { background: rgba(0, 0, 0, .55); }
+
+/* O arquivo citado no aviso: monoespaçado, para não se confundir com a frase. */
+.dbu-swal code {
+  font-family: var(--mono); font-size: 12px;
+  background: var(--bg3); padding: 1px 5px; border-radius: 3px;
+}

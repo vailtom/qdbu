@@ -1,0 +1,278 @@
+/*
+ * api_bulk.prg - PACK e ZAP. As primeiras operacoes que DESTROEM dado.
+ *
+ * ATE AQUI TUDO SO LIA. Isto muda com este arquivo, e por isso ele e o unico
+ * lugar do projeto onde as regras de docs/10-integridade.md sao obrigatorias
+ * linha a linha, e nao recomendacoes.
+ *
+ * A SEQUENCIA, e ela e a mesma para os dois comandos:
+ *
+ *   1. a UI avisa da perda e pergunta se segue          (SweetAlert, 3 saidas)
+ *   2. a UI pergunta se quer backup antes
+ *   3. AQUI: fecha a area, toma exclusivo, opera, devolve compartilhado, religa
+ *
+ * Os passos 1 e 2 sao da tela de proposito: a DLL nao pergunta nada. Ela recebe
+ * `backup` ja decidido e executa. Uma DLL que faz perguntas nao tem como ser
+ * testada sem GUI, e o cliente C (tests/) precisa poder exercitar isto.
+ *
+ * O EXCLUSIVO E TENTADO DEPOIS DE PERGUNTAR, e nao antes.
+ *
+ * Parece errado -- "por que perguntar se pode nao dar?" -- mas conferir
+ * exclusividade EXIGE TOMA-LA, o que ja obriga a fechar a area. Uma
+ * pre-conferencia seria tao disruptiva quanto a tentativa real, e custaria um
+ * ciclo de fechar/reabrir so para descobrir uma coisa que a tentativa
+ * descobriria de qualquer jeito. Decisao do autor, 02/09/2026.
+ *
+ * AS DUAS ESTRATEGIAS DE ZAP, e a diferenca de custo e enorme
+ *
+ *   COM backup    RENOMEIA o original (ele VIRA o backup) e cria um DBF vazio
+ *                 com a mesma estrutura. Instantaneo, INDEPENDENTE DO TAMANHO:
+ *                 um arquivo de 800 MB e "zapado" em milissegundos, porque nada
+ *                 e copiado nem apagado -- so um nome muda.
+ *
+ *   SEM backup    ZAP + dbCommit(). O comando xBase, direto.
+ *
+ * A estrategia do rename e do autor, e e melhor que copiar-depois-zapar em
+ * todos os eixos: mais rapida, nao precisa de espaco para uma copia, e nao ha
+ * janela em que exista meia copia. Ver docs/11-backup.md.
+ *
+ * PACK nao tem esse atalho: ele PRESERVA os registros nao marcados, entao o
+ * arquivo resultante e diferente do original e o original tem de ser copiado
+ * de verdade antes.
+ */
+
+#include "dbstruct.ch"
+#include "fileio.ch"
+#include "dbinfo.ch"
+
+
+STATIC FUNCTION ParStr( hP, cChave )
+
+   IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave )
+      RETURN ""
+   ENDIF
+
+   RETURN iif( HB_ISSTRING( hP[ cChave ] ), hP[ cChave ], "" )
+
+
+STATIC FUNCTION ParLog( hP, cChave, lPadrao )
+
+   IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave )
+      RETURN lPadrao
+   ENDIF
+
+   RETURN iif( HB_ISLOGICAL( hP[ cChave ] ), hP[ cChave ], lPadrao )
+
+
+/*
+ * bulk.zap {"h":"h7","backup":true}
+ *
+ * COM backup: renomeia o original e cria um vazio no lugar.
+ * SEM backup: ZAP + dbCommit().
+ */
+FUNCTION Api_Bulk_Zap( hP )
+
+   LOCAL cH      := ParStr( hP, "h" )
+   LOCAL lBackup := ParLog( hP, "backup", .T. )
+
+   RETURN Destrutiva( cH, "zap", lBackup )
+
+
+/*
+ * bulk.pack {"h":"h7","backup":true}
+ *
+ * COM backup: copia por registro (docs/11-backup.md) e depois PACK + dbCommit().
+ * SEM backup: PACK + dbCommit().
+ */
+FUNCTION Api_Bulk_Pack( hP )
+
+   LOCAL cH      := ParStr( hP, "h" )
+   LOCAL lBackup := ParLog( hP, "backup", .T. )
+
+   RETURN Destrutiva( cH, "pack", lBackup )
+
+
+/*
+ * O corpo comum. UMA rotina para os dois comandos, pelo mesmo motivo que o
+ * rebind e uma so: duas implementacoes seriam dois conjuntos de manhas, e a que
+ * estivesse errada erraria em silencio.
+ */
+STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
+
+   LOCAL xErro, hInfo, hEstado, aEstru
+   LOCAL cArq, cAlias, cMemo, nWa
+   LOCAL cSelo, cBackup, nAntes, nDepois, cExtMemo
+   LOCAL aFalhas := {}
+
+   IF ( xErro := SessSelect( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   hInfo  := SessHandle( cH )
+   cArq   := hInfo[ "path" ]
+   cAlias := hInfo[ "alias" ]
+   nAntes := LastRec()
+
+   /*
+    * A estrutura E A EXTENSAO DO MEMO sao lidas ANTES de fechar.
+    *
+    * Depois do dbCloseArea() nao ha work area selecionada, e qualquer dbInfo()
+    * vira erro de RUNTIME -- que sobe pelo RECOVER do dispatcher como "ERR:" e
+    * chega a tela como "Erro nao identificado", sem codigo e sem explicacao.
+    * Foi exatamente o que aconteceu na primeira versao: o dbInfo(DBI_MEMOEXT)
+    * estava depois do fechamento, e o ZAP com backup morria ali.
+    */
+   aEstru := dbStruct()
+   cExtMemo := dbInfo( DBI_MEMOEXT )
+
+   /* Fotografa indices, ordem, filtro e cursor. R5. */
+   hEstado := EstadoAntes( cH )
+
+   cSelo   := CarimboAgora()
+   cBackup := NomeDoBackup( cArq, cSelo )
+
+   dbCloseArea()
+
+   /* ---------------------------------------------------- ZAP com renomeacao */
+   IF cAcao == "zap" .AND. lBackup
+
+      /*
+       * Renomear exige o arquivo FECHADO -- por nos e por todos. Se outro
+       * processo o tem aberto, o FRename falha, e essa e a resposta certa:
+       * melhor recusar que operar com alguem lendo.
+       */
+      IF FRename( cArq, cBackup ) != 0
+         RETURN Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
+                        Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "rename failed", "h", ;
+                             { "file" => hb_FNameNameExt( cArq ) } ) )
+      ENDIF
+
+      /* O memo acompanha: um DBF com campo memo cujo .DBT ficou para tras nao
+         abre. Renomeia com a mesma base, para o par continuar par. */
+      cMemo := hb_FNameExtSet( cArq, cExtMemo )
+      IF hb_FileExists( cMemo )
+         FRename( cMemo, hb_FNameExtSet( cBackup, hb_FNameExt( cMemo ) ) )
+      ENDIF
+
+      BEGIN SEQUENCE WITH {| e | Break( e ) }
+         dbCreate( cArq, aEstru )
+      RECOVER
+         /* Nao conseguiu criar o vazio: DESFAZ a renomeacao. Deixar o usuario
+            sem o arquivo no lugar dele seria o pior desfecho possivel. */
+         FRename( cBackup, cArq )
+         RETURN Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
+                        Err( "ERROR_ZAP_CREATE_FAILED", "could not create the empty file", ;
+                             "h", { "file" => hb_FNameNameExt( cArq ) } ) )
+      END SEQUENCE
+
+      xErro := Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+      IF xErro != NIL
+         RETURN xErro
+      ENDIF
+
+      RETURN Ok( { "action"   => "zap", ;
+                   "strategy" => "rename", ;
+                   "file"     => hb_FNameNameExt( cArq ), ;
+                   "backup"   => hb_FNameNameExt( cBackup ), ;
+                   "before"   => nAntes, ;
+                   "after"    => 0 } )
+   ENDIF
+
+   /* ------------------------------------- as demais: exclusivo e o comando */
+
+   nWa := AbreNaArea( cArq, cAlias, .T. )      /* EXCLUSIVO */
+
+   IF nWa == 0
+      RETURN Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
+                     Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "another program is using it", ;
+                          "h", { "file" => hb_FNameNameExt( cArq ) } ) )
+   ENDIF
+
+   SessReattach( cH, nWa, .T. )
+
+   /* PACK com backup: copia por REGISTRO, sob o exclusivo que ja temos. E a
+      unica forma de o retrato ser consistente -- ninguem escreve agora. */
+   IF cAcao == "pack" .AND. lBackup
+      Dbu_JobBegin( JobMsg( "UI_JOB_BACKUP", hb_FNameNameExt( cBackup ) ), LastRec() )
+      xErro := CopiaPorRegistro( cBackup, {| n, t | HB_SYMBOL_UNUSED( t ), Dbu_Progress( n ) } )
+      Dbu_JobEnd()
+
+      IF xErro != NIL
+         /* Backup falhou: NAO opera. R4 -- backup antes, e se nao houve backup
+            nao ha operacao. */
+         Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+         RETURN xErro
+      ENDIF
+   ENDIF
+
+   BEGIN SEQUENCE WITH {| e | Break( e ) }
+      IF cAcao == "pack"
+         Dbu_JobBegin( JobMsg( iif( cAcao == "pack", "UI_JOB_PACK", "UI_JOB_ZAP" ), ;
+                               hb_FNameNameExt( cArq ) ), 0 )
+         __dbPack()
+         Dbu_JobEnd()
+      ELSE
+         __dbZap()
+      ENDIF
+      dbCommit()
+   RECOVER
+      Dbu_JobEnd()
+      Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+      RETURN Err( iif( cAcao == "pack", "ERROR_PACK_FAILED", "ERROR_ZAP_FAILED" ), ;
+                  "operation failed", "h", { "file" => hb_FNameNameExt( cArq ) } )
+   END SEQUENCE
+
+   nDepois := LastRec()
+
+   xErro := Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+   IF xErro != NIL
+      RETURN xErro
+   ENDIF
+
+   HB_SYMBOL_UNUSED( aFalhas )
+
+   RETURN Ok( { "action"   => cAcao, ;
+                "strategy" => iif( lBackup, "copy", "direct" ), ;
+                "file"     => hb_FNameNameExt( cArq ), ;
+                "backup"   => iif( lBackup .AND. cAcao == "pack", ;
+                                   hb_FNameNameExt( cBackup ), "" ), ;
+                "before"   => nAntes, ;
+                "after"    => nDepois, ;
+                "removed"  => Max( 0, nAntes - nDepois ) } )
+
+
+/*
+ * Devolve o arquivo ao modo de trabalho e religa o ambiente.
+ *
+ * CHAMADA EM TODO CAMINHO DE SAIDA, inclusive nos de erro. Desligar e nao
+ * religar deixaria a tela pior do que antes de tentar -- e e por isso que ela
+ * recebe o erro a propagar em vez de quem chama fazer as duas coisas: ter de
+ * lembrar de religar antes de cada RETURN e o tipo de coisa que se esquece.
+ *
+ * Se nem o modo anterior voltar, o handle vira `detached` (R6): a aba fica na
+ * tela, marcada, com o motivo, e a grade e descartada.
+ */
+STATIC FUNCTION Reabre( cH, cArq, cAlias, lModo, hEstado, xErroOriginal )
+
+   LOCAL nWa
+
+   /* Se a area continua aberta (caminho de sucesso do PACK), fecha primeiro:
+      voltar ao compartilhado exige largar o exclusivo. */
+   IF ! Empty( Alias() )
+      dbCloseArea()
+   ENDIF
+
+   nWa := AbreNaArea( cArq, cAlias, lModo )
+
+   IF nWa == 0
+      SessDetach( cH, "ERROR_REOPEN_FAILED" )
+      RETURN Err( "ERROR_HANDLE_DETACHED", "could not reopen after the operation", "h", ;
+                  { "handle" => cH, ;
+                    "file"   => hb_FNameNameExt( cArq ), ;
+                    "why"    => "ERROR_REOPEN_FAILED" } )
+   ENDIF
+
+   SessReattach( cH, nWa, lModo )
+   Religar( hEstado )
+
+   RETURN xErroOriginal

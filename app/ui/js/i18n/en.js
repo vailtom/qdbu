@@ -598,4 +598,48 @@
 
   UI_CLOSE_TAB_SHORT: "Close the tab",
 
+
+  // ============================================ T14: PACK and ZAP
+  UI_PACK: "Pack",
+  UI_PACK_TITLE: "Permanently remove records marked for deletion",
+  UI_ZAP: "Zap",
+  UI_ZAP_TITLE: "Delete ALL records, keeping the structure",
+
+  UI_JOB_PACK: "Packing {file}…",
+  UI_JOB_ZAP: "Zapping {file}…",
+
+  UI_ZAP_WARN_TITLE: "Delete every record?",
+  UI_ZAP_WARN:
+    "This deletes the {n} records in '{file}'. The field structure is kept, " +
+    "but the data does not come back on its own.",
+  UI_PACK_WARN_TITLE: "Pack the file?",
+  UI_PACK_WARN:
+    "This permanently removes the records marked for deletion in '{file}' " +
+    "and renumbers the rest. Record numbers change.",
+
+  UI_ASK_BACKUP_TITLE: "Make a copy first?",
+  UI_ASK_BACKUP:
+    "The copy stays in the same folder, with the time in its name, and opens " +
+    "in DBU like any file — you can check it before deleting the copy.",
+  UI_WITH_BACKUP: "Yes, copy first",
+  UI_WITHOUT_BACKUP: "No, go without a copy",
+  UI_GO_AHEAD: "Continue",
+
+  UI_ZAP_DONE: "'{file}' zapped: {n} records deleted.",
+  UI_ZAP_DONE_BACKUP:
+    "'{file}' zapped: {n} records deleted. The copy is in '{backup}'.",
+  UI_PACK_DONE: { one: "'{file}' packed: {n} record removed.", other: "'{file}' packed: {n} records removed." },
+  UI_PACK_DONE_BACKUP: "'{file}' packed: {n} removed. The copy is in '{backup}'.",
+  UI_NOTHING_TO_PACK: "'{file}' has no records marked; nothing was changed.",
+
+  ERROR_ZAP_CREATE_FAILED:
+    "Could not create the empty file for '{file}'. The original was restored " +
+    "and nothing was lost.",
+  ERROR_ZAP_FAILED: "The ZAP on '{file}' failed. The file was not changed.",
+  ERROR_PACK_FAILED: "Packing '{file}' failed. The file was not changed.",
+
+  UI_DONE: "Done",
+  UI_ERROR: "Did not work",
+  UI_OK: "Got it",
+
 };

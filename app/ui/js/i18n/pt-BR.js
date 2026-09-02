@@ -621,4 +621,50 @@
 
   UI_CLOSE_TAB_SHORT: "Fechar a aba",
 
+
+  // ============================================ T14: PACK e ZAP
+  UI_PACK: "Compactar",
+  UI_PACK_TITLE: "Remover definitivamente os registros marcados para exclusão",
+  UI_ZAP: "Esvaziar",
+  UI_ZAP_TITLE: "Apagar TODOS os registros, mantendo a estrutura",
+
+  UI_JOB_PACK: "Compactando {file}…",
+  UI_JOB_ZAP: "Esvaziando {file}…",
+
+  // O aviso. Diz o que vai acontecer com ESTE arquivo, com números — não um
+  // "tem certeza?" genérico, que ensina a clicar sem ler.
+  UI_ZAP_WARN_TITLE: "Apagar todos os registros?",
+  UI_ZAP_WARN:
+    "Isto apaga os {n} registros de '{file}'. A estrutura dos campos é " +
+    "mantida, mas os dados não voltam sozinhos.",
+  UI_PACK_WARN_TITLE: "Compactar o arquivo?",
+  UI_PACK_WARN:
+    "Isto remove definitivamente os registros marcados para exclusão de " +
+    "'{file}' e renumera os que sobram. Os números de registro mudam.",
+
+  UI_ASK_BACKUP_TITLE: "Fazer uma cópia antes?",
+  UI_ASK_BACKUP:
+    "A cópia fica na mesma pasta, com a hora no nome, e abre no DBU como " +
+    "qualquer arquivo — dá para conferir antes de apagar a cópia.",
+  UI_WITH_BACKUP: "Sim, copiar antes",
+  UI_WITHOUT_BACKUP: "Não, seguir sem cópia",
+  UI_GO_AHEAD: "Continuar",
+
+  UI_ZAP_DONE: "'{file}' esvaziado: {n} registros apagados.",
+  UI_ZAP_DONE_BACKUP:
+    "'{file}' esvaziado: {n} registros apagados. A cópia ficou em '{backup}'.",
+  UI_PACK_DONE: { one: "'{file}' compactado: {n} registro removido.", other: "'{file}' compactado: {n} registros removidos." },
+  UI_PACK_DONE_BACKUP: "'{file}' compactado: {n} removidos. A cópia ficou em '{backup}'.",
+  UI_NOTHING_TO_PACK: "'{file}' não tem registros marcados; nada foi alterado.",
+
+  ERROR_ZAP_CREATE_FAILED:
+    "Não foi possível criar o arquivo vazio de '{file}'. O original foi " +
+    "restaurado e nada se perdeu.",
+  ERROR_ZAP_FAILED: "O ZAP de '{file}' falhou. O arquivo não foi alterado.",
+  ERROR_PACK_FAILED: "A compactação de '{file}' falhou. O arquivo não foi alterado.",
+
+  UI_DONE: "Pronto",
+  UI_ERROR: "Não deu",
+  UI_OK: "Entendi",
+
 };

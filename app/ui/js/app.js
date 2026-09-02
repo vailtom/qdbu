@@ -4434,3 +4434,157 @@ $("pv-rodar").addEventListener("click", async () => {
     botao.disabled = false;
   }
 });
+
+
+// ------------------------------------------------------- T14: PACK e ZAP
+
+/*
+ * O PRIMEIRO CÓDIGO DESTA APLICAÇÃO QUE DESTRÓI DADO.
+ *
+ * Até aqui tudo só lia, ou criava arquivo novo ao lado. Daqui em diante o
+ * arquivo do cliente muda — e por isso o fluxo tem duas perguntas, não uma.
+ *
+ *   1. avisa da perda e pergunta se segue
+ *   2. pergunta se quer cópia antes
+ *   3. executa
+ *
+ * As perguntas ficam AQUI e não na DLL: uma DLL que pergunta não tem como ser
+ * testada sem GUI, e o cliente C precisa poder exercitar bulk.pack/bulk.zap.
+ * A DLL recebe `backup` já decidido.
+ */
+
+/*
+ * SweetAlert vestido com o tema do app.
+ *
+ * O `window.confirm()` que havia antes é modal do SISTEMA: sai com a cara do
+ * Windows, ignora os 12 temas, e os botões vêm no idioma do SO e não no que a
+ * pessoa escolheu. Pior, só tem duas saídas — e o fluxo do ZAP precisa de três
+ * (com cópia, sem cópia, desistir). Com `confirm()` viravam duas caixas
+ * empilhadas, e a segunda parece que o app está insistindo.
+ */
+function swalBase(extra) {
+  return Object.assign(
+    {
+      customClass: { popup: "dbu-swal", container: "dbu-swal-fundo" },
+      buttonsStyling: true,
+      reverseButtons: true,
+      focusCancel: true,
+      heightAuto: false, // senão o SweetAlert mexe no <body> e a grade pula
+    },
+    extra || {}
+  );
+}
+
+const escapaHtml = (t) =>
+  String(t).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
+  );
+
+/*
+ * Pergunta em três saídas: "sim, com cópia" / "sim, sem cópia" / desistir.
+ *
+ * Devolve `true`, `false` ou `null` — e `null` (desistir) é o padrão de
+ * qualquer coisa inesperada, porque o desfecho seguro é não fazer nada.
+ */
+async function perguntarBackup() {
+  const r = await Swal.fire(
+    swalBase({
+      icon: "question",
+      title: T("UI_ASK_BACKUP_TITLE"),
+      html: escapaHtml(T("UI_ASK_BACKUP")),
+      showDenyButton: true,
+      showCancelButton: true,
+      confirmButtonText: T("UI_WITH_BACKUP"),
+      denyButtonText: T("UI_WITHOUT_BACKUP"),
+      cancelButtonText: T("UI_CANCEL"),
+    })
+  );
+  if (r.isConfirmed) return true;
+  if (r.isDenied) return false;
+  return null;
+}
+
+/*
+ * O fluxo completo, comum a PACK e ZAP.
+ *
+ * O aviso cita o ARQUIVO e os NÚMEROS deste arquivo — não é um "tem certeza?"
+ * genérico. Aviso genérico ensina a clicar em OK sem ler, e depois de três
+ * vezes ninguém lê mais nenhum.
+ */
+async function destrutiva(acao) {
+  const aba = abas.find((a) => a.h === abaAtiva);
+  if (!aba || aba.detached) return;
+
+  const arquivo = (aba.info && aba.info.file) || aba.alias;
+  const total = (aba.info && aba.info.records) || 0;
+
+  const aviso = await Swal.fire(
+    swalBase({
+      icon: "warning",
+      title: T(acao === "zap" ? "UI_ZAP_WARN_TITLE" : "UI_PACK_WARN_TITLE"),
+      html: escapaHtml(
+        T(acao === "zap" ? "UI_ZAP_WARN" : "UI_PACK_WARN", {
+          file: arquivo,
+          n: total,
+        })
+      ),
+      showCancelButton: true,
+      confirmButtonText: T("UI_GO_AHEAD"),
+      cancelButtonText: T("UI_CANCEL"),
+    })
+  );
+  if (!aviso.isConfirmed) return;
+
+  const comBackup = await perguntarBackup();
+  if (comBackup === null) return; // desistiu na segunda pergunta
+
+  try {
+    const r = await comProgresso(
+      DBU.rpc(acao === "zap" ? "bulk.zap" : "bulk.pack", {
+        h: abaAtiva,
+        backup: comBackup,
+      })
+    );
+
+    // A grade em cache é de antes da operação: o arquivo mudou embaixo dela.
+    gradeDe.delete(abaAtiva);
+    await repintarDoEstado();
+
+    await Swal.fire(
+      swalBase({
+        icon: "success",
+        title: T("UI_DONE"),
+        html: escapaHtml(mensagemDoResultado(acao, r)),
+        confirmButtonText: T("UI_OK"),
+        showCancelButton: false,
+      })
+    );
+  } catch (e) {
+    await repintarDoEstado(); // o handle pode ter virado `detached` (R6)
+    await Swal.fire(
+      swalBase({
+        icon: "error",
+        title: T("UI_ERROR"),
+        html: escapaHtml(msgErro(e)),
+        confirmButtonText: T("UI_OK"),
+        showCancelButton: false,
+      })
+    );
+  }
+}
+
+/* A frase do resultado, com os números do que realmente aconteceu. */
+function mensagemDoResultado(acao, r) {
+  if (acao === "zap") {
+    return r.backup
+      ? T("UI_ZAP_DONE_BACKUP", { file: r.file, n: r.before, backup: r.backup })
+      : T("UI_ZAP_DONE", { file: r.file, n: r.before });
+  }
+  if (!r.removed) return T("UI_NOTHING_TO_PACK", { file: r.file });
+  return r.backup
+    ? T("UI_PACK_DONE_BACKUP", { file: r.file, n: r.removed, backup: r.backup })
+    : T("UI_PACK_DONE", { file: r.file, n: r.removed });
+}
+
+$("pg-pack").addEventListener("click", () => destrutiva("pack"));
+$("pg-zap").addEventListener("click", () => destrutiva("zap"));

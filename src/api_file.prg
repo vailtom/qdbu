@@ -550,7 +550,7 @@ FUNCTION Api_File_Reopen( hP )
  * Nao levanta erro: quem chama precisa TENTAR e decidir, e um erro aqui viraria
  * um RECOVER no dispatcher -- que significa bug, e nao "o arquivo esta em uso".
  */
-STATIC FUNCTION AbreNaArea( cArq, cAlias, lExcl )
+FUNCTION AbreNaArea( cArq, cAlias, lExcl )
 
    LOCAL nWa := 0
 

@@ -594,4 +594,48 @@
 
   UI_CLOSE_TAB_SHORT: "Cerrar la pestaña",
 
+
+  // ============================================ T14: PACK y ZAP
+  UI_PACK: "Compactar",
+  UI_PACK_TITLE: "Eliminar definitivamente los registros marcados para borrado",
+  UI_ZAP: "Vaciar",
+  UI_ZAP_TITLE: "Borrar TODOS los registros, manteniendo la estructura",
+
+  UI_JOB_PACK: "Compactando {file}…",
+  UI_JOB_ZAP: "Vaciando {file}…",
+
+  UI_ZAP_WARN_TITLE: "¿Borrar todos los registros?",
+  UI_ZAP_WARN:
+    "Esto borra los {n} registros de '{file}'. La estructura de los campos se " +
+    "mantiene, pero los datos no vuelven solos.",
+  UI_PACK_WARN_TITLE: "¿Compactar el archivo?",
+  UI_PACK_WARN:
+    "Esto elimina definitivamente los registros marcados para borrado de " +
+    "'{file}' y renumera los que quedan. Los números de registro cambian.",
+
+  UI_ASK_BACKUP_TITLE: "¿Hacer una copia antes?",
+  UI_ASK_BACKUP:
+    "La copia queda en la misma carpeta, con la hora en el nombre, y se abre " +
+    "en DBU como cualquier archivo — puede revisarla antes de borrarla.",
+  UI_WITH_BACKUP: "Sí, copiar antes",
+  UI_WITHOUT_BACKUP: "No, seguir sin copia",
+  UI_GO_AHEAD: "Continuar",
+
+  UI_ZAP_DONE: "'{file}' vaciado: {n} registros borrados.",
+  UI_ZAP_DONE_BACKUP:
+    "'{file}' vaciado: {n} registros borrados. La copia quedó en '{backup}'.",
+  UI_PACK_DONE: { one: "'{file}' compactado: {n} registro eliminado.", other: "'{file}' compactado: {n} registros eliminados." },
+  UI_PACK_DONE_BACKUP: "'{file}' compactado: {n} eliminados. La copia quedó en '{backup}'.",
+  UI_NOTHING_TO_PACK: "'{file}' no tiene registros marcados; no se cambió nada.",
+
+  ERROR_ZAP_CREATE_FAILED:
+    "No se pudo crear el archivo vacío de '{file}'. El original fue " +
+    "restaurado y no se perdió nada.",
+  ERROR_ZAP_FAILED: "El ZAP de '{file}' falló. El archivo no fue alterado.",
+  ERROR_PACK_FAILED: "La compactación de '{file}' falló. El archivo no fue alterado.",
+
+  UI_DONE: "Listo",
+  UI_ERROR: "No salió",
+  UI_OK: "Entendido",
+
 };

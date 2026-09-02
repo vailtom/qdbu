@@ -111,6 +111,11 @@
  *     ERROR_BACKUP_NEEDS_CONFIRM    file, bytes
  *     WARN_CANCELED_BACKUP          file
  *
+ *   T14 -- PACK e ZAP
+ *     ERROR_ZAP_CREATE_FAILED       file
+ *     ERROR_ZAP_FAILED              file
+ *     ERROR_PACK_FAILED             file
+ *
  *   R6 -- arquivo perdido na troca de modo
  *     ERROR_HANDLE_DETACHED         handle, file, why
  *     ERROR_REOPEN_FAILED

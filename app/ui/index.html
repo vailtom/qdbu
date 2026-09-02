@@ -73,6 +73,14 @@
              — uma converte, a outra copia idêntico. -->
         <button type="button" id="pg-backup" class="ferramenta"
                 data-i18n-title="UI_BACKUP_TITLE" data-i18n="UI_BACKUP"></button>
+        <!-- As duas que DESTROEM. Separadas por um divisor e marcadas com a cor
+             de risco: ficam na mesma barra porque é onde se age sobre o
+             arquivo, mas não podem parecer irmãs de "Colunas" e "Filtro". -->
+        <span class="visoes-sep"></span>
+        <button type="button" id="pg-pack" class="ferramenta risco"
+                data-i18n-title="UI_PACK_TITLE" data-i18n="UI_PACK"></button>
+        <button type="button" id="pg-zap" class="ferramenta risco"
+                data-i18n-title="UI_ZAP_TITLE" data-i18n="UI_ZAP"></button>
         <span class="filtro-ativo" id="filtro-ativo" hidden></span>
       </div>
 
@@ -549,6 +557,10 @@
 <script src="js/i18n/pt-BR.js"></script>
 <script src="js/i18n/en.js"></script>
 <script src="js/i18n/es.js"></script>
+<!-- SweetAlert2 11.26.25, MIT — vendorizado em ui/vendor/ e não vindo de CDN:
+     o app tem de funcionar sem rede (regra 1 do GUIA-DO-PROJETO.md: autocontido). A
+     licença está ao lado do arquivo. -->
+<script src="vendor/sweetalert2/sweetalert2.all.min.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/tema.js"></script>
 <script src="js/idioma.js"></script>
