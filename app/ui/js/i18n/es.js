@@ -499,4 +499,43 @@
 
   UI_JOB_SIMULATING: "Simulando procesamiento…",
 
+
+  // -------------------------------------- TA: prevuelo y copia de seguridad
+  ERROR_BACKUP_READ_FAILED: "No se pudo leer '{file}' para copiarlo.",
+  ERROR_BACKUP_WRITE_FAILED: "No se pudo grabar la copia '{file}'.",
+  ERROR_BACKUP_MISSING: "La copia '{file}' nunca llegó a crearse.",
+  ERROR_BACKUP_SIZE_MISMATCH:
+    "La copia '{file}' salió con {got:size}, y el original tiene " +
+    "{expected:size}. La copia de seguridad fue descartada.",
+  ERROR_BACKUP_PRECHECK_FAILED:
+    "Las comprobaciones de '{file}' no pasaron; no se copió nada.",
+  ERROR_BACKUP_NEEDS_CONFIRM:
+    "'{file}' ocupa {bytes:size}. Confirme para copiar.",
+  WARN_CANCELED_BACKUP: "Copia de '{file}' cancelada. No quedó nada en el disco.",
+
+  UI_JOB_BACKUP: "Copiando {file} a la copia de seguridad…",
+
+  // Las comprobaciones, una frase por elemento de la lista.
+  UI_CHECK_DISK_SPACE: "Espacio en disco",
+  UI_CHECK_DISK_SPACE_OK: "{free:size} libres; la operación necesita {needed:size} ({factor}× el conjunto)",
+  UI_CHECK_DISK_SPACE_BAD: "solo {free:size} libres, y la operación necesita {needed:size} ({factor}× el conjunto)",
+  UI_CHECK_DISK_UNKNOWN: "Espacio en disco",
+  UI_CHECK_DISK_UNKNOWN_MSG: "no se pudo medir el espacio libre en {path}",
+  UI_CHECK_FILE_SET: "Archivos que se copiarán",
+  UI_CHECK_FILE_SET_MSG: { one: "{n} archivo, {bytes}", other: "{n} archivos, {bytes}" },
+  UI_CHECK_LARGE_FILE: "Archivo grande",
+  UI_CHECK_LARGE_FILE_MSG: "{bytes:size} — por encima de {limit:size}, la copia va a tardar",
+  UI_CHECK_NOT_EXCLUSIVE: "Modo de apertura",
+  UI_CHECK_NOT_EXCLUSIVE_MSG:
+    "'{file}' está abierto en modo compartido; la operación siguiente exigirá exclusivo",
+
+  UI_PREFLIGHT: "Comprobaciones",
+  UI_PREFLIGHT_EXPLAIN:
+    "Antes de alterar el archivo, DBU comprueba lo que puede salir mal y hace " +
+    "una copia. Nada se altera hasta que usted confirme.",
+  UI_BACKUP_RUN: "Hacer la copia",
+  UI_BACKUP_DONE: "Copia guardada en {dir}",
+  UI_BACKUP_FILES: { one: "{n} archivo copiado", other: "{n} archivos copiados" },
+  UI_CONFIRM_LARGE: "Entiendo que va a tardar, adelante",
+
 };

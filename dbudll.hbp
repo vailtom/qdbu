@@ -17,6 +17,12 @@ lib/harbour-xlsxwriter/hbxlsxwriter.hbc
 -w3
 -dflag=/DEF:src/bridge/dbudll.def
 
+# Cabecalhos proprios. `#define` no Harbour vale so ate o fim do ARQUIVO, entao
+# constante compartilhada entre dois .prg tem de morar num .ch -- e o compilador
+# precisa saber onde procurar. Sem isto, `FATOR_ESPACO` vira a string literal
+# "FATOR_ESPACO" em runtime, com um mero Warning na compilacao.
+-incpath=src/util
+
 src/bridge/bridge.c
 src/bridge/progress.c
 
@@ -31,6 +37,7 @@ src/util/expr.prg
 src/util/conv.prg
 src/util/log.prg
 src/util/job.prg
+src/util/backup.prg
 
 # api, um arquivo por dominio
 src/api_meta.prg
@@ -43,3 +50,4 @@ src/api_filter.prg
 src/api_export.prg
 src/api_session.prg
 src/api_log.prg
+src/api_backup.prg

@@ -102,6 +102,15 @@
  *     ERROR_NO_ACTIVE_ORDER
  *     ERROR_SEEK_BAD_KEY_TYPE       type
  *
+ *   backup / pre-voo
+ *     ERROR_BACKUP_READ_FAILED      file
+ *     ERROR_BACKUP_WRITE_FAILED     file
+ *     ERROR_BACKUP_MISSING          file
+ *     ERROR_BACKUP_SIZE_MISMATCH    file, expected, got
+ *     ERROR_BACKUP_PRECHECK_FAILED  file, needed, free
+ *     ERROR_BACKUP_NEEDS_CONFIRM    file, bytes
+ *     WARN_CANCELED_BACKUP          file
+ *
  *   log
  *     ERROR_LOG_DAY_NOT_FOUND       day
  *

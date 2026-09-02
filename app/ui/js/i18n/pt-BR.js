@@ -526,4 +526,43 @@
 
   UI_JOB_SIMULATING: "Simulando processamento…",
 
+
+  // -------------------------------------- TA: pré-voo e backup
+  ERROR_BACKUP_READ_FAILED: "Não foi possível ler '{file}' para copiar.",
+  ERROR_BACKUP_WRITE_FAILED: "Não foi possível gravar a cópia '{file}'.",
+  ERROR_BACKUP_MISSING: "A cópia '{file}' não chegou a ser criada.",
+  ERROR_BACKUP_SIZE_MISMATCH:
+    "A cópia '{file}' saiu com {got:size}, e o original tem {expected:size}. " +
+    "O backup foi descartado.",
+  ERROR_BACKUP_PRECHECK_FAILED:
+    "As conferências de '{file}' não passaram; nada foi copiado.",
+  ERROR_BACKUP_NEEDS_CONFIRM:
+    "'{file}' ocupa {bytes:size}. Confirme para copiar.",
+  WARN_CANCELED_BACKUP: "Cópia de '{file}' cancelada. Nada ficou no disco.",
+
+  UI_JOB_BACKUP: "Copiando {file} para o backup…",
+
+  // As conferências, uma frase por item do checklist.
+  UI_CHECK_DISK_SPACE: "Espaço em disco",
+  UI_CHECK_DISK_SPACE_OK: "{free:size} livres; a operação precisa de {needed:size} ({factor}× o conjunto)",
+  UI_CHECK_DISK_SPACE_BAD: "só {free:size} livres, e a operação precisa de {needed:size} ({factor}× o conjunto)",
+  UI_CHECK_DISK_UNKNOWN: "Espaço em disco",
+  UI_CHECK_DISK_UNKNOWN_MSG: "não foi possível medir o espaço livre em {path}",
+  UI_CHECK_FILE_SET: "Arquivos que serão copiados",
+  UI_CHECK_FILE_SET_MSG: { one: "{n} arquivo, {bytes}", other: "{n} arquivos, {bytes}" },
+  UI_CHECK_LARGE_FILE: "Arquivo grande",
+  UI_CHECK_LARGE_FILE_MSG: "{bytes:size} — acima de {limit:size}, a cópia vai demorar",
+  UI_CHECK_NOT_EXCLUSIVE: "Modo de abertura",
+  UI_CHECK_NOT_EXCLUSIVE_MSG:
+    "'{file}' está em modo compartilhado; a operação seguinte vai exigir exclusivo",
+
+  UI_PREFLIGHT: "Conferências",
+  UI_PREFLIGHT_EXPLAIN:
+    "Antes de alterar o arquivo, o DBU confere o que pode dar errado e faz " +
+    "uma cópia. Nada é alterado até você confirmar.",
+  UI_BACKUP_RUN: "Fazer o backup",
+  UI_BACKUP_DONE: "Backup feito em {dir}",
+  UI_BACKUP_FILES: { one: "{n} arquivo copiado", other: "{n} arquivos copiados" },
+  UI_CONFIRM_LARGE: "Entendi que vai demorar, pode copiar",
+
 };

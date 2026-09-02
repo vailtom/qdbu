@@ -503,4 +503,43 @@
 
   UI_JOB_SIMULATING: "Simulating processing…",
 
+
+  // -------------------------------------- TA: pre-flight and backup
+  ERROR_BACKUP_READ_FAILED: "Cannot read '{file}' to copy it.",
+  ERROR_BACKUP_WRITE_FAILED: "Cannot write the copy '{file}'.",
+  ERROR_BACKUP_MISSING: "The copy '{file}' was never created.",
+  ERROR_BACKUP_SIZE_MISMATCH:
+    "The copy '{file}' came out at {got:size}, and the original has " +
+    "{expected:size}. The backup was discarded.",
+  ERROR_BACKUP_PRECHECK_FAILED:
+    "Pre-flight checks on '{file}' did not pass; nothing was copied.",
+  ERROR_BACKUP_NEEDS_CONFIRM:
+    "'{file}' takes up {bytes:size}. Confirm to copy.",
+  WARN_CANCELED_BACKUP: "Copy of '{file}' canceled. Nothing was left on disk.",
+
+  UI_JOB_BACKUP: "Copying {file} to the backup…",
+
+  // The checks, one phrase per checklist item.
+  UI_CHECK_DISK_SPACE: "Disk space",
+  UI_CHECK_DISK_SPACE_OK: "{free:size} free; the operation needs {needed:size} ({factor}× the file set)",
+  UI_CHECK_DISK_SPACE_BAD: "only {free:size} free, and the operation needs {needed:size} ({factor}× the file set)",
+  UI_CHECK_DISK_UNKNOWN: "Disk space",
+  UI_CHECK_DISK_UNKNOWN_MSG: "could not measure free space on {path}",
+  UI_CHECK_FILE_SET: "Files to be copied",
+  UI_CHECK_FILE_SET_MSG: { one: "{n} file, {bytes}", other: "{n} files, {bytes}" },
+  UI_CHECK_LARGE_FILE: "Large file",
+  UI_CHECK_LARGE_FILE_MSG: "{bytes:size} — above {limit:size}, the copy will take a while",
+  UI_CHECK_NOT_EXCLUSIVE: "Open mode",
+  UI_CHECK_NOT_EXCLUSIVE_MSG:
+    "'{file}' is open shared; the next operation will require exclusive",
+
+  UI_PREFLIGHT: "Pre-flight checks",
+  UI_PREFLIGHT_EXPLAIN:
+    "Before altering the file, DBU checks what could go wrong and makes a " +
+    "copy. Nothing is altered until you confirm.",
+  UI_BACKUP_RUN: "Run the backup",
+  UI_BACKUP_DONE: "Backup written to {dir}",
+  UI_BACKUP_FILES: { one: "{n} file copied", other: "{n} files copied" },
+  UI_CONFIRM_LARGE: "I understand it will take a while, go ahead",
+
 };

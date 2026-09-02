@@ -175,6 +175,39 @@
    * tela é um bug a corrigir; uma exceção aqui derrubaria a tela inteira, e o
    * webview não tem console para dizer por quê.
    */
+  /**
+   * Contagem de bytes em unidade que se lê. 874418955 → "834.0 MB".
+   *
+   * QUEM DECIDE É O MOLDE, e não quem manda o número. A DLL manda bytes crus
+   * porque é o que ela sabe; a frase é que decide se aquilo se lê como tamanho
+   * ("ocupa 834 MB") ou como contagem. Sem isto, `ERROR_BACKUP_NEEDS_CONFIRM`
+   * dizia "ocupa 874.418.955 bytes" — verdade que ninguém consegue ler.
+   *
+   * Escrito `{bytes:size}` no dicionário. O sufixo é do MOLDE, então cada
+   * idioma escolhe sozinho, e um parâmetro que em outra frase seja contagem
+   * pura continua saindo como número.
+   *
+   * Base 1024 com os símbolos KB/MB/GB: é o que o Explorer do Windows mostra, e
+   * concordar com o sistema operacional importa mais aqui do que a briga entre
+   * KiB e KB — a pessoa vai comparar este número com o que vê na pasta.
+   */
+  function tamanho(v) {
+    const n = Number(v);
+    if (!isFinite(n)) return String(v);
+    if (n < 1024) return numero(n) + " B";
+
+    const un = ["KB", "MB", "GB", "TB"];
+    let x = n / 1024;
+    let i = 0;
+    while (x >= 1024 && i < un.length - 1) {
+      x /= 1024;
+      i++;
+    }
+    // Uma casa decimal: duas dão precisão falsa, zero perde a diferença entre
+    // 1,2 GB e 1,9 GB, que é justamente a que decide se cabe no disco.
+    return numero(Math.round(x * 10) / 10) + " " + un[i];
+  }
+
   function t(chave, params) {
     let txt = null;
 
@@ -185,11 +218,15 @@
     if (txt === null || txt === undefined) return chave;
     if (!params) return String(txt);
 
-    const pronto = opcionais(String(txt), params).replace(/\{(\w+)\}/g, (todo, nome) => {
-      if (!(nome in params)) return todo;
-      const v = params[nome];
-      return v === null || v === undefined ? "" : numero(v);
-    });
+    const pronto = opcionais(String(txt), params).replace(
+      /\{(\w+)(?::(\w+))?\}/g,
+      (todo, nome, formato) => {
+        if (!(nome in params)) return todo;
+        const v = params[nome];
+        if (v === null || v === undefined) return "";
+        return formato === "size" ? tamanho(v) : numero(v);
+      }
+    );
 
     /*
      * Pontuacao dobrada no fim.
@@ -313,6 +350,7 @@
     doErro,
     severidade,
     numero,
+    tamanho,
     aplicar,
     idioma,
     idiomas,
