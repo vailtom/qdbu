@@ -333,7 +333,8 @@ FUNCTION Api_Backup_Run( hP )
    LOCAL lOp      := ParLog( hP, "forOperation", .T. )
    LOCAL lConfGde := ParLog( hP, "confirmLarge", .F. )
    LOCAL xErro, hRel, cSelo, aFeitos := {}, hArq, cDestino, nTotal, nFeito := 0
-   LOCAL hCopia, aCopias := {}
+   LOCAL hCopia, aCopias := {}, nEste := 0
+   LOCAL lAberto
 
    IF ( xErro := SessSelect( cH ) ) != NIL
       RETURN xErro
@@ -364,12 +365,53 @@ FUNCTION Api_Backup_Run( hP )
    cSelo  := hRel[ "stamp" ]
    nTotal := hRel[ "bytes" ]
 
+   /* SessSelect() ja rodou e nos deixou na area deste handle. */
+   lAberto := ! Empty( Alias() )
+
    Dbu_JobBegin( JobMsg( "UI_JOB_BACKUP", hRel[ "file" ] ), nTotal )
+
+   /*
+    * DUAS VIAS, e a escolha e pelo estado do arquivo -- nao por preferencia.
+    *
+    *   ABERTO   -> CopiaPorRegistro()  le pela work area
+    *   FECHADO  -> CopiaArquivo()      le os bytes com FOpen
+    *
+    * Nao e otimizacao: a copia de bytes NAO CONSEGUE abrir um arquivo que o RDD
+    * mantem exclusivo -- o Windows nega o segundo handle mesmo dentro do proprio
+    * processo. E o pre-voo roda antes de PACK/ZAP, que exigem exclusivo. A via
+    * de bytes falharia exatamente no caso que justifica o backup.
+    *
+    * A via por registro cobre o conjunto INTEIRO de uma vez: dbCreate() cria o
+    * .DBT junto quando ha campo memo, e os valores memo sao copiados como
+    * valores. Por isso ela nao percorre `set` -- ela substitui o laco.
+    */
+   IF lAberto
+      xErro := CopiaPorRegistro( hRel[ "target" ], ;
+                                 {| n, t | HB_SYMBOL_UNUSED( t ), Dbu_Progress( n ) } )
+      Dbu_JobEnd()
+
+      IF xErro != NIL
+         RETURN xErro
+      ENDIF
+
+      RETURN Ok( { ;
+         "file"    => hRel[ "file" ], ;
+         "stamp"   => cSelo, ;
+         "dir"     => hRel[ "dir" ], ;
+         "bytes"   => Max( 0, hb_FSize( hRel[ "target" ] ) ), ;
+         "mode"    => "record", ;
+         "files"   => { { "source" => hRel[ "file" ], ;
+                          "backup" => hb_FNameNameExt( hRel[ "target" ] ), ;
+                          "bytes"  => Max( 0, hb_FSize( hRel[ "target" ] ) ), ;
+                          "role"   => "data" } }, ;
+         "indexes" => hRel[ "indexes" ], ;
+         "checks"  => hRel[ "checks" ] } )
+   ENDIF
 
    FOR EACH hArq IN hRel[ "set" ]
       cDestino := DestinoDoMembro( hArq[ "path" ], hRel[ "target" ], hArq[ "role" ] )
 
-      xErro := CopiaArquivo( hArq[ "path" ], cDestino, nFeito, nTotal )
+      xErro := CopiaArquivo( hArq[ "path" ], cDestino, nFeito, nTotal, @nEste )
       IF xErro != NIL
          Dbu_JobEnd()
          DesfazParciais( aFeitos )
@@ -379,7 +421,7 @@ FUNCTION Api_Backup_Run( hP )
       /* Passo 3 da sequencia, e o que da valor aos outros: conferir que a copia
          ficou de pe. FCreate() bem-sucedido seguido de disco cheio deixa um
          arquivo truncado, e um backup truncado e pior que backup nenhum. */
-      xErro := BackupConfere( hArq[ "path" ], cDestino )
+      xErro := BackupConfere( cDestino, nEste )
       IF xErro != NIL
          Dbu_JobEnd()
          AAdd( aFeitos, cDestino )
@@ -403,6 +445,7 @@ FUNCTION Api_Backup_Run( hP )
       "file"    => hRel[ "file" ], ;
       "stamp"   => cSelo, ;
       "dir"     => hRel[ "dir" ], ;
+      "mode"    => "bytes", ;
       "indexes" => hRel[ "indexes" ], ;
       "bytes"   => nTotal, ;
       "files"   => aCopias, ;

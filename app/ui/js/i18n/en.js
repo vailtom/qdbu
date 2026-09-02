@@ -577,4 +577,25 @@
   UI_CHECK_TARGET_IS_SOURCE: "Invalid destination",
   UI_CHECK_TARGET_IS_SOURCE_MSG: "'{file}' is the source file itself",
 
+
+  // ------------------------------------------ R6: file lost during a mode swap
+  ERROR_HANDLE_DETACHED:
+    "'{file}' was closed for an operation and could not be reopened. " +
+    "What is on screen is from before; use Reconnect once the file is free.",
+  ERROR_REOPEN_FAILED: "another program holds the file",
+  ERROR_CANNOT_LOCK_EXCLUSIVE:
+    "Could not open '{file}' in exclusive mode — another program is using it. " +
+    "Nothing was altered.",
+  ERROR_CANNOT_OPEN_SHARED:
+    "Could not reopen '{file}' in shared mode. Nothing was altered.",
+  ERROR_BACKUP_UNVERIFIABLE:
+    "The copy '{file}' was created, but it could not be measured to verify.",
+
+  UI_DETACHED: "disconnected",
+  UI_RECONNECT: "Reconnect",
+  UI_DETACHED_HINT: "The file was closed for an operation and did not come back.",
+  UI_RECONNECTED: "'{file}' reconnected.",
+
+  UI_CLOSE_TAB_SHORT: "Close the tab",
+
 };

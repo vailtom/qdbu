@@ -53,7 +53,24 @@ FUNCTION Api_Session_State( hP )
    NEXT
 
    FOR EACH hInfo IN SessOpenFiles()
-      AAdd( aFiles, FileState( hInfo[ "h" ], .F. ) )
+      /*
+       * Handle perdido (R6) nao passa pelo FileState: ele nao tem work area --
+       * `wa` e 0 --, e o FileState comeca selecionando a area. O que a tela
+       * precisa aqui e outra coisa: o nome do arquivo, o estado, e o motivo,
+       * para poder marcar a aba e oferecer Reconectar.
+       */
+      IF SessDetached( hInfo[ "h" ] )
+         AAdd( aFiles, { ;
+            "h"           => hInfo[ "h" ], ;
+            "path"        => hInfo[ "path" ], ;
+            "file"        => hb_FNameNameExt( hInfo[ "path" ] ), ;
+            "alias"       => hInfo[ "alias" ], ;
+            "connection"  => hInfo[ "connection" ], ;
+            "detached"    => .T., ;
+            "detachedWhy" => hInfo[ "detachedWhy" ] } )
+      ELSE
+         AAdd( aFiles, FileState( hInfo[ "h" ], .F. ) )
+      ENDIF
    NEXT
 
    FOR EACH hInfo IN SessClosedFiles()

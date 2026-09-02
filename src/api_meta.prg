@@ -232,3 +232,41 @@ STATIC FUNCTION ChaveRepetida( xChave )
    dbGoTo( nGuarda )
 
    RETURN nQuantos > 1
+
+
+/*
+ * meta.detach {"h":"h7"} -- forca um handle ao estado `detached` (R6).
+ *
+ * POR QUE PRECISA EXISTIR
+ *
+ * O ramo irrecuperavel da R6 -- reabrir falha nos DOIS modos -- depende de
+ * alguem tomar o arquivo dentro da janela de milissegundos entre o
+ * dbCloseArea() e o dbUseArea(). E uma corrida que nao se vence de fora com
+ * confiabilidade, e "testei umas vezes e uma delas pegou" nao e teste.
+ *
+ * O ramo RECUPERAVEL (nao consegui exclusivo, voltei ao compartilhado) e
+ * testavel de verdade: basta outro processo abrir o arquivo em modo normal.
+ * Esse tem teste real, e passa.
+ *
+ * Este gancho cobre o que sobra: o comportamento da TELA quando o estado
+ * acontece -- grade descartada, aba marcada, motivo visivel, Reconectar
+ * funcionando, aba ainda fechavel. Ele nao prova que o estado E ALCANCADO pela
+ * corrida; prova o que o app faz quando ele acontece.
+ *
+ * Fecha a work area de verdade, e nao so marca a flag: um `detached` com a area
+ * ainda aberta seria um estado que nunca existe na vida real, e o teste estaria
+ * medindo uma ficcao.
+ */
+FUNCTION Api_Meta_Detach( hP )
+
+   LOCAL cH := iif( HB_ISHASH( hP ) .AND. hb_HHasKey( hP, "h" ), hP[ "h" ], "" )
+   LOCAL xErro
+
+   IF ( xErro := SessSelect( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   dbCloseArea()
+   SessDetach( cH, "ERROR_REOPEN_FAILED" )
+
+   RETURN Ok( { "h" => cH, "detached" => .T. } )

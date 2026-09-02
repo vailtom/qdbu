@@ -213,6 +213,15 @@ FUNCTION Api_File_Struct( hP )
 
 /* ----------------------------------------------------------------- apoio */
 
+/* Numerico do envelope, com padrao. STATIC como nos demais api_*.prg. */
+STATIC FUNCTION ParNum( hP, cChave, nPadrao )
+
+   IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave )
+      RETURN nPadrao
+   ENDIF
+
+   RETURN iif( HB_ISNUMERIC( hP[ cChave ] ), hP[ cChave ], nPadrao )
+
 STATIC FUNCTION ParStr( hP, cChave )
 
    IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave )
@@ -458,3 +467,212 @@ FUNCTION FileState( cH, lWithFields )
    dbSelectArea( nOld )
 
    RETURN hRet
+
+
+/*
+ * file.reopen {"h":"h7","exclusive":true} -- troca o modo de abertura.
+ *
+ * A SEQUENCIA E A R6 de docs/10-integridade.md, e cada falha tem tratamento
+ * proprio porque elas nao sao equivalentes.
+ *
+ *   1. fotografa o ambiente (rebind.prg)
+ *   2. dbCloseArea()
+ *   3. reabre no modo pedido
+ *      falhou -> tenta VOLTAR ao modo anterior imediatamente
+ *                conseguiu -> religa e recusa. NADA foi perdido.
+ *                falhou    -> `detached`. A aba fica na tela, marcada.
+ *   4. religa indices, ordem, filtro e cursor
+ *
+ * ENTRE 2 E 3 EXISTE UMA JANELA. Qualquer processo da rede pode pegar o arquivo
+ * ali. Nao da para fechar essa janela -- da para torna-la inofensiva, e e o que
+ * o passo 3 faz: a recusa acontece antes de qualquer operacao destrutiva, entao
+ * o pior caso e "nao consegui trocar o modo", nunca "perdi o arquivo do
+ * usuario sem avisar".
+ */
+FUNCTION Api_File_Reopen( hP )
+
+   LOCAL cH    := ParStr( hP, "h" )
+   LOCAL lExcl := ParLog( hP, "exclusive", .F. )
+   LOCAL xErro, hInfo, hEstado, cArq, cAlias, nWa
+
+   IF ( xErro := SessSelect( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   hInfo  := SessHandle( cH )
+   cArq   := hInfo[ "path" ]
+   cAlias := hInfo[ "alias" ]
+
+   /* Ja esta no modo pedido: nao mexe. Fechar e reabrir a toa seria abrir a
+      janela por nada. */
+   IF hInfo[ "exclusive" ] == lExcl
+      RETURN Ok( FileState( cH, .F. ) )
+   ENDIF
+
+   hEstado := EstadoAntes( cH )
+
+   dbCloseArea()
+
+   nWa := AbreNaArea( cArq, cAlias, lExcl )
+
+   IF nWa == 0
+      /* Nao conseguiu o modo pedido. Volta ao anterior AGORA, antes que a
+         janela cresca. */
+      nWa := AbreNaArea( cArq, cAlias, hInfo[ "exclusive" ] )
+
+      IF nWa == 0
+         SessDetach( cH, "ERROR_REOPEN_FAILED" )
+         RETURN Err( "ERROR_HANDLE_DETACHED", "could not reopen in either mode", "h", ;
+                     { "handle" => cH, ;
+                       "file"   => hb_FNameNameExt( cArq ), ;
+                       "why"    => "ERROR_REOPEN_FAILED" } )
+      ENDIF
+
+      /* Voltou ao estado anterior: religa e recusa. Nada foi perdido. */
+      SessReattach( cH, nWa, hInfo[ "exclusive" ] )
+      Religar( hEstado )
+
+      RETURN Err( iif( lExcl, "ERROR_CANNOT_LOCK_EXCLUSIVE", "ERROR_CANNOT_OPEN_SHARED" ), ;
+                  "mode change refused", "h", ;
+                  { "file" => hb_FNameNameExt( cArq ) } )
+   ENDIF
+
+   SessReattach( cH, nWa, lExcl )
+
+   RETURN Ok( { ;
+      "state"        => FileState( cH, .F. ), ;
+      "rebindErrors" => Religar( hEstado ) } )
+
+
+/*
+ * Abre o arquivo numa area nova e devolve o numero dela, ou 0 se nao deu.
+ *
+ * Nao levanta erro: quem chama precisa TENTAR e decidir, e um erro aqui viraria
+ * um RECOVER no dispatcher -- que significa bug, e nao "o arquivo esta em uso".
+ */
+STATIC FUNCTION AbreNaArea( cArq, cAlias, lExcl )
+
+   LOCAL nWa := 0
+
+   /* O RECOVER nao reatribui: `nWa` ja nasce 0, e se o dbUseArea estourar a
+      atribuicao nunca completou. Reatribuir era codigo morto (W0032). */
+   BEGIN SEQUENCE WITH {| e | Break( e ) }
+      dbUseArea( .T., , cArq, cAlias, ! lExcl, .F. )
+      nWa := Select()
+   RECOVER
+   END SEQUENCE
+
+   RETURN nWa
+
+
+/*
+ * file.reconnect {"h":"h7"} -- tenta trazer de volta um handle perdido (R6).
+ *
+ * Existe porque quem estava segurando o arquivo pode ja ter soltado. Sem isto,
+ * a unica saida seria fechar a aba e reabrir o arquivo -- perdendo colunas
+ * escolhidas, filtro e posicao, que e punir o usuario por um problema que nao
+ * foi dele.
+ *
+ * Reabre COMPARTILHADO, sempre: e o modo normal de trabalho, e quem quer
+ * exclusivo pede por file.reopen. Reconectar tem de ser a operacao com maior
+ * chance de dar certo, nao a mais ambiciosa.
+ */
+FUNCTION Api_File_Reconnect( hP )
+
+   LOCAL cH := ParStr( hP, "h" )
+   LOCAL hInfo := SessHandle( cH )
+   LOCAL nWa
+
+   IF hInfo == NIL
+      RETURN Err( "ERROR_INVALID_HANDLE", "handle does not exist", "h", ;
+                  { "handle" => hb_CStr( cH ) } )
+   ENDIF
+
+   IF ! SessDetached( cH )
+      RETURN Ok( FileState( cH, .F. ) )      /* ja esta ligado */
+   ENDIF
+
+   IF ! hb_FileExists( hInfo[ "path" ] )
+      RETURN Err( "ERROR_FILE_NOT_FOUND", "file no longer exists", "h", ;
+                  { "file" => hb_FNameNameExt( hInfo[ "path" ] ) } )
+   ENDIF
+
+   nWa := AbreNaArea( hInfo[ "path" ], hInfo[ "alias" ], .F. )
+
+   IF nWa == 0
+      RETURN Err( "ERROR_CANNOT_OPEN_SHARED", "still held by another program", "h", ;
+                  { "file" => hb_FNameNameExt( hInfo[ "path" ] ) } )
+   ENDIF
+
+   SessReattach( cH, nWa, .F. )
+
+   RETURN Ok( FileState( cH, .F. ) )
+
+
+/*
+ * file.reopenslow {"h":"h7","exclusive":true,"hold":15} -- o file.reopen com a
+ * janela ALARGADA de proposito.
+ *
+ * POR QUE EXISTE
+ *
+ * O ramo irrecuperavel da R6 -- reabrir falha nos DOIS modos -- depende de
+ * alguem tomar o arquivo dentro da janela entre o dbCloseArea() e o
+ * dbUseArea(). Essa janela dura milissegundos: nao da para vence-la de fora com
+ * confiabilidade, e "tentei varias vezes e uma pegou" nao e teste.
+ *
+ * Aqui a janela vira segundos, e uma PESSOA consegue agir: abrir o mesmo
+ * arquivo no DBU original com /E, ou em qualquer programa que peca exclusivo.
+ * O caminho de codigo e o mesmo do file.reopen -- o que muda e so o tempo de
+ * espera no meio. Nao e simulacao: e a corrida de verdade, em camera lenta.
+ *
+ * `hold` tem teto de 60 s. A thread da VM e uma so, entao esperar aqui congela
+ * o app inteiro -- o que e aceitavel num gancho de diagnostico e nao seria em
+ * mais nada.
+ */
+FUNCTION Api_File_Reopenslow( hP )
+
+   LOCAL cH     := ParStr( hP, "h" )
+   LOCAL lExcl  := ParLog( hP, "exclusive", .T. )
+   LOCAL nEspera := ParNum( hP, "hold", 10 )
+   LOCAL xErro, hInfo, hEstado, cArq, cAlias, nWa
+
+   IF ( xErro := SessSelect( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   nEspera := Max( 1, Min( nEspera, 60 ) )
+
+   hInfo   := SessHandle( cH )
+   cArq    := hInfo[ "path" ]
+   cAlias  := hInfo[ "alias" ]
+   hEstado := EstadoAntes( cH )
+
+   dbCloseArea()
+
+   /* ---- A JANELA, aberta de par em par ---- */
+   hb_idleSleep( nEspera )
+
+   nWa := AbreNaArea( cArq, cAlias, lExcl )
+
+   IF nWa == 0
+      nWa := AbreNaArea( cArq, cAlias, hInfo[ "exclusive" ] )
+
+      IF nWa == 0
+         SessDetach( cH, "ERROR_REOPEN_FAILED" )
+         RETURN Err( "ERROR_HANDLE_DETACHED", "could not reopen in either mode", "h", ;
+                     { "handle" => cH, ;
+                       "file"   => hb_FNameNameExt( cArq ), ;
+                       "why"    => "ERROR_REOPEN_FAILED" } )
+      ENDIF
+
+      SessReattach( cH, nWa, hInfo[ "exclusive" ] )
+      Religar( hEstado )
+
+      RETURN Err( iif( lExcl, "ERROR_CANNOT_LOCK_EXCLUSIVE", "ERROR_CANNOT_OPEN_SHARED" ), ;
+                  "mode change refused", "h", { "file" => hb_FNameNameExt( cArq ) } )
+   ENDIF
+
+   SessReattach( cH, nWa, lExcl )
+
+   RETURN Ok( { "state" => FileState( cH, .F. ), ;
+                "rebindErrors" => Religar( hEstado ) } )

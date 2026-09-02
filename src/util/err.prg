@@ -111,6 +111,13 @@
  *     ERROR_BACKUP_NEEDS_CONFIRM    file, bytes
  *     WARN_CANCELED_BACKUP          file
  *
+ *   R6 -- arquivo perdido na troca de modo
+ *     ERROR_HANDLE_DETACHED         handle, file, why
+ *     ERROR_REOPEN_FAILED
+ *     ERROR_CANNOT_LOCK_EXCLUSIVE   file
+ *     ERROR_CANNOT_OPEN_SHARED      file
+ *     ERROR_BACKUP_UNVERIFIABLE     file
+ *
  *   religar estado (R5)
  *     ERROR_REBIND_INDEX_FAILED     file, key
  *     ERROR_REBIND_ORDER_LOST       name

@@ -410,6 +410,24 @@
      linha seriam 278 subárvores de DOM criadas para talvez nunca abrirem. -->
 <div id="menu-conexao" role="menu" hidden></div>
 
+<!-- R6: o arquivo foi fechado para uma operação e não voltou.
+
+     Cobre a grade INTEIRA, e não é um aviso numa faixa: enquanto o arquivo não
+     volta, não há nada verdadeiro para mostrar ali. Um aviso discreto sobre uma
+     grade cheia de linhas antigas seria pior que erro nenhum. -->
+<div id="desconectado" class="desconectado" hidden>
+  <div class="dc-caixa">
+    <span class="dc-icone">⚠</span>
+    <h3 id="dc-titulo"></h3>
+    <p id="dc-motivo"></p>
+    <p class="dc-msg" id="dc-msg"></p>
+    <div class="dc-acoes">
+      <button type="button" id="dc-reconectar" class="primario" data-i18n="UI_RECONNECT"></button>
+      <button type="button" id="dc-fechar" data-i18n="UI_CLOSE_TAB_SHORT"></button>
+    </div>
+  </div>
+</div>
+
 <!-- Pré-voo: as conferências que rodam antes de qualquer alteração.
 
      NÃO é um "tem certeza?". Um aviso genérico ensina a clicar em OK sem ler;

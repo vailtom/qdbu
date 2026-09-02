@@ -363,13 +363,32 @@ function desenharAbas() {
   cx.hidden = abas.length === 0;
 
   for (const a of abas) {
-    const aba = elemento("div", "aba" + (a.h === abaAtiva ? " ativa" : ""));
+    /*
+     * Aba de arquivo perdido é MARCADA, não escondida. Esconder faria a pessoa
+     * achar que fechou sozinha; deixar igual às outras faria ela clicar e
+     * receber um erro sem entender de onde veio.
+     */
+    const solto = !!a.detached;
+    const aba = elemento(
+      "div",
+      "aba" + (a.h === abaAtiva ? " ativa" : "") + (solto ? " solta" : "")
+    );
     aba.dataset.h = a.h;
     aba.tabIndex = 0;
     aba.setAttribute("role", "tab");
     aba.setAttribute("aria-selected", String(a.h === abaAtiva));
-    aba.title = paraExibir(a.caminho);
+    aba.title = solto
+      ? T("UI_DETACHED_HINT") + "  " + paraExibir(a.caminho)
+      : paraExibir(a.caminho);
 
+    if (solto) {
+      // O símbolo sozinho não é acessível: leitor de tela anuncia "aviso" ou
+      // nada. A palavra vai no aria-label, e o ⚠ fica como marca visual.
+      const marca = elemento("span", "aba-solta", "⚠");
+      marca.setAttribute("role", "img");
+      marca.setAttribute("aria-label", T("UI_DETACHED"));
+      aba.appendChild(marca);
+    }
     aba.appendChild(elemento("span", "aba-nome", rotuloAba(a)));
 
     const x = elemento("button", "aba-fechar", "×");
@@ -403,7 +422,57 @@ function desenharConteudo() {
 
   $("vazio").hidden = !!a;
   $("conteudo").hidden = !a;
-  if (!a) return;
+  if (!a) {
+    $("desconectado").hidden = true;
+    return;
+  }
+
+  /*
+   * R6: arquivo perdido → o painel cobre tudo e a grade não é desenhada.
+   *
+   * Sair aqui é o ponto: nada abaixo desta linha roda, então nenhuma linha
+   * antiga chega à tela. Tentar desenhar e depois esconder deixaria uma janela
+   * de um quadro em que os dados velhos aparecem.
+   */
+  if (a.detached) {
+    /*
+     * A grade é ESVAZIADA, e não apenas coberta.
+     *
+     * O painel é `position:absolute; inset:0`, então ninguém vê as linhas
+     * embaixo — e foi exatamente isso que quase passou: o teste acusou 20
+     * linhas ainda no DOM. Cobrir não é limpar. Se o painel falhar em aparecer
+     * por qualquer motivo, o que fica na tela são dados de um arquivo que não
+     * está mais aberto, que é a falha que a R6 existe para impedir.
+     */
+    // Esvazia o CONTEÚDO, preservando a estrutura: `desenharGrade()` faz
+    // `querySelector("thead tr")` e assume que o <tr> existe. Apagar o thead
+    // inteiro fazia esse seletor devolver null e derrubar a pintura em
+    // silêncio — a grade ficava vazia até depois de reconectar.
+    const corpo = $("grade").querySelector("tbody");
+    if (corpo) corpo.textContent = "";
+    const cabLinha = $("grade").querySelector("thead tr");
+    if (cabLinha) cabLinha.textContent = "";
+    $("cartoes").textContent = "";
+
+    // A barra de posição também: ela dizia "1-20 de 20" sobre um arquivo que
+    // não está mais aberto. Só apareceu ao olhar o screenshot — o teste de DOM
+    // conferia a grade e não a barra.
+    atualizarBarraGrade(null);
+
+    $("desconectado").hidden = false;
+    $("dc-titulo").textContent = a.alias || a.info.file || "";
+    $("dc-motivo").textContent = msgErro({
+      codigo: "ERROR_HANDLE_DETACHED",
+      params: { file: a.info.file || a.alias, why: a.detachedWhy },
+    });
+    msgDesconectado("");
+    return;
+  }
+  /* Limpa a mensagem ao sair do estado: reabrir o painel depois mostraria o
+     motivo antigo por um quadro. */
+  $("desconectado").hidden = true;
+  $("dc-motivo").textContent = "";
+  msgDesconectado("");
 
   const i = a.info;
 
@@ -584,8 +653,28 @@ async function repintarDoEstado() {
     caminho: f.path,
     conexao: f.connection,
     info: f,
+    // R6: o arquivo foi fechado para uma operação e não voltou. A aba fica,
+    // marcada — some é o que ela não pode fazer.
+    detached: !!f.detached,
+    detachedWhy: f.detachedWhy || "",
     fields: antes.get(f.h) || null,
   }));
+
+  /*
+   * A GRADE DE UM ARQUIVO PERDIDO É DESCARTADA, e isto é a R6 inteira.
+   *
+   * Deixar as linhas na tela mostraria dados de um arquivo que não está mais
+   * aberto — a falha silenciosa que docs/10-integridade.md existe para
+   * impedir. O usuário olharia números que não pode mais confiar, sem nada
+   * indicando isso.
+   */
+  for (const a of abas) {
+    if (a.detached) {
+      gradeDe.delete(a.h);
+      colunasDe.delete(a.h);
+      indicesDe.delete(a.h);
+    }
+  }
 
   fechados = st.closed;
   aplicarOrdem();
@@ -4228,6 +4317,43 @@ function msgPrevoo(txt, classe) {
 $("pg-backup").addEventListener("click", () => {
   if (!abaAtiva) return;
   abrirPrevoo(abaAtiva, null, { copiaAvulsa: true });
+});
+
+/* ------------------------------------------------- R6: reconectar / fechar */
+
+function msgDesconectado(txt, classe) {
+  const el = $("dc-msg");
+  el.textContent = txt || "";
+  el.className = "dc-msg" + (txt && classe ? " " + classe : "");
+}
+
+/*
+ * Reconectar existe porque quem segurava o arquivo pode já ter soltado.
+ *
+ * Sem isto, a única saída seria fechar a aba e reabrir — perdendo colunas
+ * escolhidas, filtro e posição. Punir o usuário por um problema que não foi
+ * dele.
+ */
+$("dc-reconectar").addEventListener("click", async () => {
+  if (!abaAtiva) return;
+  const botao = $("dc-reconectar");
+  botao.disabled = true;
+  msgDesconectado("");
+  try {
+    const r = await DBU.rpc("file.reconnect", { h: abaAtiva });
+    await repintarDoEstado();
+    hint(T("UI_RECONNECTED", { file: r.file }));
+  } catch (e) {
+    msgDesconectado(msgErro(e), sevErro(e));
+  } finally {
+    botao.disabled = false;
+  }
+});
+
+/* Fechar a aba TEM de funcionar mesmo desconectada. Uma aba presa num erro que
+   não se consegue nem fechar é pior que o erro. */
+$("dc-fechar").addEventListener("click", () => {
+  if (abaAtiva) fecharAba(abaAtiva);
 });
 
 $("pv-cancelar").addEventListener("click", () => $("dlg-prevoo").close());

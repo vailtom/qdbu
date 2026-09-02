@@ -573,4 +573,25 @@
   UI_CHECK_TARGET_IS_SOURCE: "Destino no válido",
   UI_CHECK_TARGET_IS_SOURCE_MSG: "'{file}' es el propio archivo de origen",
 
+
+  // ------------------------------------- R6: archivo perdido al cambiar de modo
+  ERROR_HANDLE_DETACHED:
+    "'{file}' se cerró para una operación y no se pudo volver a abrir. " +
+    "Lo que está en pantalla es de antes; use Reconectar cuando el archivo esté libre.",
+  ERROR_REOPEN_FAILED: "otro programa tiene el archivo",
+  ERROR_CANNOT_LOCK_EXCLUSIVE:
+    "No se pudo abrir '{file}' en modo exclusivo — otro programa lo está " +
+    "usando. No se alteró nada.",
+  ERROR_CANNOT_OPEN_SHARED:
+    "No se pudo volver a abrir '{file}' en modo compartido. No se alteró nada.",
+  ERROR_BACKUP_UNVERIFIABLE:
+    "La copia '{file}' se creó, pero no se pudo medir para verificarla.",
+
+  UI_DETACHED: "desconectado",
+  UI_RECONNECT: "Reconectar",
+  UI_DETACHED_HINT: "El archivo se cerró para una operación y no volvió.",
+  UI_RECONNECTED: "'{file}' reconectado.",
+
+  UI_CLOSE_TAB_SHORT: "Cerrar la pestaña",
+
 };

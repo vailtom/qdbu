@@ -600,4 +600,25 @@
   UI_CHECK_TARGET_IS_SOURCE: "Destino inválido",
   UI_CHECK_TARGET_IS_SOURCE_MSG: "'{file}' é o próprio arquivo de origem",
 
+
+  // ---------------------------------------------- R6: arquivo perdido na troca
+  ERROR_HANDLE_DETACHED:
+    "'{file}' foi fechado para uma operação e não pôde ser reaberto. " +
+    "Os dados na tela são de antes; use Reconectar quando o arquivo estiver livre.",
+  ERROR_REOPEN_FAILED: "outro programa está com o arquivo",
+  ERROR_CANNOT_LOCK_EXCLUSIVE:
+    "Não foi possível abrir '{file}' em modo exclusivo — outro programa está " +
+    "usando. Nada foi alterado.",
+  ERROR_CANNOT_OPEN_SHARED:
+    "Não foi possível reabrir '{file}' em modo compartilhado. Nada foi alterado.",
+  ERROR_BACKUP_UNVERIFIABLE:
+    "A cópia '{file}' foi criada, mas não foi possível medi-la para conferir.",
+
+  UI_DETACHED: "desconectado",
+  UI_RECONNECT: "Reconectar",
+  UI_DETACHED_HINT: "O arquivo foi fechado para uma operação e não voltou.",
+  UI_RECONNECTED: "'{file}' reconectado.",
+
+  UI_CLOSE_TAB_SHORT: "Fechar a aba",
+
 };

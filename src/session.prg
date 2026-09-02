@@ -74,6 +74,18 @@ FUNCTION SessHandle( cH )
    RETURN h[ cH ]
 
 /*
+ * O TERCEIRO ESTADO: `detached`.
+ *
+ * `open` e normal; `closed` e o usuario tendo mandado fechar -- esperado, e a
+ * mensagem cita o `closedIn`. Faltava o caso em que o APP fechou a area para
+ * uma operacao exclusiva e NAO CONSEGUIU REABRIR: outro processo da rede pegou
+ * o arquivo na janela entre o dbCloseArea() e o dbUseArea().
+ *
+ * Nao e erro passageiro nem foi pedido por ninguem: e um estado, e a aba
+ * continua na tela. Sem distingui-lo, a UI mostraria as linhas de um arquivo
+ * que nao esta mais aberto -- a falha silenciosa que docs/10-integridade.md
+ * inteiro existe para impedir. Ver R6 la.
+ *
  * Selects the handle's work area. THIS IS THE ISOLATION GUARANTEE: every Api_*
  * that takes a handle starts here, so no function depends on which area the
  * previous call happened to leave selected. That implicit dependency is exactly
@@ -88,6 +100,13 @@ FUNCTION SessSelect( cH )
    IF hInfo == NIL
       RETURN Err( "ERROR_INVALID_HANDLE", "handle does not exist", "h", ;
                   { "handle" => hb_CStr( cH ) } )
+   ENDIF
+
+   IF hb_HHasKey( hInfo, "detached" ) .AND. hInfo[ "detached" ]
+      RETURN Err( "ERROR_HANDLE_DETACHED", "file was lost during an exclusive operation", ;
+                  "h", { "handle" => cH, ;
+                         "file"   => hb_FNameNameExt( hInfo[ "path" ] ), ;
+                         "why"    => hInfo[ "detachedWhy" ] } )
    ENDIF
 
    IF ! hInfo[ "open" ]
@@ -162,3 +181,68 @@ FUNCTION SessSetConnections( aCon )
    s_aConnections := aCon
    SessBump()
    RETURN aCon
+
+
+/*
+ * Marca o handle como perdido, com o motivo.
+ *
+ * `cPorque` e um CODIGO de traducao, nao uma frase: quem le a mensagem e a
+ * mesma pessoa que escolheu o idioma. Ver R6 de docs/10-integridade.md.
+ *
+ * A workarea nao e fechada aqui -- ela ja nao existe, e por isso chegamos neste
+ * estado. O handle fica no mapa, com o caminho, para a aba poder oferecer
+ * "reconectar" e para a mensagem citar o arquivo pelo nome.
+ */
+FUNCTION SessDetach( cH, cPorque )
+
+   LOCAL hInfo := SessHandle( cH )
+
+   IF hInfo == NIL
+      RETURN .F.
+   ENDIF
+
+   hInfo[ "detached" ] := .T.
+   hInfo[ "detachedWhy" ] := hb_defaultValue( cPorque, "ERROR_REOPEN_FAILED" )
+   hInfo[ "wa" ] := 0
+
+   SessBump()
+
+   RETURN .T.
+
+
+/*
+ * Devolve o handle ao normal, apontando para a workarea nova.
+ *
+ * Usado depois de fechar e reabrir a area -- seja na sequencia normal de uma
+ * operacao exclusiva, seja num "reconectar" pedido pelo usuario. O HANDLE E O
+ * MESMO: `h7` continua `h7`, porque a UI inteira o referencia. O que muda e a
+ * area por tras dele.
+ */
+FUNCTION SessReattach( cH, nWa, lExclusivo )
+
+   LOCAL hInfo := SessHandle( cH )
+
+   IF hInfo == NIL
+      RETURN .F.
+   ENDIF
+
+   hInfo[ "wa" ] := nWa
+   hInfo[ "open" ] := .T.
+   hInfo[ "detached" ] := .F.
+   hInfo[ "detachedWhy" ] := ""
+
+   IF HB_ISLOGICAL( lExclusivo )
+      hInfo[ "exclusive" ] := lExclusivo
+   ENDIF
+
+   SessBump()
+
+   RETURN .T.
+
+
+/* O handle esta perdido? */
+FUNCTION SessDetached( cH )
+
+   LOCAL hInfo := SessHandle( cH )
+
+   RETURN hInfo != NIL .AND. hb_HHasKey( hInfo, "detached" ) .AND. hInfo[ "detached" ]
