@@ -524,4 +524,6 @@
   UI_JOB_COPYING: "Copiando para {file}…",
   UI_JOB_WORKING: "Trabalhando…",
 
+  UI_JOB_SIMULATING: "Simulando processamento…",
+
 };

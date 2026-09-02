@@ -510,6 +510,72 @@ fn selftest() -> i32 {
         }
     }
 
+    // --- B11 + i18n do rotulo: a maquinaria de tarefa longa ---
+    //
+    // Possivel gracas a meta.slowjob. As operacoes reais desta base sao rapidas
+    // demais para observar a barra: contar 421.714 registros leva 40 ms e criar
+    // o indice sobre eles leva 95 ms, ambos abaixo do pulso de 120 ms da UI.
+    // Sem uma tarefa lenta de mentira, progresso e cancelamento so podiam ser
+    // testados fabricando um arquivo gigante.
+    if let Some(prog) = hb.progresso() {
+        let prog = std::sync::Arc::new(prog);
+
+        // O cancelamento vem de OUTRA thread, que e o unico jeito que existe: a
+        // thread da VM esta dentro do laco e nao volta para atender ninguem.
+        // HbCancel nao entra na fila justamente por isso (ver progress.c).
+        let cancelador = std::sync::Arc::clone(&prog);
+        let vigia = std::thread::spawn(move || {
+            let mut rotulo = String::new();
+            for _ in 0..400 {
+                let a = cancelador.ler();
+                if a.ativo {
+                    if rotulo.is_empty() {
+                        rotulo = a.mensagem.clone();
+                    }
+                    if a.atual >= 3 {
+                        cancelador.cancelar();
+                        return (rotulo, a.atual, a.total);
+                    }
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            (rotulo, 0, 0)
+        });
+
+        let resp = rpc_bruto(&hb, "meta.slowjob", r#"{"seconds":8,"steps":80}"#);
+        let (rotulo, visto, total) = vigia.join().unwrap_or_default();
+
+        match resp {
+            Ok(r) => {
+                t.ok(
+                    "tarefa: cancelamento de outra thread interrompe o laco",
+                    r.contains("\"canceled\":true") || r.contains("\"canceled\": true"),
+                    &format!("esperava canceled:true em {r}"),
+                );
+                t.ok(
+                    "tarefa: parou muito antes do fim (nao esperou os 8 s)",
+                    visto > 0 && total > 0 && visto < total / 2,
+                    &format!("parou em {visto} de {total}"),
+                );
+            }
+            Err(e) => {
+                t.ok("tarefa: cancelamento de outra thread interrompe o laco", false, &e);
+                t.ok("tarefa: parou muito antes do fim (nao esperou os 8 s)", false, &e);
+            }
+        }
+
+        // O rotulo viaja como CODIGO, nao como frase pronta -- se voltar a ser
+        // frase, a barra fica em portugues em qualquer idioma. Ver
+        // src/util/job.prg.
+        t.ok(
+            "tarefa: o rotulo viaja como codigo de traducao, nao como frase",
+            rotulo.contains("\"c\":\"UI_JOB_"),
+            &format!("esperava {{\"c\":\"UI_JOB_...\"}}, veio {rotulo:?}"),
+        );
+    } else {
+        saida("  --   tarefa: DLL sem HbProgressGet/HbCancel, pulando");
+    }
+
     t.resumo()
 }
 
