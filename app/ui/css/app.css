@@ -1301,3 +1301,7 @@ body.arrastando-aba .aba { cursor: grabbing; }
   border-left: 3px solid var(--aviso);
 }
 .pv-confirma input { margin-top: 1px; }
+
+/* O nome da cópia é o que a pessoa vai procurar na pasta: monoespaçado, para
+   o carimbo de hora ser lido dígito a dígito. */
+.pv-tabela td.bak { font-family: var(--mono, monospace); font-size: 11px; }

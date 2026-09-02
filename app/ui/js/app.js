@@ -4055,6 +4055,12 @@ async function abrirPrevoo(h, aoConfirmar) {
   msgPrevoo("");
   $("pv-confirma").checked = false;
 
+  // Volta ao estado de ANTES: o diálogo é reaproveitado, e sem isto a segunda
+  // abertura herdaria o "Fechar" e o botão escondido da primeira.
+  $("pv-rodar").hidden = false;
+  $("pv-cancelar").textContent = T("UI_CANCEL");
+  $("pv-conjunto-box").open = false;
+
   try {
     desenharPrevoo(await DBU.rpc("backup.check", { h }));
     dlg.showModal();
@@ -4128,6 +4134,42 @@ function detalheDoCheck(c) {
   return T("UI_" + c.id + "_MSG", p);
 }
 
+/*
+ * O resultado: QUAIS arquivos nasceram, e não só a pasta.
+ *
+ * A primeira versão dizia "Backup feito em J:\bases\base01\" e parava aí — o
+ * nome do arquivo estava na resposta (`files[].backup`) e não ia para a tela.
+ * Obrigar a pessoa a abrir o Explorer para descobrir o que foi criado desfaz
+ * justamente o que este diálogo existe para construir: saber o que aconteceu.
+ *
+ * A lista do conjunto é REESCRITA com os nomes das cópias. O que estava ali era
+ * a previsão ("vai copiar isto"); depois de feito, a previsão não interessa
+ * mais — interessa o que existe agora, com o nome pelo qual se procura.
+ */
+function mostrarBackupFeito(r) {
+  msgPrevoo(T("UI_BACKUP_DONE", { dir: paraExibir(r.dir) }), "ok");
+
+  const corpo = $("pv-conjunto");
+  corpo.textContent = "";
+  for (const f of r.files) {
+    const tr = elemento("tr");
+    tr.appendChild(elemento("td", "papel", T("UI_ROLE_" + f.role.toUpperCase())));
+    tr.appendChild(elemento("td", "bak", f.backup));
+    tr.appendChild(elemento("td", "num", window.I.tamanho(f.bytes)));
+    corpo.appendChild(tr);
+  }
+
+  // Aberto, não recolhido: o nome do arquivo é a resposta à pergunta "e agora,
+  // onde está minha cópia?" — escondê-la atrás de um clique seria escondê-la.
+  $("pv-conjunto-resumo").textContent = T("UI_BACKUP_FILES", { n: r.files.length });
+  $("pv-conjunto-box").open = true;
+
+  // O botão de copiar de novo não faz sentido depois de feito: uma segunda
+  // cópia idêntica só ocuparia disco. Fechar é a ação que resta.
+  $("pv-rodar").hidden = true;
+  $("pv-cancelar").textContent = T("UI_CLOSE");
+}
+
 function msgPrevoo(txt, classe) {
   const el = $("pv-msg");
   el.textContent = txt || "";
@@ -4149,7 +4191,7 @@ $("pv-rodar").addEventListener("click", async () => {
         confirmLarge: $("pv-confirma").checked,
       })
     );
-    msgPrevoo(T("UI_BACKUP_DONE", { dir: paraExibir(r.dir) }), "ok");
+    mostrarBackupFeito(r);
 
     // A operação real só agora — depois de a cópia existir E ter sido
     // conferida. É o passo 3 da sequência que dá valor a todos os outros.
