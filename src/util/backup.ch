@@ -35,8 +35,35 @@
    merece saber antes de comecar, nao depois. */
 #define GRANDE_BYTES   ( 256 * 1024 * 1024 )
 
-/* 1 MB por pedaco: grande o bastante para a copia nao virar sindrome de chamada
-   de sistema, pequeno o bastante para o cancelamento responder rapido. */
-#define BLOCO_COPIA    ( 1024 * 1024 )
+/*
+ * 256 KB por pedaco, e o numero foi MEDIDO, nao escolhido.
+ *
+ * Copiando o mesmo arquivo de 834 MB (J:/bases/BASE02/NETROM.DBF), com
+ * meta.copyfile variando so o bloco:
+ *
+ *      8 KB   1294 ms    644 MB/s   106.741 iteracoes   (o do Clipper)
+ *     64 KB    608 ms   1372 MB/s    13.343             (o do __CopyFile)
+ *    256 KB    471 ms   1771 MB/s     3.336   <-- melhor
+ *      1 MB    649 ms   1285 MB/s       834
+ *      5 MB    714 ms   1168 MB/s       167   <-- pior que 64 KB
+ *     10 MB    679 ms   1228 MB/s        84
+ *
+ * A curva sobe ate 256 KB e DESCE depois. O palpite comum -- "bloco maior copia
+ * mais rapido" -- e falso: passado o ponto em que a chamada de sistema ja se
+ * diluiu, blocos grandes so pioram a localidade de cache.
+ *
+ * Ressalva: os numeros altos sao com o arquivo no cache do sistema, entao medem
+ * o custo de chamada e de copia de memoria, nao o disco frio. A conclusao que
+ * importa se sustenta assim mesmo -- bloco grande nao compra nada.
+ *
+ * O bloco tambem e a latencia do cancelamento: um bloco por vez. Com 256 KB
+ * isso e imperceptivel ate num compartilhamento lento; com 10 MB a 5 MB/s
+ * seriam 2 segundos ate o Parar responder.
+ *
+ * E parametro em CopiaArquivo(), nao valor fixo: e o que o FileCopy() do
+ * NETSPOOL.PRG aprendeu em 2014 -- porta LPT, disco local e rede querem coisas
+ * diferentes. Este e so o padrao.
+ */
+#define BLOCO_COPIA    ( 256 * 1024 )
 
 #endif

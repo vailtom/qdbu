@@ -9,6 +9,7 @@
  * exercitam a ponte sem montar envelope -- e e bom que o teste mais basico da
  * ponte nao dependa da camada de roteamento.
  */
+#include "backup.ch"
 
 /* Extrai um parametro aceitando hash (envelope) ou string (cru). */
 STATIC FUNCTION Arg( x, cChave )
@@ -270,3 +271,61 @@ FUNCTION Api_Meta_Detach( hP )
    SessDetach( cH, "ERROR_REOPEN_FAILED" )
 
    RETURN Ok( { "h" => cH, "detached" => .T. } )
+
+
+/*
+ * meta.copyfile {"source":"...","dest":"...","block":1048576} -- exercita a
+ * copia de bytes direto, sem passar pelo backup.
+ *
+ * POR QUE PRECISA EXISTIR
+ *
+ * A via de bytes so roda com o arquivo FORA da work area, e hoje nenhum fluxo
+ * faz isso: quem fecha a area para operar e a T14, que ainda nao existe. Sem
+ * este gancho a rotina seria codigo nao exercitado ate o dia em que rodasse
+ * pela primeira vez em cima do arquivo de um cliente.
+ *
+ * Serve tambem para MEDIR o tamanho de bloco. A discussao sobre 64 KB, 1 MB ou
+ * 10 MB nao se resolve por opiniao: o __CopyFile do Harbour usa 64 KB ha 25
+ * anos, e o palpite contrario era de que bloco maior seria melhor. Com o
+ * parametro exposto, mede-se.
+ */
+FUNCTION Api_Meta_Copyfile( hP )
+
+   LOCAL cOrig  := iif( HB_ISHASH( hP ) .AND. hb_HHasKey( hP, "source" ), hP[ "source" ], "" )
+   LOCAL cDest  := iif( HB_ISHASH( hP ) .AND. hb_HHasKey( hP, "dest" ), hP[ "dest" ], "" )
+   LOCAL nBloco := ParNum( hP, "block", 0 )
+   LOCAL lExcl  := ! ( HB_ISHASH( hP ) .AND. hb_HHasKey( hP, "shared" ) .AND. hP[ "shared" ] == .T. )
+   LOCAL nCopiados := 0
+   LOCAL nInicio, xErro
+
+   IF Empty( cOrig ) .OR. Empty( cDest )
+      RETURN Err( "ERROR_PARAM_REQUIRED", "source and dest are required", , ;
+                  { "param" => "source/dest" } )
+   ENDIF
+
+   cOrig := CaminhoOS( cOrig )
+   cDest := CaminhoOS( cDest )
+
+   IF ! hb_FileExists( cOrig )
+      RETURN Err( "ERROR_FILE_NOT_FOUND", "source not found", "source", ;
+                  { "file" => hb_FNameNameExt( cOrig ) } )
+   ENDIF
+
+   /* O bloco EFETIVO, e nao o pedido: CopiaArquivo() aplica piso e teto, e
+      reportar o pedido faria a medicao mentir sobre o que rodou. */
+   nBloco := iif( nBloco == 0, BLOCO_COPIA, ;
+                  Max( 4096, Min( nBloco, 32 * 1024 * 1024 ) ) )
+
+   nInicio := hb_MilliSeconds()
+   xErro := CopiaArquivo( cOrig, cDest, nBloco, NIL, @nCopiados, lExcl )
+
+   IF xErro != NIL
+      RETURN xErro
+   ENDIF
+
+   RETURN Ok( { "source"    => hb_FNameNameExt( cOrig ), ;
+                "dest"      => hb_FNameNameExt( cDest ), ;
+                "block"     => nBloco, ;
+                "exclusive" => lExcl, ;
+                "bytes"     => nCopiados, ;
+                "ms"        => hb_MilliSeconds() - nInicio } )

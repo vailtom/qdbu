@@ -245,20 +245,44 @@ FUNCTION CarimboAgora()
  *
  * Devolve NIL em sucesso, ou a recusa pronta.
  */
-FUNCTION CopiaArquivo( cOrigem, cDestino, nJaFeito, nTotalGeral, nCopiados )
+FUNCTION CopiaArquivo( cOrigem, cDestino, nBloco, bEvento, nCopiados, lExclusivo )
 
-   LOCAL nIn, nOut, nLido, nErro
-   LOCAL cBuf   := Space( BLOCO_COPIA )
-   LOCAL nFeito := hb_defaultValue( nJaFeito, 0 )
-   LOCAL nEste  := 0
+   LOCAL nIn, nOut, nLido, nErro, nEscrito, nDone
+   LOCAL nTotal, nFeito := 0
+   LOCAL cBuf, nQuero
+   LOCAL nModo
 
+   nBloco := Max( 4096, Min( hb_defaultValue( nBloco, BLOCO_COPIA ), 32 * 1024 * 1024 ) )
    nCopiados := 0
 
-   nIn := FOpen( cOrigem, FO_READ + FO_SHARED )
+   /*
+    * EXCLUSIVO por padrao, e o padrao importa.
+    *
+    * Esta via so roda com o arquivo FORA da work area -- fechado por nos, para
+    * uma operacao exclusiva. Abrir compartilhado ali deixaria outro processo
+    * gravar no meio da copia, e o resultado seria um borrao no tempo em vez de
+    * um retrato: metade do arquivo de antes, metade de depois, sem nada
+    * indicando isso.
+    *
+    * O Harbour abre a origem COMPARTILHADA no proprio __CopyFile (rtl/copyfile.c),
+    * mas ele e um COPY FILE de uso geral, que escolheu "sempre conseguir copiar"
+    * em vez de "garantir consistencia". Backup escolhe o contrario: se alguem
+    * esta com o arquivo, falhar e a resposta certa.
+    */
+   nModo := iif( hb_defaultValue( lExclusivo, .T. ), ;
+                 FO_READ + FO_EXCLUSIVE, FO_READ + FO_SHARED )
+
+   nIn := FOpen( cOrigem, nModo )
    IF nIn == F_ERROR
       RETURN Err( "ERROR_BACKUP_READ_FAILED", "cannot open source", "path", ;
                   { "file" => hb_FNameNameExt( cOrigem ), "os" => FError() } )
    ENDIF
+
+   /* O tamanho vem do HANDLE que vai ser lido, e nao do nome: e ele que define
+      quanto falta a cada volta, e um hb_FSize() no nome poderia responder sobre
+      outra coisa entre uma chamada e outra. */
+   nTotal := FSeek( nIn, 0, FS_END )
+   FSeek( nIn, 0, FS_SET )
 
    nOut := FCreate( cDestino )
    IF nOut == F_ERROR
@@ -268,47 +292,62 @@ FUNCTION CopiaArquivo( cOrigem, cDestino, nJaFeito, nTotalGeral, nCopiados )
                   { "file" => hb_FNameNameExt( cDestino ), "os" => nErro } )
    ENDIF
 
-   DO WHILE .T.
+   IF HB_ISBLOCK( bEvento )
+      Eval( bEvento, 0, nTotal )
+   ENDIF
+
+   DO WHILE nFeito < nTotal
 
       /*
-       * FError() ANTES de decidir, porque `nLido <= 0` significa DUAS coisas.
+       * PEDE EXATAMENTE O QUE FALTA, e por isso ler menos E erro.
        *
-       * Fim de arquivo e erro de leitura chegam aqui iguais. A versao anterior
-       * tratava os dois como fim: um erro de leitura no meio produzia uma copia
-       * truncada e a rotina seguia como se tivesse terminado. A conferencia de
-       * tamanho pegava depois -- mas anunciando "tamanho diferente", que e
-       * verdade e nao e a causa. Diagnostico errado num backup manda a pessoa
-       * procurar espaco em disco quando o problema e o setor ruim.
+       * Pedindo sempre o bloco inteiro, uma leitura curta significa duas coisas
+       * -- fim de arquivo ou falha -- e nao ha como distinguir. Calculando o
+       * resto, a ambiguidade some: se pedi 700 KB porque e o que falta e vieram
+       * 300 KB, algo deu errado. E o desenho do FileCopy() do NETSPOOL.PRG.
        */
-      FError( 0 )
-      nLido := FRead( nIn, @cBuf, BLOCO_COPIA )
-      nErro := FError()
+      nQuero := Min( nBloco, nTotal - nFeito )
+      cBuf := Space( nQuero )
 
-      IF nErro != 0
-         FClose( nIn )
-         FClose( nOut )
-         Descarta( cDestino )
-         RETURN Err( "ERROR_BACKUP_READ_FAILED", "read error", "path", ;
-                     { "file" => hb_FNameNameExt( cOrigem ), "os" => nErro } )
-      ENDIF
+      nLido := FRead( nIn, @cBuf, nQuero )
 
-      IF nLido <= 0
-         EXIT                                  /* fim de arquivo, de verdade */
-      ENDIF
-
-      IF FWrite( nOut, cBuf, nLido ) != nLido
+      IF nLido != nQuero
          nErro := FError()
          FClose( nIn )
          FClose( nOut )
          Descarta( cDestino )
-         RETURN Err( "ERROR_BACKUP_WRITE_FAILED", "short write", "path", ;
-                     { "file" => hb_FNameNameExt( cDestino ), "os" => nErro } )
+         RETURN Err( "ERROR_BACKUP_READ_FAILED", "short read", "path", ;
+                     { "file" => hb_FNameNameExt( cOrigem ), "os" => nErro } )
       ENDIF
 
-      nEste  += nLido
+      /*
+       * GRAVACAO PARCIAL E NORMAL, e insistir e obrigatorio.
+       *
+       * FWrite pode gravar menos que o pedido -- e o caso comum em
+       * compartilhamento de rede. A versao anterior tratava isso como falha
+       * fatal e APAGAVA a copia: a rotina que existe para nao perder backup,
+       * perdendo backup por um comportamento previsto do sistema. O
+       * __CopyFile do Harbour insiste num laco interno; aqui tambem.
+       */
+      nEscrito := 0
+      DO WHILE nEscrito < nLido
+         nDone := FWrite( nOut, SubStr( cBuf, nEscrito + 1, nLido - nEscrito ), ;
+                          nLido - nEscrito )
+         IF nDone <= 0
+            nErro := FError()
+            FClose( nIn )
+            FClose( nOut )
+            Descarta( cDestino )
+            RETURN Err( "ERROR_BACKUP_WRITE_FAILED", "write failed", "path", ;
+                        { "file" => hb_FNameNameExt( cDestino ), "os" => nErro } )
+         ENDIF
+         nEscrito += nDone
+      ENDDO
+
       nFeito += nLido
-      IF HB_ISNUMERIC( nTotalGeral ) .AND. nTotalGeral > 0
-         Dbu_Progress( nFeito )
+
+      IF HB_ISBLOCK( bEvento )
+         Eval( bEvento, nFeito, nTotal )
       ENDIF
 
       /* Entre pedacos, nunca no meio de um. R1 de docs/10-integridade.md. */
@@ -329,9 +368,8 @@ FUNCTION CopiaArquivo( cOrigem, cDestino, nJaFeito, nTotalGeral, nCopiados )
     * O FCLOSE DO DESTINO E CHECADO, e nao e formalidade.
     *
     * E nele que o ultimo buffer vai para o disco -- entao disco cheio,
-    * compartilhamento de rede que caiu e cota estourada aparecem AQUI, e nao
-    * nos FWrite anteriores, que so encheram o buffer do sistema. Fechar sem
-    * conferir e ignorar o unico ponto onde essas falhas se manifestam.
+    * compartilhamento que caiu e cota estourada aparecem AQUI, e nao nos FWrite
+    * anteriores, que so encheram o buffer do sistema.
     */
    FError( 0 )
    FClose( nOut )
@@ -343,7 +381,7 @@ FUNCTION CopiaArquivo( cOrigem, cDestino, nJaFeito, nTotalGeral, nCopiados )
                   { "file" => hb_FNameNameExt( cDestino ), "os" => nErro } )
    ENDIF
 
-   nCopiados := nEste
+   nCopiados := nFeito
 
    RETURN NIL
 
