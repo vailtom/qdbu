@@ -80,15 +80,32 @@ STATIC FUNCTION Item( cId, cNivel, hParams )
  * pelo `run` -- ter dois caminhos que conferem coisas diferentes seria a forma
  * mais provavel de o `run` passar onde o `check` reprovou.
  */
-STATIC FUNCTION MontaChecklist( cH )
+/*
+ * DOIS PROPOSITOS, e eles nao exigem a mesma coisa.
+ *
+ *   lParaOperacao = .T.  PRE-VOO: uma operacao destrutiva vem logo depois. O
+ *                        destino e sempre AO LADO do original, e o espaco tem
+ *                        de caber tambem o .tmp que a R2 exige.
+ *
+ *   lParaOperacao = .F.  COPIA AVULSA: a pessoa pediu uma copia, e so. Escolhe
+ *                        a pasta, nada vem depois, e nasce 1x apenas.
+ *
+ * A distincao apareceu ao ligar o backup a um item de menu: o aviso "esta em
+ * modo compartilhado, a operacao seguinte vai exigir exclusivo" era ruido puro
+ * numa copia avulsa, porque nao ha operacao seguinte. E copiar NUNCA exigiu
+ * exclusivo -- CopiaArquivo() le com FO_READ + FO_SHARED desde sempre.
+ */
+STATIC FUNCTION MontaChecklist( cH, cCaminhoDestino, lParaOperacao )
 
    LOCAL hInfo := SessHandle( cH )
    LOCAL aSet, nBytes, nLivre, nPreciso, aItens := {}
    LOCAL aIdx := {}, hIdx
-   LOCAL lEspacoOk, lGrande
+   LOCAL lEspacoOk, lGrande, cDestino, lMesmoVol, nLivreOrigem
+   LOCAL cAlvo, cSelo := CarimboAgora()
 
-   /* Os indices ABERTOS neste handle. Fechados nao entram: nao correm risco
-      porque a operacao destrutiva nem os conhece. */
+   /* Os indices abertos entram como DEFINICAO, nao como arquivo copiado: e a
+      chave que permite reconstrui-los depois de uma restauracao. Ver o
+      comentario em ConjuntoDoArquivo(). */
    IF HB_ISARRAY( hInfo[ "indexes" ] )
       FOR EACH hIdx IN hInfo[ "indexes" ]
          IF HB_ISHASH( hIdx ) .AND. hb_HHasKey( hIdx, "path" )
@@ -99,10 +116,34 @@ STATIC FUNCTION MontaChecklist( cH )
       NEXT
    ENDIF
 
-   aSet     := ConjuntoDoArquivo( hInfo[ "path" ], aIdx )
-   nBytes   := BytesDoConjunto( aSet )
-   nLivre   := EspacoLivre( hInfo[ "path" ] )
-   nPreciso := nBytes * FATOR_ESPACO
+   aSet   := ConjuntoDoArquivo( hInfo[ "path" ] )
+   nBytes := BytesDoConjunto( aSet )
+
+   /*
+    * O caminho COMPLETO do destino -- pasta e nome.
+    *
+    * Pre-voo nao aceita destino: copia ao lado, com o nome sugerido. A
+    * restauracao precisa ser uma renomeacao no mesmo volume, e nao uma copia
+    * que pode falhar na hora errada.
+    *
+    * Copia avulsa aceita o caminho inteiro, porque renomear e o uso comum --
+    * mesma pasta, nome com carimbo. Vazio significa "use a sugestao".
+    */
+   cAlvo := iif( lParaOperacao .OR. Empty( cCaminhoDestino ), ;
+                 NomeDoBackup( hInfo[ "path" ], cSelo ), ;
+                 CaminhoOS( cCaminhoDestino ) )
+
+   cDestino := hb_FNameDir( cAlvo )
+
+   lMesmoVol := MesmoVolume( cDestino, hInfo[ "path" ] )
+
+   /* Medido no volume de DESTINO: perguntar a origem quando a copia vai para
+      outro disco responde a pergunta errada. */
+   nLivre := EspacoLivre( hb_DirSepAdd( cDestino ) + "x" )
+
+   /* 2x so quando o .tmp da operacao seguinte disputa o MESMO volume. */
+   nPreciso := nBytes * iif( lParaOperacao .AND. lMesmoVol, ;
+                             FATOR_OPERACAO, FATOR_COPIA )
 
    /* -1 e "nao pude conferir", que NAO e "nao tem espaco". Bloqueia do mesmo
       jeito: seguir sem saber e apostar o arquivo do cliente numa suposicao. */
@@ -111,17 +152,52 @@ STATIC FUNCTION MontaChecklist( cH )
 
    IF nLivre < 0
       AAdd( aItens, Item( "CHECK_DISK_UNKNOWN", NIVEL_FAIL, ;
-                          { "path" => hb_FNameDir( hInfo[ "path" ] ) } ) )
+                          { "path" => cDestino } ) )
    ELSE
       AAdd( aItens, Item( "CHECK_DISK_SPACE", ;
                           iif( lEspacoOk, NIVEL_PASS, NIVEL_FAIL ), ;
                           { "needed" => nPreciso, ;
                             "free"   => nLivre, ;
-                            "factor" => FATOR_ESPACO } ) )
+                            "where"  => cDestino } ) )
+   ENDIF
+
+   /* Volume diferente: o backup nao ocupa nada na origem, mas o .tmp da
+      operacao seguinte continua nascendo la. Conferencia propria -- passar na do
+      destino nao diz nada sobre este disco. */
+   IF lParaOperacao .AND. ! lMesmoVol
+      nLivreOrigem := EspacoLivre( hInfo[ "path" ] )
+      AAdd( aItens, Item( "CHECK_SOURCE_ROOM", ;
+                          iif( nLivreOrigem >= nBytes, NIVEL_PASS, NIVEL_FAIL ), ;
+                          { "needed" => nBytes, ;
+                            "free"   => Max( 0, nLivreOrigem ), ;
+                            "where"  => hb_FNameDir( hInfo[ "path" ] ) } ) )
    ENDIF
 
    AAdd( aItens, Item( "CHECK_FILE_SET", NIVEL_PASS, ;
                        { "n" => Len( aSet ), "bytes" => nBytes } ) )
+
+   /*
+    * Destino ja ocupado: RECUSA, nunca sobrescrita silenciosa.
+    *
+    * Com o nome editavel, colidir deixou de ser improvavel -- e o arquivo que
+    * estaria ali e, quase por definicao, um backup anterior. Sobrescrever um
+    * backup para criar outro e a forma mais direta de nao ter backup nenhum.
+    *
+    * A recusa e por conferencia e nao por erro de gravacao: aparece ANTES,
+    * com o nome do arquivo, enquanto ainda da para trocar. Um erro no meio da
+    * copia de 800 MB apareceria depois da espera, e com o arquivo ja alterado.
+    */
+   IF hb_FileExists( cAlvo )
+      AAdd( aItens, Item( "CHECK_TARGET_EXISTS", NIVEL_FAIL, ;
+                          { "file" => hb_FNameNameExt( cAlvo ) } ) )
+   ENDIF
+
+   /* Copiar por cima da propria origem destruiria o arquivo. Nao e hipotese
+      remota com o nome editavel: basta apagar o carimbo do nome sugerido. */
+   IF Upper( AllTrim( cAlvo ) ) == Upper( AllTrim( hInfo[ "path" ] ) )
+      AAdd( aItens, Item( "CHECK_TARGET_IS_SOURCE", NIVEL_FAIL, ;
+                          { "file" => hb_FNameNameExt( cAlvo ) } ) )
+   ENDIF
 
    /* Aviso, nao falha: arquivo grande nao impede nada -- so exige que a pessoa
       saiba antes, e nao descubra esperando. */
@@ -130,10 +206,15 @@ STATIC FUNCTION MontaChecklist( cH )
                           { "bytes" => nBytes, "limit" => GRANDE_BYTES } ) )
    ENDIF
 
-   /* Exclusivo nao e exigido pelo BACKUP (ler compartilhado serve), mas e
-      exigido pela operacao que vem depois. Avisar aqui evita a pessoa esperar a
-      copia inteira para so entao ser recusada. */
-   IF ! hInfo[ "exclusive" ]
+   /*
+    * O aviso e sobre a OPERACAO SEGUINTE, nunca sobre a copia.
+    *
+    * Copiar nunca exigiu exclusivo -- CopiaArquivo() le com FO_READ+FO_SHARED,
+    * e no DBU sempre foi assim: com o arquivo aberto, e so copiar. Numa copia
+    * avulsa nao ha operacao seguinte, e o aviso seria ruido. Ruido num checklist
+    * e pior que silencio: ensina a ignorar a lista.
+    */
+   IF lParaOperacao .AND. ! hInfo[ "exclusive" ]
       AAdd( aItens, Item( "CHECK_NOT_EXCLUSIVE", NIVEL_WARN, ;
                           { "file" => hb_FNameNameExt( hInfo[ "path" ] ) } ) )
    ENDIF
@@ -145,7 +226,12 @@ STATIC FUNCTION MontaChecklist( cH )
       "bytes"      => nBytes, ;
       "freeBytes"  => nLivre, ;
       "neededBytes" => nPreciso, ;
-      "factor"     => FATOR_ESPACO, ;
+      "dir"        => cDestino, ;
+      "target"     => cAlvo, ;
+      "stamp"      => cSelo, ;
+      "sameVolume" => lMesmoVol, ;
+      "forOperation" => lParaOperacao, ;
+      "indexes"    => DefinicoesDosIndices( cH ), ;
       "large"      => lGrande, ;
       "checks"     => aItens, ;
       "limitBytes" => GRANDE_BYTES, ;
@@ -157,14 +243,75 @@ STATIC FUNCTION MontaChecklist( cH )
  */
 FUNCTION Api_Backup_Check( hP )
 
-   LOCAL cH := ParStr( hP, "h" )
+   LOCAL cH    := ParStr( hP, "h" )
+   LOCAL cAlvo := ParStr( hP, "path" )
+   LOCAL lOp   := ParLog( hP, "forOperation", .T. )
    LOCAL xErro
 
    IF ( xErro := SessSelect( cH ) ) != NIL
       RETURN xErro
    ENDIF
 
-   RETURN Ok( MontaChecklist( cH ) )
+   IF ( xErro := DestinoValido( @cAlvo ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   RETURN Ok( MontaChecklist( cH, cAlvo, lOp ) )
+
+
+/*
+ * O caminho de destino serve? Vazio significa "use a sugestao".
+ *
+ * Confere a PASTA, e nao o arquivo: o arquivo ainda nao existe -- e se existir,
+ * quem recusa e a conferencia CHECK_TARGET_EXISTS, que e uma recusa com nome e
+ * explicacao, nao um erro de gravacao no meio da copia.
+ */
+STATIC FUNCTION DestinoValido( cAlvo )
+
+   LOCAL cDir
+
+   IF Empty( cAlvo )
+      RETURN NIL
+   ENDIF
+
+   cAlvo := CaminhoOS( cAlvo )
+   cDir  := hb_FNameDir( cAlvo )
+
+   IF Empty( hb_FNameName( cAlvo ) )
+      RETURN Err( "ERROR_PARAM_REQUIRED", "destination file name is required", ;
+                  "path", { "param" => "path" } )
+   ENDIF
+
+   IF ! Empty( cDir ) .AND. ! hb_DirExists( cDir )
+      RETURN Err( "ERROR_DIR_NOT_FOUND", "destination folder not found", "path", ;
+                  { "dir" => cDir } )
+   ENDIF
+
+   RETURN NIL
+
+
+/*
+ * A definicao de cada indice aberto -- nome, chave e FOR.
+ *
+ * Vai no resultado porque o backup NAO copia os .ntx: eles sao derivados, e o
+ * que precisa sobreviver e a chave que os regenera. Sem isto, restaurar um .dbf
+ * deixaria a pessoa sem saber quais indices existiam nem com que expressao.
+ */
+STATIC FUNCTION DefinicoesDosIndices( cH )
+
+   LOCAL aRet := {}
+   LOCAL i
+
+   HB_SYMBOL_UNUSED( cH )
+
+   FOR i := 1 TO ordCount()
+      AAdd( aRet, { ;
+         "bag" => ordBagName( i ), ;
+         "key" => ordKey( i ), ;
+         "for" => ordFor( i ) } )
+   NEXT
+
+   RETURN aRet
 
 
 /*
@@ -182,6 +329,8 @@ FUNCTION Api_Backup_Check( hP )
 FUNCTION Api_Backup_Run( hP )
 
    LOCAL cH       := ParStr( hP, "h" )
+   LOCAL cAlvo    := ParStr( hP, "path" )
+   LOCAL lOp      := ParLog( hP, "forOperation", .T. )
    LOCAL lConfGde := ParLog( hP, "confirmLarge", .F. )
    LOCAL xErro, hRel, cSelo, aFeitos := {}, hArq, cDestino, nTotal, nFeito := 0
    LOCAL hCopia, aCopias := {}
@@ -192,7 +341,11 @@ FUNCTION Api_Backup_Run( hP )
 
    /* Confere DE NOVO. Entre o check e o run o usuario pode ter lido o
       relatorio, ido almocar e voltado -- e o disco pode ter enchido. */
-   hRel := MontaChecklist( cH )
+   IF ( xErro := DestinoValido( @cAlvo ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   hRel := MontaChecklist( cH, cAlvo, lOp )
 
    IF ! hRel[ "canProceed" ]
       RETURN Err( "ERROR_BACKUP_PRECHECK_FAILED", "pre-flight check failed", , ;
@@ -208,13 +361,13 @@ FUNCTION Api_Backup_Run( hP )
 
    /* Um selo para o conjunto inteiro: os arquivos saem reconheciveis como
       grupo, e nao com horas diferentes por terem sido copiados em sequencia. */
-   cSelo  := CarimboAgora()
+   cSelo  := hRel[ "stamp" ]
    nTotal := hRel[ "bytes" ]
 
    Dbu_JobBegin( JobMsg( "UI_JOB_BACKUP", hRel[ "file" ] ), nTotal )
 
    FOR EACH hArq IN hRel[ "set" ]
-      cDestino := NomeDoBackup( hArq[ "path" ], cSelo )
+      cDestino := DestinoDoMembro( hArq[ "path" ], hRel[ "target" ], hArq[ "role" ] )
 
       xErro := CopiaArquivo( hArq[ "path" ], cDestino, nFeito, nTotal )
       IF xErro != NIL
@@ -249,7 +402,8 @@ FUNCTION Api_Backup_Run( hP )
    RETURN Ok( { ;
       "file"    => hRel[ "file" ], ;
       "stamp"   => cSelo, ;
-      "dir"     => hb_FNameDir( hRel[ "path" ] ), ;
+      "dir"     => hRel[ "dir" ], ;
+      "indexes" => hRel[ "indexes" ], ;
       "bytes"   => nTotal, ;
       "files"   => aCopias, ;
       "checks"  => hRel[ "checks" ] } )

@@ -4036,6 +4036,8 @@ $("lg-pasta").addEventListener("click", () => {
 
 let prevooHandle = null;
 let prevooDepois = null; // o que rodar depois do backup confirmado
+let prevooOperacao = true; // pré-voo (true) × cópia avulsa (false)
+let prevooAlvo = ""; // caminho escolhido; vazio = usa a sugestão da DLL
 
 const PV_ICONE = { pass: "✓", warn: "!", fail: "✕" };
 
@@ -4047,9 +4049,21 @@ const PV_ICONE = { pass: "✓", warn: "!", fail: "✕" };
  * delas pode esquecer a conferência, e a ordem — conferir, copiar, verificar,
  * só então operar — mora num lugar só.
  */
-async function abrirPrevoo(h, aoConfirmar) {
+async function abrirPrevoo(h, aoConfirmar, opcoes) {
   prevooHandle = h;
   prevooDepois = aoConfirmar || null;
+
+  /*
+   * Dois usos, e eles pedem coisas diferentes.
+   *
+   *   pré-voo (padrão)  uma operação destrutiva vem depois. Destino fixo, ao
+   *                     lado do original, e o espaço precisa caber o .tmp.
+   *   cópia avulsa      a pessoa pediu uma cópia. Escolhe a pasta, nada vem
+   *                     depois, e não há aviso sobre modo exclusivo — copiar
+   *                     nunca exigiu exclusivo.
+   */
+  prevooOperacao = !(opcoes && opcoes.copiaAvulsa);
+  prevooAlvo = "";
 
   const dlg = $("dlg-prevoo");
   msgPrevoo("");
@@ -4062,12 +4076,24 @@ async function abrirPrevoo(h, aoConfirmar) {
   $("pv-conjunto-box").open = false;
 
   try {
-    desenharPrevoo(await DBU.rpc("backup.check", { h }));
+    await recarregarPrevoo();
     dlg.showModal();
   } catch (e) {
     msgPrevoo(msgErro(e), sevErro(e));
     dlg.showModal();
   }
+}
+
+/* Reconsulta o checklist. Chamado ao abrir e a cada troca de pasta: o espaço
+   livre é do volume de DESTINO, então mudar a pasta muda a resposta. */
+async function recarregarPrevoo() {
+  desenharPrevoo(
+    await DBU.rpc("backup.check", {
+      h: prevooHandle,
+      path: prevooAlvo,
+      forOperation: prevooOperacao,
+    })
+  );
 }
 
 function desenharPrevoo(r) {
@@ -4108,6 +4134,22 @@ function desenharPrevoo(r) {
    * isso (os dois valores estavam certos); só apareceu ao olhar a tela.
    */
   $("pv-conjunto-resumo").textContent = T("UI_SEE_FILES");
+
+  /*
+   * Destino: só na cópia avulsa, e já com o nome sugerido dentro.
+   *
+   * A DLL devolve `target` — pasta e nome, com carimbo de hora. O campo nasce
+   * preenchido porque o caso comum é aceitar; e é editável porque o segundo
+   * caso mais comum é renomear na mesma pasta, que é como se guarda mais de uma
+   * geração.
+   *
+   * Só sobrescreve o campo quando a pessoa ainda não digitou nada: recarregar o
+   * checklist (a cada troca de destino) não pode apagar o que ela escreveu.
+   */
+  $("pv-destino-box").hidden = prevooOperacao;
+  if (!prevooOperacao && !prevooAlvo) {
+    $("pv-destino").value = r.target;
+  }
 
   // --- confirmação de arquivo grande ---------------------------------------
   $("pv-confirma-box").hidden = !r.large;
@@ -4176,7 +4218,65 @@ function msgPrevoo(txt, classe) {
   el.className = "ff-msg" + (txt && classe ? " " + classe : "");
 }
 
+/*
+ * A porta de entrada do backup avulso.
+ *
+ * `copiaAvulsa: true` muda três coisas: a pasta passa a ser escolhível, o
+ * espaço exigido cai de 2× para 1× (não há .tmp de operação seguinte), e some o
+ * aviso sobre modo exclusivo — copiar nunca exigiu exclusivo.
+ */
+$("pg-backup").addEventListener("click", () => {
+  if (!abaAtiva) return;
+  abrirPrevoo(abaAtiva, null, { copiaAvulsa: true });
+});
+
 $("pv-cancelar").addEventListener("click", () => $("dlg-prevoo").close());
+
+/*
+ * Escolher a pasta de destino.
+ *
+ * Usa o seletor NATIVO do sistema (tauri-plugin-dialog), e não um navegador de
+ * pastas nosso: a pessoa já sabe usar o do Windows, ele mostra unidades de rede
+ * e pendrives sem nós reimplementarmos nada, e um seletor caseiro seria uma tela
+ * inteira para resolver o que o sistema já resolve.
+ */
+$("pv-escolher").addEventListener("click", async () => {
+  const inv = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+  if (!inv) {
+    msgPrevoo(T("ERROR_DIALOG_UNAVAILABLE"), "aviso");
+    return;
+  }
+  try {
+    const escolhido = await inv("plugin:dialog|save", {
+      options: {
+        title: T("UI_SAVE_AS"),
+        defaultPath: $("pv-destino").value.trim(),
+        filters: [
+          { name: T("UI_FT_DBF"), extensions: ["dbf"] },
+          { name: T("UI_FT_ALL"), extensions: ["*"] },
+        ],
+      },
+    });
+    if (!escolhido) return; // cancelar no diálogo do sistema é cancelar
+    $("pv-destino").value = escolhido;
+    prevooAlvo = escolhido;
+    await recarregarPrevoo();
+  } catch (e) {
+    msgPrevoo(T("ERROR_DIALOG_FAILED", { detail: e.message || e }), "erro");
+  }
+});
+
+/* Digitar também vale: o `⌕` é atalho, não a única porta. Reconsulta ao sair do
+   campo, porque o espaço livre e a colisão de nome dependem do que foi digitado. */
+$("pv-destino").addEventListener("change", async () => {
+  prevooAlvo = $("pv-destino").value.trim();
+  try {
+    await recarregarPrevoo();
+    msgPrevoo("");
+  } catch (e) {
+    msgPrevoo(msgErro(e), sevErro(e));
+  }
+});
 
 $("pv-rodar").addEventListener("click", async () => {
   if (!prevooHandle) return;
@@ -4188,6 +4288,8 @@ $("pv-rodar").addEventListener("click", async () => {
     const r = await comProgresso(
       DBU.rpc("backup.run", {
         h: prevooHandle,
+        path: prevooOperacao ? "" : $("pv-destino").value.trim(),
+        forOperation: prevooOperacao,
         confirmLarge: $("pv-confirma").checked,
       })
     );

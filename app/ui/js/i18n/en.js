@@ -521,8 +521,8 @@
 
   // The checks, one phrase per checklist item.
   UI_CHECK_DISK_SPACE: "Disk space",
-  UI_CHECK_DISK_SPACE_OK: "{free:size} free; the operation needs {needed:size} ({factor}× the file set)",
-  UI_CHECK_DISK_SPACE_BAD: "only {free:size} free, and the operation needs {needed:size} ({factor}× the file set)",
+  UI_CHECK_DISK_SPACE_OK: "{free:size} free on {where}; the operation needs {needed:size}",
+  UI_CHECK_DISK_SPACE_BAD: "only {free:size} free on {where}, and the operation needs {needed:size}",
   UI_CHECK_DISK_UNKNOWN: "Disk space",
   UI_CHECK_DISK_UNKNOWN_MSG: "could not measure free space on {path}",
   UI_CHECK_FILE_SET: "Files to be copied",
@@ -561,5 +561,20 @@
     "The record you were on no longer exists; moved to the top.",
 
   UI_SEE_FILES: "See the files",
+
+
+  // ----------------------------------------- destination of a standalone copy
+  UI_CHECK_SOURCE_ROOM: "Room in the source folder",
+  UI_CHECK_SOURCE_ROOM_MSG:
+    "{free:size} free on {where}; the operation will create a {needed:size} temporary file there",
+
+  UI_BACKUP: "Backup",
+  UI_BACKUP_TITLE: "Copy this file somewhere else, without altering it",
+
+  UI_SAVE_AS: "Save as",
+  UI_CHECK_TARGET_EXISTS: "Destination already exists",
+  UI_CHECK_TARGET_EXISTS_MSG: "'{file}' is already there; pick another name so it is not overwritten",
+  UI_CHECK_TARGET_IS_SOURCE: "Invalid destination",
+  UI_CHECK_TARGET_IS_SOURCE_MSG: "'{file}' is the source file itself",
 
 };

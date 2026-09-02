@@ -48,17 +48,32 @@
 
 
 /*
- * O conjunto de arquivos que andam junto com um DBF.
+ * O conjunto que o backup copia: O DADO, e so ele.
  *
- * Devolve um array de { "path", "bytes", "role" }. `role` distingue o que e
- * insubstituivel (dbf, memo) do que e regeravel (index) -- mas TUDO entra no
- * backup, porque regerar um indice exige a chave, e a chave mora no arquivo que
- * se perderia.
+ *   .dbf   os registros
+ *   .dbt / .fpt   o memo -- DADO tambem, e insubstituivel: some junto e nao volta
+ *
+ * INDICE NAO ENTRA, e a primeira versao errava nisto.
+ *
+ * O argumento de entao era "a chave mora no cabecalho do .ntx, perder o arquivo
+ * perde a definicao". Errado por quatro motivos:
+ *
+ *   1. Indice e DERIVADO. Regenera do .dbf mais a chave.
+ *   2. A chave nao se perde: rebind.prg ja a captura como metadado (`key`,
+ *      `for`) de cada indice aberto, e ela viaja no resultado do backup.
+ *   3. Depois de um PACK o indice e RECONSTRUIDO. Guardar o antigo e guardar
+ *      lixo.
+ *   4. Restaurar um .ntx velho ao lado de um .dbf restaurado e PIOR que nao
+ *      ter: ele parece valido e aponta para posicoes que nao existem mais.
+ *
+ * E ha o custo: uma pasta real tem 395 indices. Copia-los multiplicaria o
+ * tamanho e o tempo do backup para produzir arquivos que devem ser jogados
+ * fora na restauracao.
  */
-FUNCTION ConjuntoDoArquivo( cDbf, aIndices )
+FUNCTION ConjuntoDoArquivo( cDbf )
 
    LOCAL aSet := {}
-   LOCAL cMemo, cIdx
+   LOCAL cMemo
 
    AAdd( aSet, { "path" => cDbf, ;
                  "bytes" => Max( 0, hb_FSize( cDbf ) ), ;
@@ -72,16 +87,6 @@ FUNCTION ConjuntoDoArquivo( cDbf, aIndices )
       AAdd( aSet, { "path" => cMemo, ;
                     "bytes" => Max( 0, hb_FSize( cMemo ) ), ;
                     "role" => "memo" } )
-   ENDIF
-
-   IF HB_ISARRAY( aIndices )
-      FOR EACH cIdx IN aIndices
-         IF HB_ISSTRING( cIdx ) .AND. hb_FileExists( cIdx )
-            AAdd( aSet, { "path" => cIdx, ;
-                          "bytes" => Max( 0, hb_FSize( cIdx ) ), ;
-                          "role" => "index" } )
-         ENDIF
-      NEXT
    ENDIF
 
    RETURN aSet
@@ -127,29 +132,95 @@ FUNCTION EspacoLivre( cCaminho )
 
 
 /*
- * O nome do backup: NOME_AAAAMMDD_HHMMSS.ext.bak
+ * O nome sugerido: NOME_AAAAMMDD_HHMMSS.DBF -- um DBF de verdade.
  *
- * AO LADO DO ORIGINAL, e nao dentro do projeto: o conjunto pode ter centenas de
- * MB, e copiar entre volumes e lento e pode nao caber. Ao lado, a copia e no
- * mesmo disco e a restauracao e uma renomeacao.
+ * SEM `.bak`, e isso foi uma correcao de rumo. A primeira versao gerava
+ * `NETCLI_20260902_113446.DBF.bak`, e um backup que nao se consegue ABRIR e um
+ * backup que nao se consegue CONFERIR: a lista de arquivos do DBU so mostra
+ * *.dbf, entao a copia ficava invisivel dentro do proprio programa que a criou.
+ * Com a extensao real ela aparece na arvore, abre, e da para ver os registros
+ * -- que e a prova de que a copia presta.
  *
- * COM CARIMBO DE HORA, e nao um `.bak` unico. A razao de existir da R4 e "nao
- * ficar sem volta"; um `.bak` que se sobrescreve faz a SEGUNDA operacao
- * destruir a unica copia da primeira -- que e precisamente a falha que a regra
- * existe para impedir. Os arquivos ficam visiveis na pasta do usuario de
- * proposito: quem ve, apaga quando quiser.
+ * O preco e a pasta ficar com mais DBFs a vista. Ficar a vista e melhor que
+ * ficar escondido: quem ve, confere e apaga quando quiser.
  *
- * A extensao original fica no nome (`.dbf.bak`, `.dbt.bak`) para o conjunto
- * poder ser remontado sem adivinhacao.
+ * COM CARIMBO DE HORA, e nao um nome fixo. A razao de existir da R4 e "nao
+ * ficar sem volta"; um nome que se sobrescreve faz a SEGUNDA operacao destruir
+ * a unica copia da primeira -- precisamente a falha que a regra existe para
+ * impedir.
+ *
+ * E so uma SUGESTAO: no backup manual a pessoa edita o caminho inteiro, e o
+ * memo acompanha a base que ela escolher.
  */
-FUNCTION NomeDoBackup( cArquivo, cCarimbo )
+FUNCTION NomeDoBackup( cArquivo, cCarimbo, cDirDestino )
 
    LOCAL cSelo := iif( HB_ISSTRING( cCarimbo ) .AND. ! Empty( cCarimbo ), ;
                        cCarimbo, CarimboAgora() )
+   LOCAL cDir := iif( HB_ISSTRING( cDirDestino ) .AND. ! Empty( cDirDestino ), ;
+                      hb_DirSepAdd( cDirDestino ), hb_FNameDir( cArquivo ) )
 
-   RETURN hb_FNameDir( cArquivo ) + ;
-          hb_FNameName( cArquivo ) + "_" + cSelo + ;
-          hb_FNameExt( cArquivo ) + ".bak"
+   RETURN cDir + hb_FNameName( cArquivo ) + "_" + cSelo + hb_FNameExt( cArquivo )
+
+
+/*
+ * O destino de um arquivo do conjunto, dado o destino escolhido para o .DBF.
+ *
+ * O memo SEGUE A BASE do nome que a pessoa escolheu. Se ela renomear o destino
+ * para `NETCLI_ANTES.DBF`, o memo tem de sair `NETCLI_ANTES.DBT` -- e o par que
+ * faz o arquivo abrir. Manter o memo com o nome antigo produziria um DBF que
+ * abre e cujos campos memo estao vazios, que e a pior forma de estar errado.
+ */
+FUNCTION DestinoDoMembro( cOrigem, cDestinoDbf, cPapel )
+
+   IF cPapel == "data"
+      RETURN cDestinoDbf
+   ENDIF
+
+   /* memo: mesma base do DBF de destino, extensao do memo de origem */
+   RETURN hb_FNameExtSet( cDestinoDbf, hb_FNameExt( cOrigem ) )
+
+
+/*
+ * Os dois caminhos estao no mesmo volume?
+ *
+ * Compara a raiz -- letra de unidade, ou o par servidor+compartilhamento numa
+ * UNC. Importa porque decide DUAS coisas: de qual volume medir o espaco, e se o
+ * temporario da operacao seguinte disputa espaco com o backup ou nao.
+ */
+FUNCTION MesmoVolume( c1, c2 )
+   RETURN Upper( RaizDoVolume( c1 ) ) == Upper( RaizDoVolume( c2 ) )
+
+
+/*
+ * A raiz do volume: "J:" para um caminho local, "\\servidor\share" numa UNC.
+ *
+ * SEM LITERAL DE BARRA INVERTIDA. No Harbour a barra invertida NAO e escape em
+ * string comum, entao "\\" sao DUAS barras e nao uma -- e um `"\"` no fim de
+ * uma string e um convite a confusao para quem le. Chr( 92 ) diz exatamente o
+ * que e, e nao muda de significado conforme quem le o codigo. Mesma razao do
+ * SEP_BARRA em app/ui/js/app.js.
+ */
+STATIC FUNCTION RaizDoVolume( cCaminho )
+
+   LOCAL cBarra := Chr( 92 )
+   LOCAL c := StrTran( hb_defaultValue( cCaminho, "" ), "/", cBarra )
+   LOCAL nServidor, nShare
+
+   /* UNC: as duas primeiras barras, o servidor, e o compartilhamento. Nao para
+      no servidor: dois compartilhamentos do mesmo servidor podem estar em discos
+      diferentes, e e o disco que tem espaco livre. */
+   IF Left( c, 2 ) == cBarra + cBarra
+      nServidor := At( cBarra, SubStr( c, 3 ) )
+      IF nServidor == 0
+         RETURN c                                  /* so o servidor */
+      ENDIF
+      nShare := At( cBarra, SubStr( c, 3 + nServidor ) )
+      RETURN iif( nShare == 0, c, Left( c, 2 + nServidor + nShare - 1 ) )
+   ENDIF
+
+   /* Local: a letra e os dois-pontos. Caminho relativo nao tem raiz -- devolve
+      vazio, e quem compara trata como "nao da para saber". */
+   RETURN iif( Len( c ) >= 2 .AND. SubStr( c, 2, 1 ) == ":", Left( c, 2 ), "" )
 
 
 /* AAAAMMDD_HHMMSS. Um so por operacao, para o conjunto inteiro sair com o mesmo

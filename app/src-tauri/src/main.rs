@@ -611,16 +611,33 @@ fn selftest() -> i32 {
                         r.contains("\"level\"") && r.contains("\"canProceed\""),
                         &format!("esperava level e canProceed em {r}"),
                     );
-                    // 3x o conjunto: a R2 quer original + backup + temporario.
+                    let v: serde_json::Value =
+                        serde_json::from_str(&r).unwrap_or(serde_json::Value::Null);
+                    let bytes = v.pointer("/result/bytes").and_then(|x| x.as_i64());
+                    let preciso = v.pointer("/result/neededBytes").and_then(|x| x.as_i64());
+
+                    // 2x, e nao 3x: o ORIGINAL ja ocupa o espaco dele e portanto
+                    // nao esta no livre. O que nasce e o backup (1x) mais o .tmp
+                    // que a R2 exige (1x). A primeira versao pedia 3x com uma
+                    // justificativa aritmeticamente errada.
                     t.ok(
-                        "TA: o espaco exigido e 3x o conjunto",
-                        r.contains("\"factor\":3"),
-                        &format!("esperava factor:3 em {r}"),
+                        "TA: pre-voo no mesmo volume exige 2x o conjunto",
+                        matches!((bytes, preciso), (Some(b), Some(n)) if b > 0 && n == b * 2),
+                        &format!("bytes={bytes:?}, neededBytes={preciso:?}"),
+                    );
+
+                    // O memo entra (e DADO, insubstituivel); o indice nao (e
+                    // derivado, e restaurar um .ntx velho e pior que nao ter).
+                    t.ok(
+                        "TA: o conjunto leva o memo e nao leva indice",
+                        r.contains("\"role\":\"memo\"") && !r.contains("\"role\":\"index\""),
+                        &format!("esperava memo sem index em {r}"),
                     );
                 }
                 Err(e) => {
                     t.ok("TA: o checklist responde com niveis e um veredito", false, &e);
-                    t.ok("TA: o espaco exigido e 3x o conjunto", false, &e);
+                    t.ok("TA: pre-voo no mesmo volume exige 2x o conjunto", false, &e);
+                    t.ok("TA: o conjunto leva o memo e nao leva indice", false, &e);
                 }
             }
 

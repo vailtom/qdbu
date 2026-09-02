@@ -517,8 +517,8 @@
 
   // Las comprobaciones, una frase por elemento de la lista.
   UI_CHECK_DISK_SPACE: "Espacio en disco",
-  UI_CHECK_DISK_SPACE_OK: "{free:size} libres; la operación necesita {needed:size} ({factor}× el conjunto)",
-  UI_CHECK_DISK_SPACE_BAD: "solo {free:size} libres, y la operación necesita {needed:size} ({factor}× el conjunto)",
+  UI_CHECK_DISK_SPACE_OK: "{free:size} libres en {where}; la operación necesita {needed:size}",
+  UI_CHECK_DISK_SPACE_BAD: "solo {free:size} libres en {where}, y la operación necesita {needed:size}",
   UI_CHECK_DISK_UNKNOWN: "Espacio en disco",
   UI_CHECK_DISK_UNKNOWN_MSG: "no se pudo medir el espacio libre en {path}",
   UI_CHECK_FILE_SET: "Archivos que se copiarán",
@@ -557,5 +557,20 @@
     "El registro en el que estaba ya no existe; volví al principio.",
 
   UI_SEE_FILES: "Ver los archivos",
+
+
+  // ------------------------------------------ destino de la copia individual
+  UI_CHECK_SOURCE_ROOM: "Espacio en la carpeta de origen",
+  UI_CHECK_SOURCE_ROOM_MSG:
+    "{free:size} libres en {where}; la operación creará un archivo temporal de {needed:size} allí",
+
+  UI_BACKUP: "Copia",
+  UI_BACKUP_TITLE: "Copiar este archivo a otro lugar, sin alterarlo",
+
+  UI_SAVE_AS: "Guardar como",
+  UI_CHECK_TARGET_EXISTS: "El destino ya existe",
+  UI_CHECK_TARGET_EXISTS_MSG: "'{file}' ya está allí; elija otro nombre para no sobrescribirlo",
+  UI_CHECK_TARGET_IS_SOURCE: "Destino no válido",
+  UI_CHECK_TARGET_IS_SOURCE_MSG: "'{file}' es el propio archivo de origen",
 
 };

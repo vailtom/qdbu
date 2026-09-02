@@ -68,6 +68,11 @@
                 data-i18n-title="UI_FILTER_TITLE" data-i18n="UI_FILTER"></button>
         <button type="button" id="pg-exportar" class="ferramenta"
                 data-i18n-title="UI_EXPORT_TITLE" data-i18n="UI_EXPORT"></button>
+        <!-- Ao lado de Exportar porque é a ação irmã: as duas leem o arquivo e
+             criam outro ao lado, sem tocar no original. A diferença é o que sai
+             — uma converte, a outra copia idêntico. -->
+        <button type="button" id="pg-backup" class="ferramenta"
+                data-i18n-title="UI_BACKUP_TITLE" data-i18n="UI_BACKUP"></button>
         <span class="filtro-ativo" id="filtro-ativo" hidden></span>
       </div>
 
@@ -418,6 +423,22 @@
     <p class="explica" data-i18n="UI_PREFLIGHT_EXPLAIN"></p>
 
     <div class="pv-alvo"><code id="pv-arquivo"></code></div>
+
+    <!-- Destino: só na cópia avulsa. No pré-voo a cópia é obrigatoriamente ao
+         lado do original — a restauração tem de ser uma renomeação no mesmo
+         volume, e não uma cópia que pode falhar na hora errada.
+
+         Campo editável com o `⌕` ao lado, o mesmo padrão do destino da
+         exportação: o nome já vem sugerido com o carimbo de hora, e renomear é
+         o uso comum (mesma pasta, nome diferente). -->
+    <label class="pv-destino" id="pv-destino-box" hidden>
+      <span data-i18n="UI_SAVE_AS"></span>
+      <span class="pv-arq-linha">
+        <input id="pv-destino" autocomplete="off" spellcheck="false">
+        <button type="button" id="pv-escolher"
+                data-i18n-title="UI_CHOOSE_WHERE_SAVE">⌕</button>
+      </span>
+    </label>
 
     <ul class="pv-checks" id="pv-checks"></ul>
 

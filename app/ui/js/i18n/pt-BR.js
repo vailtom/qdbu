@@ -544,8 +544,8 @@
 
   // As conferências, uma frase por item do checklist.
   UI_CHECK_DISK_SPACE: "Espaço em disco",
-  UI_CHECK_DISK_SPACE_OK: "{free:size} livres; a operação precisa de {needed:size} ({factor}× o conjunto)",
-  UI_CHECK_DISK_SPACE_BAD: "só {free:size} livres, e a operação precisa de {needed:size} ({factor}× o conjunto)",
+  UI_CHECK_DISK_SPACE_OK: "{free:size} livres em {where}; a operação precisa de {needed:size}",
+  UI_CHECK_DISK_SPACE_BAD: "só {free:size} livres em {where}, e a operação precisa de {needed:size}",
   UI_CHECK_DISK_UNKNOWN: "Espaço em disco",
   UI_CHECK_DISK_UNKNOWN_MSG: "não foi possível medir o espaço livre em {path}",
   UI_CHECK_FILE_SET: "Arquivos que serão copiados",
@@ -584,5 +584,20 @@
     "O registro onde você estava não existe mais; voltei ao início.",
 
   UI_SEE_FILES: "Ver os arquivos",
+
+
+  // ------------------------------------------------ destino do backup avulso
+  UI_CHECK_SOURCE_ROOM: "Espaço na pasta de origem",
+  UI_CHECK_SOURCE_ROOM_MSG:
+    "{free:size} livres em {where}; a operação vai criar um arquivo temporário de {needed:size} lá",
+
+  UI_BACKUP: "Backup",
+  UI_BACKUP_TITLE: "Copiar este arquivo para outro lugar, sem alterá-lo",
+
+  UI_SAVE_AS: "Salvar como",
+  UI_CHECK_TARGET_EXISTS: "Destino já existe",
+  UI_CHECK_TARGET_EXISTS_MSG: "'{file}' já está lá; escolha outro nome para não sobrescrever",
+  UI_CHECK_TARGET_IS_SOURCE: "Destino inválido",
+  UI_CHECK_TARGET_IS_SOURCE_MSG: "'{file}' é o próprio arquivo de origem",
 
 };
