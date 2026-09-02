@@ -1,0 +1,1254 @@
+/*
+ * As doze paletas sao escuras, e o navegador precisa saber disso.
+ *
+ * Sem esta linha, o que o SISTEMA desenha -- barra de rolagem nativa, <select>,
+ * caixa de marcar -- vem do tema CLARO do Windows, dentro de um app escuro.
+ * Foi medido: com o Windows em modo escuro, `Canvas` respondia branco e
+ * `CanvasText` preto, porque a pagina nao declarava nada.
+ */
+:root {
+  color-scheme: dark;
+
+  --bg: #15110c;
+  --bg2: #1d1812;
+  --bg3: #251f17;
+  --bg4: #2c241b;
+  --line: #3c3123;
+  --line2: #4d3e2c;
+  --fg: #eee4d8;
+  --dim: #9d8d7b;
+  --dim2: #716557;
+  /* ACENTO do tema. Muda inteiro quando se troca de tema -- ver js/tema.js. */
+  --amber: #ae7129;
+
+  /*
+   * O texto QUE VAI EM CIMA do acento. Era #201803 escrito na regra, um marrom
+   * que so funciona sobre acento quente: sobre o azul do tema claro fica
+   * ilegivel. Cada tema decide o seu -- escuro sobre acento claro, branco sobre
+   * acento escuro.
+   */
+  --acento-texto: #201803;
+
+  /*
+   * SIGNIFICADO, e nao decoracao. Estas tres NAO acompanham o tema.
+   *
+   * O acento tambem era usado para "aviso", e num tema azul todo aviso viraria
+   * azul: a cor deixaria de significar alguma coisa e viraria so a cor do app.
+   * Verde e sucesso, vermelho e erro, ambar e atencao -- em qualquer tema.
+   */
+  --ok: #6fbf73;
+  --aviso: #f5a623;
+  --erro: #e0685f;
+
+  /* Nomes antigos, mantidos porque 70 regras os citam. Apontam para os de cima. */
+  --green: var(--ok);
+  --red: var(--erro);
+  --mono: "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+}
+
+* { box-sizing: border-box; }
+
+/* `hidden` e display:none pela folha do NAVEGADOR, e qualquer display de autor
+   ganha dele. Sem isto, todo elemento flex que use o atributo continua na tela:
+   o JS marca .hidden = true, o DOM concorda, e as duas visoes aparecem
+   empilhadas. Global de proposito -- caso a caso da o mesmo bug no proximo
+   elemento. */
+[hidden] { display: none !important; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  font: 13px/1.5 "Segoe UI", system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+/* ---------------------------------------------------------------- cabecalho */
+
+header {
+  flex: none;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 10px 16px;
+  background: var(--bg2); border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: baseline; gap: 9px; }
+.brand h1 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: .2px; }
+.brand .sub { color: var(--dim); font-size: 11.5px; }
+.dot {
+  width: 8px; height: 8px; border-radius: 50%; background: var(--amber);
+  align-self: center; box-shadow: 0 0 0 3px rgba(245,166,35,.16);
+}
+
+/* ------------------------------------------------------- tema e idioma */
+
+.acoes-topo { display: flex; align-items: center; gap: 10px; }
+
+.tema { position: relative; }
+
+.tema-btn {
+  display: flex; align-items: center;
+  background: transparent; border: 1px solid var(--line);
+  border-radius: 5px; padding: 4px 7px; cursor: pointer;
+}
+.tema-btn:hover { border-color: var(--dim2); }
+.tema.aberto .tema-btn { border-color: var(--amber); }
+
+/* A amostra diz como o tema e SEM aplica-lo: fundo, linha e acento, os tres
+   que definem o conjunto. Ver o comentario em js/tema.js. */
+.tema-amostra { display: flex; gap: 2px; }
+.tema-amostra span {
+  width: 9px; height: 14px; border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.35);
+}
+
+.tema-lista {
+  position: absolute; top: calc(100% + 5px); right: 0; z-index: 40;
+  margin: 0; padding: 4px; list-style: none; min-width: 150px;
+  background: var(--bg3); border: 1px solid var(--line2); border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.45);
+}
+.tema-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 9px; border-radius: 4px; cursor: pointer;
+  color: var(--dim); font-size: 12.5px;
+}
+.tema-item:hover { background: var(--bg4); color: var(--fg); }
+.tema-item.ativo { color: var(--fg); box-shadow: inset 2px 0 0 var(--amber); }
+.tema-nome { flex: 1; }
+
+/* `position: relative` aqui e o que ancora o menu: sem isso ele se posiciona
+   pelo <body> e cai no canto da janela em vez de sob o botao. */
+.idioma { position: relative; }
+
+.idioma-btn {
+  display: flex; align-items: center; gap: 7px;
+  background: transparent; color: var(--dim);
+  border: 1px solid var(--line); border-radius: 5px;
+  padding: 4px 9px; cursor: pointer; font-size: 12.5px;
+}
+.idioma-btn:hover { color: var(--fg); border-color: var(--dim2); }
+.idioma.aberto .idioma-btn { color: var(--fg); border-color: var(--amber); }
+
+/* A bandeira e um <svg> dentro de um <span>. O `display:block` no svg tira o
+   espaco de linha de base que faria a caixa 3px mais alta que a imagem. */
+.bandeira {
+  flex: none; width: 20px; height: 14px;
+  border-radius: 2px; overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.35);
+}
+.bandeira svg { display: block; width: 100%; height: 100%; }
+
+.idioma-seta { color: var(--dim2); font-size: 10px; }
+.idioma.aberto .idioma-seta { color: var(--amber); }
+
+.idioma-lista {
+  position: absolute; top: calc(100% + 5px); right: 0; z-index: 40;
+  margin: 0; padding: 4px; list-style: none;
+  min-width: 168px;
+  background: var(--bg3); border: 1px solid var(--line2); border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.45);
+}
+.idioma-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 9px; border-radius: 4px; cursor: pointer;
+  color: var(--dim); font-size: 12.5px;
+}
+.idioma-item:hover { background: var(--bg4); color: var(--fg); }
+
+/* O idioma em vigor fica marcado com a barra ambar da esquerda, e nao so com a
+   cor do texto: numa lista de tres, "qual esta valendo" tem de ser visivel de
+   relance, sem comparar tons. */
+.idioma-item.ativo { color: var(--fg); box-shadow: inset 2px 0 0 var(--amber); }
+
+/* ------------------------------------------------------------------- corpo */
+
+.corpo { flex: 1; display: flex; min-height: 0; }
+
+.painel {
+  flex: none; width: 320px; display: flex; flex-direction: column;
+  background: var(--bg2); min-height: 0; overflow: hidden;
+}
+
+/* Divisoria: alvo estreito na tela, area de clique larga o suficiente para
+   pegar com o mouse sem precisar de mira. */
+.divisoria {
+  flex: none; width: 5px; cursor: col-resize; background: var(--line);
+  position: relative;
+}
+.divisoria::after {
+  content: ""; position: absolute; inset: 0 -3px; /* area de clique maior */
+}
+.divisoria:hover, .divisoria:focus-visible { background: var(--amber); outline: none; }
+body.arrastando { cursor: col-resize; user-select: none; }
+body.arrastando .divisoria { background: var(--amber); }
+
+.busca { flex: none; padding: 8px; border-bottom: 1px solid var(--line); }
+.busca input {
+  width: 100%; padding: 6px 9px;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 5px; font-size: 12.5px;
+}
+.busca input:focus { outline: none; border-color: var(--amber); }
+
+.arvore { flex: 1; overflow: auto; padding: 6px 0; min-height: 0; }
+.arvore ul { list-style: none; margin: 0; padding: 0; }
+.arvore-vazia { color: var(--dim2); font-size: 12px; padding: 14px 16px; margin: 0; }
+
+/* conexao */
+.conexao { margin-bottom: 2px; }
+.conexao .cab {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px; cursor: pointer; user-select: none;
+}
+.conexao .cab:hover { background: var(--bg3); }
+.conexao .cab:focus-visible { outline: 1px solid var(--amber); outline-offset: -1px; }
+.conexao .seta { flex: none; color: var(--dim); width: 10px; font-size: 10px; }
+
+/* O NOME ENCOLHE COM RETICENCIAS, e nao quebra em duas linhas.
+   Quebrar empurrava os tres botoes para a linha de baixo, desalinhados das
+   outras conexoes -- e o painel e redimensionavel, entao "cabe" depende da
+   largura do momento, nao do tamanho do nome.
+   `min-width: 0` e o que permite encolher: em flex, o minimo padrao e o
+   tamanho do conteudo, e sem zerar isso o `text-overflow` nunca dispara. */
+.conexao .nome {
+  flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 600; font-size: 12.5px;
+}
+
+/* O aviso nao encolhe: "pasta nao encontrada" pela metade nao avisa nada. */
+.conexao .aviso {
+  flex: none;
+  font-size: 10.5px; color: var(--red);
+  background: rgba(224,104,95,.12); padding: 1px 6px; border-radius: 3px;
+}
+/* UM botao de acoes, no lugar dos tres icones. Discreto como eles eram: so
+   aparece no hover da linha, para nao encher uma arvore de 278 pastas. */
+.conexao .acoes-conexao {
+  flex: none; background: none; border: none; color: var(--dim2);
+  font-size: 15px; line-height: 1; padding: 0 5px; cursor: pointer;
+  border-radius: 4px;
+  opacity: 0; transition: opacity .12s;
+}
+.conexao .cab:hover .acoes-conexao,
+.conexao .cab:focus-within .acoes-conexao { opacity: 1; }
+.conexao .acoes-conexao:hover { color: var(--amber); background: var(--bg4); }
+.conexao .acoes-conexao[aria-expanded="true"] { opacity: 1; color: var(--amber); }
+
+/* O menu flutua em coordenadas de TELA (position: fixed), e nao dentro da
+   arvore: dentro dela um menu perto do rodape seria cortado pelo overflow, e a
+   alternativa -- deixar a arvore com overflow visivel -- quebraria a rolagem. */
+/* Pelo ID, e nao pela classe: o botao de cada linha ja se chamou
+   `menu-conexao` tambem, e herdou daqui `position: fixed` e `min-width: 190px`
+   -- virou uma caixa de 190px por cima de cada linha da arvore. Id e unico por
+   definicao; classe qualquer um repete sem perceber. */
+#menu-conexao {
+  position: fixed; z-index: 60;
+  min-width: 170px; padding: 4px;
+  background: var(--bg3); border: 1px solid var(--line2); border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.5);
+}
+.mc-cab {
+  padding: 5px 9px 6px; margin-bottom: 3px;
+  border-bottom: 1px solid var(--line);
+  color: var(--dim); font-size: 11px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.mc-item {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%; text-align: left;
+  background: none; border: none; border-radius: 4px;
+  padding: 6px 9px; cursor: pointer;
+  color: var(--fg); font: inherit; font-size: 12.5px;
+}
+
+/* Largura fixa: e ela que alinha os rotulos numa coluna so, mesmo com glifos
+   de larguras diferentes (o × e bem mais estreito que o 🗀). */
+.mc-icone {
+  flex: none; width: 16px; text-align: center;
+  color: var(--dim); font-size: 13px; line-height: 1;
+}
+.mc-item:hover .mc-icone { color: var(--amber); }
+.mc-rotulo { flex: 1; }
+.mc-item:hover { background: var(--bg4); }
+.mc-item:focus-visible { outline: 1px solid var(--amber); outline-offset: -1px; }
+
+/* Linha antes do destrutivo: e o unico daqui que apaga cadastro. */
+.mc-linha { height: 1px; margin: 4px 0; background: var(--line); }
+.mc-item.risco, .mc-item.risco .mc-icone { color: var(--red); }
+.mc-item.risco:hover { background: rgba(224,104,95,.14); }
+.mc-item.risco:hover .mc-icone { color: var(--red); }
+
+.carregando {
+  padding: 3px 10px 6px 26px; color: var(--dim2); font-size: 11.5px; font-style: italic;
+}
+.carregando.erro { color: var(--red); font-style: normal; }
+
+/* arquivo: so o nome. Metadados vivem no painel da direita e no tooltip. */
+.arquivos { padding-bottom: 6px !important; }
+.arquivo {
+  padding: 3px 10px 3px 26px; cursor: pointer;
+  border-left: 2px solid transparent;
+  font-family: var(--mono); font-size: 12px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.arquivo:hover { background: var(--bg3); }
+.arquivo:focus-visible { outline: 1px solid var(--amber); outline-offset: -1px; }
+.arquivo.sel { background: var(--bg4); border-left-color: var(--amber); }
+.arquivo.invalido { color: var(--dim2); text-decoration: line-through; }
+
+/* -------------------------------------------------------------- area central */
+
+.area { flex: 1; overflow: auto; padding: 22px; min-width: 0; }
+.estado-vazio { color: var(--dim2); max-width: 460px; }
+.estado-vazio .titulo { font-size: 14px; color: var(--dim); margin: 0 0 6px; }
+.estado-vazio .dica { font-size: 12.5px; margin: 0; line-height: 1.6; }
+.saida {
+  margin: 0; padding: 12px 14px; background: var(--bg2);
+  border: 1px solid var(--line); border-radius: 6px;
+  font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap;
+}
+
+/* ------------------------------------------------------------------ rodape */
+
+.status, .logbar {
+  flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 5px 16px; border-top: 1px solid var(--line); font-size: 11px;
+}
+.status { background: var(--bg3); }
+.logbar { background: var(--bg2); color: var(--dim2); font-size: 10.5px; }
+.status code, .logbar code {
+  color: var(--dim); font-family: var(--mono); font-size: 10.5px;
+}
+.status .hint { color: var(--amber); font-size: 11px; }
+.status .arch { margin-left: auto; color: var(--dim2); }
+.logbar .cdp { margin-left: auto; font-family: var(--mono); }
+.logbar .cdp.on { color: var(--green); }
+.logbar .cdp.off { color: var(--dim2); }
+
+.badge {
+  padding: 1px 8px; border-radius: 999px; font-weight: 600; font-size: 10.5px;
+  background: var(--bg4); color: var(--dim);
+}
+.badge.ok { background: rgba(111,191,115,.16); color: var(--green); }
+.badge.bad { background: rgba(224,104,95,.16); color: var(--red); }
+
+/* ------------------------------------------------------------------ botoes */
+
+/*
+ * ESTILO BASE DE BOTAO.
+ *
+ * Faltava, e por isso cada componente vinha redefinindo o seu -- .barra-grade,
+ * .pc-acoes, .ff-acoes, .pi-botoes... Os botoes dentro de `dialog .acoes` nao
+ * pegavam nenhuma dessas regras e caiam no visual padrao do navegador, cinza e
+ * quadrado no meio de um app escuro.
+ *
+ * As especializacoes continuam valendo (tamanho, cor de risco); o que muda e
+ * que agora elas AJUSTAM uma base em vez de inventar uma do zero. Botao que
+ * deve ser so um icone (`x` de fechar, seta de ir-ate) declara
+ * `background: none; border: none` e continua como estava.
+ */
+button {
+  font: inherit; font-size: 12px; line-height: 1;
+  background: var(--bg3); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 4px;
+  padding: 5px 11px; cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
+button:disabled { color: var(--dim2); opacity: .5; cursor: default; }
+button:focus-visible { outline: 1px solid var(--amber); outline-offset: 1px; }
+
+/* A acao principal de um formulario. So UMA por dialogo: se tudo e destaque,
+   nada e. */
+button.primario, dialog .acoes button[type=submit] {
+  border-color: var(--line2); color: var(--amber); background: var(--bg4);
+}
+button.primario:hover, dialog .acoes button[type=submit]:hover {
+  border-color: var(--amber);
+}
+.primario {
+  background: var(--amber); color: var(--acento-texto); font-weight: 600;
+  border: none; border-radius: 5px; padding: 6px 14px; cursor: pointer;
+  font-size: 12.5px;
+}
+.primario:hover { filter: brightness(1.08); }
+.ghost {
+  background: transparent; color: var(--dim);
+  border: 1px solid var(--line); border-radius: 5px;
+  padding: 6px 13px; cursor: pointer; font-size: 12.5px;
+}
+.ghost:hover { color: var(--fg); border-color: var(--dim2); }
+
+/* ---------------------------------------------------------------- dialogo */
+
+dialog {
+  border: 1px solid var(--line2); border-radius: 8px;
+  background: var(--bg2); color: var(--fg);
+  padding: 20px 22px; min-width: 440px;
+  box-shadow: 0 12px 40px rgba(0,0,0,.5);
+}
+dialog::backdrop { background: rgba(0,0,0,.55); }
+dialog h2 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+dialog .explica { margin: 0 0 16px; color: var(--dim); font-size: 12px; }
+dialog label { display: block; margin-bottom: 12px; font-size: 12px; color: var(--dim); }
+dialog .opcional { color: var(--dim2); font-weight: normal; }
+dialog input {
+  display: block; width: 100%; margin-top: 4px; padding: 7px 9px;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 5px;
+  font-family: var(--mono); font-size: 12.5px;
+}
+dialog input:focus { outline: none; border-color: var(--amber); }
+dialog input.culpado { border-color: var(--red); background: rgba(224,104,95,.06); }
+.erro-campo {
+  margin: 0 0 12px; padding: 8px 10px; font-size: 12px; color: var(--red);
+  background: rgba(224,104,95,.09); border: 1px solid rgba(224,104,95,.25);
+  border-radius: 5px;
+}
+dialog .acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+/* ------------------------------------------------------------------- abas */
+
+.area { display: flex; flex-direction: column; padding: 0; }
+
+.abas {
+  flex: none; display: flex; align-items: stretch; gap: 1px;
+  background: var(--bg2); border-bottom: 1px solid var(--line);
+  overflow-x: auto; scrollbar-width: thin;
+}
+.aba {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 10px 7px 13px; cursor: pointer; user-select: none;
+  background: var(--bg3); border-right: 1px solid var(--line);
+  border-top: 2px solid transparent; white-space: nowrap; font-size: 12.5px;
+}
+.aba:hover { background: var(--bg4); }
+.aba.ativa { background: var(--bg); border-top-color: var(--amber); }
+.aba:focus-visible { outline: 1px solid var(--amber); outline-offset: -2px; }
+.aba-nome { font-family: var(--mono); }
+.aba.ativa .aba-nome { color: var(--fg); }
+.aba:not(.ativa) .aba-nome { color: var(--dim); }
+.aba-fechar {
+  background: none; border: none; cursor: pointer; padding: 0 2px;
+  color: var(--dim2); font-size: 14px; line-height: 1; opacity: .5;
+}
+.aba:hover .aba-fechar { opacity: 1; }
+.aba-fechar:hover { color: var(--red); }
+
+/* --------------------------------------------------------------- conteudo */
+
+.conteudo { flex: 1; overflow: auto; padding: 18px 22px; min-height: 0; }
+.estado-vazio { padding: 22px; }
+
+.cartoes { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
+.cartao {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 14px; min-width: 96px;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+}
+.cartao.alerta { border-color: rgba(245,166,35,.4); }
+.c-rot { font-size: 10px; color: var(--dim2); text-transform: uppercase; letter-spacing: .5px; }
+.c-val { font-family: var(--mono); font-size: 15px; color: var(--fg); }
+.cartao.alerta .c-val { color: var(--aviso); }
+
+.secao {
+  margin: 0 0 8px; font-size: 10.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .8px; color: var(--dim2);
+}
+.tabela-wrap {
+  border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  background: var(--bg2);
+}
+.estrutura { width: 100%; border-collapse: collapse; font-size: 12px; }
+.estrutura th {
+  text-align: left; padding: 6px 12px; font-weight: 600; font-size: 10.5px;
+  text-transform: uppercase; letter-spacing: .4px; color: var(--dim2);
+  background: var(--bg3); border-bottom: 1px solid var(--line);
+  position: sticky; top: 0;
+}
+.estrutura td { padding: 3px 12px; border-bottom: 1px solid rgba(58,49,37,.4); }
+.estrutura tbody tr:nth-child(even) { background: rgba(255,255,255,.014); }
+.estrutura tbody tr:hover { background: var(--bg3); }
+.estrutura .num { text-align: right; font-family: var(--mono); }
+.estrutura .dim { color: var(--dim2); }
+.estrutura .nome { font-family: var(--mono); color: var(--fg); }
+.estrutura .tipo { font-family: var(--mono); color: var(--amber); }
+.estrutura th.num { text-align: right; }
+
+
+/* arrastar abas */
+.aba { cursor: pointer; }
+.aba.arrastando { opacity: .4; }
+.aba.alvo { box-shadow: inset 3px 0 0 var(--amber); }
+body.arrastando-aba { cursor: grabbing; user-select: none; }
+body.arrastando-aba .aba { cursor: grabbing; }
+
+/* ------------------------------------------------------------------ grade */
+
+/* O conteudo deixa de rolar como bloco: quem rola e a grade, para o cabecalho
+   das colunas e a barra de navegacao ficarem parados. Com 366 campos e 500
+   linhas, perder o cabecalho ao rolar torna a tabela ilegivel. */
+.conteudo { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+
+.visoes {
+  flex: none; display: flex; gap: 2px; padding: 8px 14px 0;
+  border-bottom: 1px solid var(--line); background: var(--bg2);
+}
+.visao {
+  background: none; border: 1px solid transparent; border-bottom: none;
+  color: var(--dim); font: inherit; font-size: 12px; cursor: pointer;
+  padding: 5px 14px; border-radius: 5px 5px 0 0; margin-bottom: -1px;
+}
+.visao:hover { color: var(--fg); }
+.visao.ativa {
+  color: var(--amber); background: var(--bg);
+  border-color: var(--line); border-bottom: 1px solid var(--bg);
+}
+.visao:focus-visible { outline: 1px solid var(--amber); outline-offset: -2px; }
+
+.visao-corpo { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+#visao-estrutura { overflow: auto; padding: 18px 22px; }
+
+.grade-wrap { flex: 1; overflow: auto; min-height: 0; }
+
+.grade {
+  border-collapse: separate; border-spacing: 0;
+  font-family: var(--mono); font-size: 12px; white-space: nowrap;
+}
+
+/* Cabecalho fixo. `position: sticky` no th (nao no thead): o Chromium so
+   respeita no elemento que de fato rola junto. */
+.grade thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg3); color: var(--dim);
+  text-align: left; font-weight: 500; font-size: 11px;
+  letter-spacing: .04em; text-transform: uppercase;
+  padding: 6px 12px; border-bottom: 1px solid var(--line2);
+  border-right: 1px solid var(--line);
+}
+.grade thead th.num { text-align: right; }
+
+.grade td {
+  padding: 3px 12px; border-bottom: 1px solid rgba(58,49,37,.35);
+  border-right: 1px solid rgba(58,49,37,.25);
+  max-width: 340px; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Zebra discreta: separa a linha sem competir com o marcador de deletado. */
+.grade tbody tr:nth-child(even) { background: rgba(255,255,255,.018); }
+.grade tbody tr:hover { background: var(--bg3); }
+
+/* Numero do registro: coluna fixa a esquerda, porque com 366 campos ela sai da
+   tela e a linha perde a identidade. */
+.grade .recno {
+  position: sticky; left: 0; z-index: 2;
+  background: var(--bg2); color: var(--dim2);
+  text-align: right; border-right: 1px solid var(--line);
+}
+.grade thead th.recno { z-index: 3; background: var(--bg4); }
+.grade tbody tr:hover .recno { background: var(--bg4); }
+
+/* Deletado: marcado, nao removido. Tachado + numero em vermelho, sem esconder
+   o dado -- o registro ainda pode ser recuperado. */
+.grade tr.deletado td { color: var(--dim2); text-decoration: line-through; }
+.grade tr.deletado .recno { color: var(--red); text-decoration: none; }
+.grade tr.deletado .recno::after { content: " ×"; }
+
+.grade td.num    { text-align: right; }
+.grade td.data   { color: var(--dim); }
+.grade td.logico { text-align: center; color: var(--green); }
+.grade td.memo   { color: var(--amber); font-style: italic; }
+.grade td.nulo   { color: var(--dim2); }
+.grade td.nulo::after { content: "·"; color: var(--line2); }
+.grade td.binario { color: var(--red); }
+
+.grade-vazia {
+  margin: 0; padding: 28px 22px; color: var(--dim2);
+  font-size: 12.5px; font-style: italic;
+}
+
+/* Barra inferior consolidada: navegacao, posicao e frescor num lugar so. */
+.barra-grade {
+  flex: none; display: flex; align-items: center; gap: 14px;
+  padding: 6px 14px; background: var(--bg2);
+  border-top: 1px solid var(--line); font-size: 11.5px; color: var(--dim);
+}
+.barra-grade .nav { display: flex; gap: 2px; }
+.barra-grade button {
+  background: var(--bg3); border: 1px solid var(--line);
+  color: var(--fg); font: inherit; font-size: 12px; line-height: 1;
+  padding: 4px 9px; border-radius: 4px; cursor: pointer;
+}
+.barra-grade button:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
+.barra-grade button:disabled { color: var(--dim2); cursor: default; opacity: .5; }
+.barra-grade button:focus-visible { outline: 1px solid var(--amber); outline-offset: 1px; }
+
+.barra-grade label { display: flex; align-items: center; gap: 6px; }
+.barra-grade input, .barra-grade select {
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 4px;
+  font: inherit; font-size: 11.5px; padding: 3px 6px;
+}
+.barra-grade input { font-family: var(--mono); text-align: right; }
+.barra-grade input:focus, .barra-grade select:focus {
+  outline: none; border-color: var(--amber);
+}
+
+/* A posicao empurra o resto para a direita e nunca muda de lugar ao trocar de
+   pagina -- numero que pula de posicao nao se le. */
+.barra-grade .posicao {
+  margin-left: auto; font-family: var(--mono); color: var(--fg);
+}
+.barra-grade .refresh { font-family: var(--mono); color: var(--dim2); }
+
+/* --------------------------------------------------------------- colunas */
+
+.dados-linha { flex: 1; display: flex; min-height: 0; }
+
+.painel-colunas {
+  flex: none; width: 250px; display: flex; flex-direction: column;
+  background: var(--bg2); border-right: 1px solid var(--line);
+  min-height: 0;
+}
+
+.pc-topo {
+  flex: none; display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px 8px 12px; border-bottom: 1px solid var(--line);
+  font-size: 12px; color: var(--fg);
+}
+.pc-topo button {
+  background: none; border: none; color: var(--dim2);
+  font-size: 16px; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.pc-topo button:hover { color: var(--red); }
+
+/* No rodape do painel, como no Navicat -- a lista e o assunto, a busca e a
+   ferramenta para chegar nela. */
+.painel-colunas input[type=search] {
+  flex: none; margin: 0; padding: 6px 10px;
+  background: var(--bg); color: var(--fg);
+  border: none; border-top: 1px solid var(--line);
+  font: inherit; font-size: 12px;
+}
+.painel-colunas input[type=search]:focus { outline: none; border-color: var(--amber); }
+
+.pc-acoes {
+  flex: none; display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px; border-bottom: 1px solid var(--line);
+}
+.pc-acoes button {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg);
+  font: inherit; font-size: 11px; padding: 3px 8px; border-radius: 4px; cursor: pointer;
+}
+.pc-acoes button:hover { border-color: var(--amber); color: var(--amber); }
+.pc-conta { margin-left: auto; font-size: 11px; color: var(--dim2); font-family: var(--mono); }
+
+.pc-lista {
+  flex: 1; overflow: auto; min-height: 0;
+  list-style: none; margin: 0; padding: 4px 0;
+}
+.pc-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 2px 10px; font-size: 12px;
+}
+.pc-item:hover { background: var(--bg3); }
+.pc-item.oculta .pc-nome { color: var(--dim2); }
+
+.pc-item input[type=checkbox] { accent-color: var(--amber); cursor: pointer; }
+
+.pc-nome {
+  flex: 1; font-family: var(--mono); color: var(--fg); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.pc-ir {
+  background: none; border: none; color: var(--dim2);
+  font-size: 12px; line-height: 1; padding: 1px 4px; cursor: pointer; border-radius: 3px;
+}
+.pc-ir:hover:not(:disabled) { color: var(--amber); background: var(--bg4); }
+.pc-ir:disabled { opacity: .25; cursor: default; }
+
+.pc-tipo { font-family: var(--mono); font-size: 10.5px; color: var(--dim2); }
+.pc-vazio { padding: 12px; color: var(--dim2); font-size: 11.5px; font-style: italic; }
+.pc-dica {
+  flex: none; margin: 0; padding: 6px 12px; border-top: 1px solid var(--line);
+  font-size: 10.5px; color: var(--dim2); font-style: italic;
+}
+
+/* Ferramentas da grade, na barra superior. Acendem enquanto o painel esta
+   aberto -- e assim se sabe que a grade nao mostra tudo. */
+.visoes-sep {
+  width: 1px; align-self: center; height: 16px;
+  background: var(--line); margin: 0 8px;
+}
+.ferramenta {
+  background: none; border: 1px solid transparent; color: var(--dim);
+  font: inherit; font-size: 12px; cursor: pointer;
+  padding: 4px 11px; border-radius: 4px; margin-bottom: 3px;
+}
+.ferramenta:hover { color: var(--fg); }
+.ferramenta.ativo {
+  color: var(--amber); border-color: var(--line2); background: var(--bg3);
+}
+.ferramenta:focus-visible { outline: 1px solid var(--amber); outline-offset: -2px; }
+
+/* Pisca a coluna alvo do "ir ate": com 366 colunas, rolar ate ela nao basta --
+   o olho ainda tem de achar qual das que aparecem e a certa. */
+@keyframes pisca-coluna {
+  0%, 100% { background: transparent; }
+  30%      { background: rgba(245,166,35,.30); }
+}
+.grade .piscando { animation: pisca-coluna 1.2s ease-in-out; }
+
+/* --------------------------------------------------------------- indices */
+
+.pi-secao {
+  flex: none; margin: 0; padding: 7px 12px 4px;
+  border-top: 1px solid var(--line); background: var(--bg3);
+  font-size: 10.5px; color: var(--dim2); text-transform: uppercase;
+  letter-spacing: .05em;
+}
+
+.pi-abertos { flex: none; max-height: 42%; }
+
+.pi-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 3px 10px; font-size: 12px;
+}
+.pi-item:hover { background: var(--bg3); }
+.pi-item.ativo .pi-nome { color: var(--amber); }
+.pi-item input[type=radio] { accent-color: var(--amber); cursor: pointer; }
+
+.pi-nome {
+  font-family: var(--mono); color: var(--fg); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pi-chave {
+  margin-left: auto; font-family: var(--mono); font-size: 10.5px;
+  color: var(--dim2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pi-x {
+  flex: none; background: none; border: none; color: var(--dim2);
+  font-size: 13px; line-height: 1; padding: 0 3px; cursor: pointer;
+}
+.pi-x:hover { color: var(--red); }
+
+.pi-cand {
+  display: flex; align-items: center; gap: 7px;
+  padding: 2px 10px; font-size: 12px;
+}
+.pi-cand:hover { background: var(--bg3); }
+.pi-abrir {
+  background: none; border: none; color: var(--fg);
+  font: inherit; font-family: var(--mono); font-size: 12px;
+  cursor: pointer; padding: 1px 0; text-align: left;
+}
+.pi-abrir:hover { color: var(--amber); text-decoration: underline; }
+
+/* "maybe" nao e erro: e um indice que PODE ser deste arquivo. Marcar com um
+   sinal discreto e melhor que esconder -- esconder decidiria pelo usuario. */
+.pi-cand.maybe .pi-abrir { color: var(--dim); }
+.pi-cand.maybe .pi-abrir::before { content: "? "; color: var(--dim2); }
+
+.barra-grade .ord select { max-width: 210px; }
+
+/* ---------------------------------------------------------------- filtro */
+
+/* Faixa horizontal acima da grade, como o Filter & Sort do Navicat. */
+.faixa-filtro {
+  flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 9px 14px; background: var(--bg2);
+  border-bottom: 1px solid var(--line); font-size: 12px;
+}
+
+.ff-modos { display: flex; gap: 12px; color: var(--dim); }
+.ff-modos label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+.ff-modos input { accent-color: var(--amber); cursor: pointer; }
+
+.ff-linha { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 300px; }
+.ff-linha select, .ff-linha input {
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 4px;
+  font: inherit; font-size: 12px; padding: 4px 7px;
+}
+.ff-linha select { max-width: 190px; }
+.ff-linha input { flex: 1; font-family: var(--mono); min-width: 120px; }
+.ff-linha select:focus, .ff-linha input:focus { outline: none; border-color: var(--amber); }
+
+/* A lista de sugestões pode ser parcial: dizer isso evita a conclusão errada
+   de que o valor procurado não existe no arquivo. */
+.ff-parcial {
+  font-size: 10px; color: var(--dim2); border: 1px solid var(--line);
+  border-radius: 3px; padding: 1px 5px; cursor: help;
+}
+
+.ff-acoes { display: flex; gap: 5px; }
+.ff-acoes button {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg);
+  font: inherit; font-size: 11.5px; padding: 4px 10px;
+  border-radius: 4px; cursor: pointer;
+}
+.ff-acoes button:hover { border-color: var(--amber); color: var(--amber); }
+#ff-aplicar { border-color: var(--line2); color: var(--amber); }
+.ff-acoes .ff-x { background: none; border: none; color: var(--dim2); font-size: 14px; }
+.ff-acoes .ff-x:hover { color: var(--red); }
+
+.ff-msg {
+  flex-basis: 100%; margin: 0; font-family: var(--mono); font-size: 11px;
+  color: var(--dim); min-height: 14px;
+}
+.ff-msg.ok    { color: var(--green); }
+.ff-msg.erro  { color: var(--red); }
+.ff-msg.aviso { color: var(--aviso); }
+
+/* Indicador permanente na barra de cima: uma grade filtrada nao pode parecer a
+   grade inteira -- confundir as duas leva a conclusoes erradas sobre os dados. */
+.filtro-ativo {
+  align-self: center; margin-left: 6px; margin-bottom: 3px;
+  font-size: 10.5px; font-family: var(--mono);
+  color: var(--amber); border: 1px solid var(--line2);
+  background: var(--bg3); border-radius: 3px; padding: 2px 7px; cursor: help;
+}
+
+/* ------------------------------------------------- condicoes do filtro */
+
+.ff-guiado { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; flex: 1; min-width: 380px; }
+.ff-condicoes { display: flex; flex-direction: column; gap: 4px; flex-basis: 100%; }
+
+.ff-cond { display: flex; align-items: center; gap: 6px; }
+.ff-cond input[type=checkbox] { accent-color: var(--amber); cursor: pointer; }
+
+/* Desligada continua na tela, apagada: o valor digitado nao se perde ao testar
+   "e sem esta condicao?" -- que e justamente para que a caixa serve. */
+.ff-cond.inativa select,
+.ff-cond.inativa input[data-campo=valor] { opacity: .4; }
+
+.ff-cond select, .ff-cond input {
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 4px;
+  font: inherit; font-size: 12px; padding: 3px 6px;
+}
+.ff-cond select:focus, .ff-cond input:focus { outline: none; border-color: var(--amber); }
+.ff-cond [data-campo=campo] { min-width: 130px; max-width: 180px; font-family: var(--mono); }
+.ff-cond [data-campo=op] { min-width: 118px; }
+.ff-cond [data-campo=valor] { flex: 1; min-width: 110px; font-family: var(--mono); }
+
+.ff-juncao { width: 56px; color: var(--amber); font-weight: 500; }
+.ff-juncao-vazia { width: 56px; color: var(--dim2); font-size: 11px; text-align: center; }
+
+/* fx -- declara que o valor ao lado e para CALCULAR, nao para comparar como
+   literal. Aceso tem de ser inconfundivel a distancia: o preco de nao notar que
+   esta ligado (ou desligado) e um filtro que roda e devolve outra coisa. */
+.ff-fx {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--dim2);
+  font-family: var(--mono); font-size: 11px; font-style: italic; line-height: 1;
+  width: 26px; height: 24px; border-radius: 4px; cursor: pointer;
+  flex: none;
+}
+.ff-fx:hover { border-color: var(--amber); color: var(--amber); }
+.ff-fx.ligado {
+  background: var(--amber); border-color: var(--amber); color: var(--acento-texto);
+  font-weight: 700;
+}
+
+/* O campo acompanha: monoespacado porque passa a ser codigo, e a borda ambar
+   liga visualmente ao botao que a acendeu. */
+.ff-cond input[data-campo="valor"].calc {
+  font-family: var(--mono); border-color: var(--amber); color: var(--fg);
+}
+
+.ff-mini {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--dim);
+  font: inherit; font-size: 12px; line-height: 1;
+  width: 22px; height: 22px; border-radius: 4px; cursor: pointer;
+}
+.ff-mini:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
+.ff-mini:disabled { opacity: .3; cursor: default; }
+.ff-rem:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
+
+.ff-add {
+  background: none; border: 1px dashed var(--line2); color: var(--dim);
+  font: inherit; font-size: 11.5px; padding: 3px 10px;
+  border-radius: 4px; cursor: pointer;
+}
+.ff-add:hover { border-color: var(--amber); color: var(--amber); }
+
+/* A previa e a defesa contra a pegadinha da precedencia: mostra a expressao com
+   os parenteses que o Harbour aplica de fato. Em ambar quando ha mistura de E
+   com OU, que e quando o agrupamento costuma surpreender. */
+.ff-previa {
+  flex-basis: 100%; margin: 0; padding: 4px 8px;
+  font-family: var(--mono); font-size: 11px; color: var(--dim);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+}
+.ff-previa.alerta { color: var(--aviso); border-color: var(--line2); }
+
+/* ------------------------------------------------------------ scrollbars */
+
+/*
+ * As barras nativas do WebView2 sao claras e grossas: num tema escuro elas
+ * viram duas faixas brancas atravessando a tela, e a horizontal da grade
+ * competia com a barra de navegacao logo abaixo.
+ *
+ * `scrollbar-gutter: stable` e o que resolve o "quebrando o layout": sem ele o
+ * espaco da barra aparece e some conforme o conteudo cabe ou nao, e a grade
+ * inteira desloca alguns pixels a cada troca de pagina.
+ */
+* { scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+
+.arvore, .grade-wrap, .conteudo, #visao-estrutura, .pc-lista, .pi-abertos {
+  scrollbar-gutter: stable;
+}
+
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+::-webkit-scrollbar-thumb {
+  background: var(--line2);
+  border-radius: 6px;
+  /* Borda transparente com background-clip afina a alca sem estreitar a area
+     de clique -- pegar uma barra de 4px com o mouse e sofrido. */
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--dim2); background-clip: content-box; }
+::-webkit-scrollbar-thumb:active { background: var(--amber); background-clip: content-box; }
+
+/* O canto onde as duas barras se encontram fica branco por padrao. */
+::-webkit-scrollbar-corner { background: var(--bg2); }
+
+/* Setas nas pontas: ocupam espaco e ninguem usa. */
+::-webkit-scrollbar-button { display: none; }
+
+/* A barra da grade encosta na barra de navegacao; um fundo proprio separa as
+   duas em vez de deixar parecerem uma faixa so. */
+.grade-wrap::-webkit-scrollbar { background: var(--bg); }
+.grade-wrap::-webkit-scrollbar-corner { background: var(--bg); }
+
+/* Barra de abas: fina e discreta, senao rouba altura de uma faixa que ja e
+   apertada. */
+.abas::-webkit-scrollbar { height: 6px; }
+.abas::-webkit-scrollbar-thumb { border-width: 1px; }
+
+/* Busca na barra da grade: fica ao lado do "ir p/", que e o outro jeito de
+   chegar a um registro -- um por posicao, outro por conteudo. */
+.barra-grade .busca-inc input { font-family: var(--mono); min-width: 130px; }
+
+/* ---------------------------------------------------------------- tarefa */
+
+/* Sobre o rodape, nao num modal: a grade continua legivel enquanto a tarefa
+   corre, e parar nao exige procurar um botao dentro de um dialogo. */
+.tarefa {
+  position: fixed; left: 0; right: 0; bottom: 44px; z-index: 40;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 16px; background: var(--bg3);
+  border-top: 1px solid var(--line2); font-size: 12px;
+}
+.tf-msg { color: var(--fg); min-width: 190px; }
+.tf-barra {
+  flex: 1; height: 6px; background: var(--bg); border-radius: 3px;
+  overflow: hidden; border: 1px solid var(--line);
+}
+.tf-cheia { height: 100%; width: 0; background: var(--amber); transition: width .12s linear; }
+
+/* Sem total conhecido a barra vira listrada e anda sozinha: um traco parado em
+   0% pareceria travamento. */
+.tf-barra.indeterminada .tf-cheia {
+  width: 100%;
+  background: repeating-linear-gradient(90deg, var(--amber) 0 12px, transparent 12px 24px);
+  animation: tf-anda 1s linear infinite;
+}
+@keyframes tf-anda { from { background-position: 0 0; } to { background-position: 24px 0; } }
+
+.tf-num { font-family: var(--mono); color: var(--dim); min-width: 130px; text-align: right; }
+.tarefa button {
+  background: var(--bg2); border: 1px solid var(--line2); color: var(--fg);
+  font: inherit; font-size: 11.5px; padding: 4px 12px;
+  border-radius: 4px; cursor: pointer;
+}
+.tarefa button:hover { border-color: var(--red); color: var(--red); }
+
+/* ------------------------------------------------------- criar indice */
+
+.pi-form {
+  flex: none; display: flex; flex-direction: column; gap: 6px;
+  padding: 10px; margin: 0 8px 8px;
+  background: var(--bg3); border: 1px solid var(--line2); border-radius: 5px;
+}
+.pi-form label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--dim); }
+.pi-form input[type=text], .pi-form input:not([type]) {
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 4px;
+  font: inherit; font-family: var(--mono); font-size: 12px; padding: 4px 7px;
+}
+.pi-form input:focus { outline: none; border-color: var(--amber); }
+.pi-opc { color: var(--dim2); font-style: italic; }
+
+.pi-check { flex-direction: row !important; align-items: center; gap: 6px !important; }
+.pi-check input { accent-color: var(--amber); cursor: pointer; }
+
+/* O caminho completo antes de criar: um indice gravado na pasta errada nao da
+   erro nenhum -- so nao e achado depois. */
+.pi-destino {
+  margin: 0; font-family: var(--mono); font-size: 10px; color: var(--dim2);
+  word-break: break-all; min-height: 12px;
+}
+
+.pi-botoes { display: flex; gap: 5px; margin-top: 2px; }
+.pi-botoes button {
+  background: var(--bg2); border: 1px solid var(--line); color: var(--fg);
+  font: inherit; font-size: 11.5px; padding: 4px 10px; border-radius: 4px; cursor: pointer;
+}
+.pi-botoes button:hover { border-color: var(--amber); color: var(--amber); }
+#pi-criar { border-color: var(--line2); color: var(--amber); }
+.pi-form .ff-msg { flex-basis: auto; font-size: 10.5px; }
+
+/* -------------------------------------------------------------- exportar */
+
+#dlg-export { max-width: 720px; width: 92vw; }
+#dlg-export form { display: flex; flex-direction: column; gap: 10px; }
+
+.ex-linha { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.ex-linha > label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--dim); }
+.ex-cresce { flex: 1; min-width: 200px; }
+.ex-linha select, .ex-linha input:not([type=checkbox]) {
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 4px;
+  font: inherit; font-size: 12px; padding: 4px 7px;
+}
+.ex-cresce input { width: 100%; font-family: var(--mono); }
+.ex-linha select:focus, .ex-linha input:focus { outline: none; border-color: var(--amber); }
+.ex-check { flex-direction: row !important; align-items: center; gap: 6px !important; padding-bottom: 4px; }
+.ex-check input { accent-color: var(--amber); cursor: pointer; }
+
+/* Caminho completo antes de gravar: arquivo na pasta errada nao da erro, so nao
+   e achado depois. */
+.ex-destino {
+  margin: -4px 0 0; font-family: var(--mono); font-size: 10px;
+  color: var(--dim2); word-break: break-all; min-height: 12px;
+}
+
+.ex-cols, .ex-previa {
+  border: 1px solid var(--line); border-radius: 5px; background: var(--bg);
+}
+.ex-cols-topo {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 9px; border-bottom: 1px solid var(--line); font-size: 11.5px;
+}
+.ex-cols-topo button {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg);
+  font: inherit; font-size: 11px; padding: 2px 8px; border-radius: 4px; cursor: pointer;
+}
+.ex-cols-topo button:hover { border-color: var(--amber); color: var(--amber); }
+.ex-conta { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--dim2); }
+
+.ex-lista {
+  list-style: none; margin: 0; padding: 4px 0;
+  max-height: 132px; overflow: auto;
+}
+.ex-item { display: flex; align-items: center; gap: 7px; padding: 1px 9px; font-size: 12px; }
+.ex-item:hover { background: var(--bg3); }
+.ex-item input { accent-color: var(--amber); cursor: pointer; }
+.ex-nome { flex: 1; font-family: var(--mono); color: var(--fg); cursor: pointer; }
+.ex-item.off .ex-nome { color: var(--dim2); }
+.ex-tipo { font-family: var(--mono); font-size: 10.5px; color: var(--dim2); }
+
+/* A previa vem da DLL, nao de simulacao no JS: e o que pega separador e
+   codificacao errados antes de escrever 400 mil linhas. */
+.ex-amostra {
+  margin: 0; padding: 8px 10px; max-height: 120px; overflow: auto;
+  font-family: var(--mono); font-size: 11px; color: var(--fg);
+  white-space: pre; line-height: 1.5;
+}
+
+/*
+ * O diálogo de conexão definiu `dialog input { display:block; width:100% }`,
+ * pensando em campos de texto. Aplicado a um checkbox, ele vira um bloco de
+ * largura total e empurra o rótulo para a outra ponta da linha -- foi o que
+ * desalinhou a lista de colunas da exportação.
+ *
+ * Estas regras valem só dentro do #dlg-export e desfazem aquilo onde ele não
+ * cabe; o diálogo de conexão continua como estava.
+ */
+#dlg-export input[type=checkbox] {
+  display: inline-block; width: auto; margin: 0; padding: 0;
+  accent-color: var(--amber); cursor: pointer; flex: none;
+}
+#dlg-export label { display: flex; margin-bottom: 0; }
+#dlg-export .ex-linha > label { flex-direction: column; gap: 3px; flex: 0 0 auto; }
+#dlg-export .ex-check { flex-direction: row; align-items: center; gap: 6px; white-space: nowrap; }
+#dlg-export .ex-item { display: flex; align-items: center; gap: 7px; }
+#dlg-export .ex-item .ex-nome { flex: 1; margin: 0; }
+#dlg-export input:not([type=checkbox]), #dlg-export select { width: 100%; }
+
+/*
+ * O campo de arquivo toma o espaco que sobra na linha.
+ *
+ * Precisa desta especificidade: a regra acima e `#dlg-export .ex-linha > label`
+ * (id + duas classes) e vencia um `.ex-cresce` (id + uma), entao o `flex: 0 0
+ * auto` prevalecia e o campo ficava do tamanho do conteudo, com um vao morto
+ * ate a borda do dialogo.
+ */
+#dlg-export .ex-linha > label.ex-cresce { flex: 1 1 auto; min-width: 240px; }
+
+
+/* Campo de arquivo + botao de procurar, na mesma linha. */
+.ex-arq-linha { display: flex; gap: 5px; align-items: stretch; }
+.ex-arq-linha input { flex: 1; min-width: 0; }
+#ex-procurar { flex: none; padding: 0 11px; font-size: 15px; line-height: 1; }
+
+/*
+ * Resultado da exportacao: FAIXA, nao texto solto.
+ *
+ * A primeira versao era um `ff-msg` de 11px entre a previa e os botoes, e
+ * passava despercebida -- depois de clicar em "Exportar" o olho fica no botao,
+ * nao dois centimetros acima dele. Como o dialogo nao fecha ao concluir, o
+ * resultado E o unico sinal de que algo aconteceu; ele precisa se impor.
+ */
+#dlg-export .ff-msg {
+  font-size: 12px; line-height: 1.45; padding: 0; min-height: 0;
+  border: 1px solid transparent; border-radius: 5px;
+}
+#dlg-export .ff-msg.ok,
+#dlg-export .ff-msg.erro,
+#dlg-export .ff-msg.aviso {
+  padding: 9px 12px; font-family: inherit;
+}
+#dlg-export .ff-msg.ok {
+  color: var(--green); border-color: rgba(111,191,115,.45);
+  background: rgba(111,191,115,.10);
+}
+#dlg-export .ff-msg.erro {
+  color: var(--red); border-color: rgba(224,104,95,.5);
+  background: rgba(224,104,95,.10);
+}
+#dlg-export .ff-msg.aviso {
+  color: var(--amber); border-color: rgba(245,166,35,.45);
+  background: rgba(245,166,35,.10);
+}
+
+/* Uma piscada curta ao chegar: distingue "exportei agora" de "exportei ha um
+   minuto e a mensagem continua na tela". */
+@keyframes ex-chegou {
+  from { transform: translateY(-3px); opacity: 0; }
+  to   { transform: none; opacity: 1; }
+}
+#dlg-export .ff-msg.ok, #dlg-export .ff-msg.erro, #dlg-export .ff-msg.aviso {
+  animation: ex-chegou .22s ease-out;
+}
+
+/* O arquivo no titulo do dialogo, em tom menor: e contexto, nao o assunto. */
+.ex-titulo-arq { font-family: var(--mono); font-size: 13px; color: var(--amber); font-weight: 400; }
+
+/* Grupo de opcoes do formato: caixa discreta que junta o que e do mesmo
+   assunto. Sem ela, "Separador" ficava solto entre "Arquivo" e "Registros" e
+   nao se sabia a que dos dois pertencia. */
+.ex-grupo {
+  margin: 0; padding: 8px 12px 10px;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--bg);
+}
+.ex-grupo legend {
+  padding: 0 6px; font-size: 11px; color: var(--dim); font-weight: 500;
+}
+.ex-grupo .ex-linha { margin: 0; }
+#ex-aba { font-family: var(--mono); }
+
+/* Opcoes a esquerda na barra de acoes; os botoes continuam a direita. */
+.ex-acoes-esq { display: flex; align-items: center; gap: 16px; margin-right: auto; }
+.ex-acoes-esq .ex-check { font-size: 11.5px; color: var(--dim); }
+#dlg-export .acoes { align-items: center; }
+
+.ex-nota { margin: 0; font-size: 11px; color: var(--dim); line-height: 1.5; }
+
+/* Busca e acoes das colunas na exportacao. */
+/* Largura toda: o campo divide a linha so com o rotulo e o contador, e
+   espremido em 190px ele parecia um detalhe em vez do que e -- o jeito de achar
+   uma coluna entre 122. */
+#ex-busca {
+  flex: 1; min-width: 110px;
+  background: var(--bg2); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 4px;
+  font: inherit; font-size: 11.5px; padding: 4px 8px;
+}
+#ex-busca:focus { outline: none; border-color: var(--amber); }
+.ex-cols-acoes { border-bottom: 1px solid var(--line); }
+.ex-escopo-botoes {
+  margin-left: auto; font-size: 10.5px; color: var(--amber); font-style: italic;
+}
+
+/* Abrir no Explorer. Mesmo comportamento discreto dos outros dois: so aparece
+   no hover, porque uma arvore com 278 pastas mostrando tres icones em cada
+   linha vira ruido. O `margin-left: auto` esta AQUI agora -- este e o primeiro
+   dos tres a aparecer, e o auto em mais de um os espalharia pelas pontas. */
+.conexao .abrir-pasta {
+  flex: none; background: none; border: none; color: var(--dim2);
+  font-size: 13px; line-height: 1; padding: 0 3px; cursor: pointer;
+  opacity: 0; transition: opacity .12s;
+}
+.conexao .cab:hover .abrir-pasta,
+.conexao .cab:focus-within .abrir-pasta { opacity: 1; }
+.conexao .abrir-pasta:hover { color: var(--amber); }
+
+/* Recarregar a conexao. Discreto como o x: aparece no hover da linha, para nao
+   poluir uma arvore com 278 pastas. */
+.conexao .recarregar {
+  flex: none; background: none; border: none; color: var(--dim2);
+  font-size: 12px; line-height: 1; padding: 0 3px; cursor: pointer;
+  opacity: 0; transition: opacity .12s;
+}
+.conexao .cab:hover .recarregar,
+.conexao .cab:focus-within .recarregar { opacity: 1; }
+.conexao .recarregar:hover { color: var(--amber); }
+
+/* ---------------------------------------------- log de operacoes (T17) */
+
+/* Fica na barra de baixo, ao lado do caminho do log do app: e onde se procura
+   por qualquer um dos dois, e nao rouba espaco do cabecalho. */
+.btn-log {
+  background: none; border: 1px solid var(--line); color: var(--dim);
+  border-radius: 4px; padding: 1px 8px; cursor: pointer;
+  font: inherit; font-size: 10.5px;
+}
+.btn-log:hover { border-color: var(--amber); color: var(--amber); }
+
+#dlg-log { max-width: 900px; width: 94vw; }
+.lg-linha { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 10px; }
+.lg-cresce { flex: 1; }
+.lg-conta { color: var(--dim2); font-size: 11.5px; white-space: nowrap; padding-bottom: 5px; }
+
+/* Altura fixa com rolagem propria: sem isto um dia com 800 operacoes empurra os
+   botoes para fora da janela. */
+.lg-tabela-wrap {
+  max-height: 46vh; overflow: auto;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--bg);
+}
+.lg-tabela { width: 100%; border-collapse: collapse; font-size: 12px; }
+.lg-tabela th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg3); color: var(--dim);
+  text-align: left; font-weight: 600; font-size: 11px;
+  padding: 5px 10px; border-bottom: 1px solid var(--line);
+}
+.lg-tabela td { padding: 3px 10px; border-bottom: 1px solid var(--line); }
+.lg-tabela tbody tr:hover { background: var(--bg3); }
+.lg-tabela .num { text-align: right; }
+
+.lg-hora    { font-family: var(--mono); color: var(--dim); white-space: nowrap; }
+.lg-metodo  { font-family: var(--mono); color: var(--amber); white-space: nowrap; }
+.lg-arquivo { font-family: var(--mono); white-space: nowrap; }
+.lg-ms      { font-family: var(--mono); color: var(--dim2); white-space: nowrap; }
+
+/* A recusa e a linha que importa achar: fica marcada na linha inteira, e nao
+   so numa coluna, para saltar aos olhos ao rolar centenas de operacoes. */
+.lg-tabela tr.recusa .lg-res { color: var(--erro); }
+.lg-tabela tr.recusa { background: rgba(224,104,95,.06); }
+
+.lg-vazio { margin: 0; padding: 18px 12px; color: var(--dim2); font-style: italic; }
+.lg-caminho {
+  flex: 1; color: var(--dim2); font-family: var(--mono); font-size: 10.5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}

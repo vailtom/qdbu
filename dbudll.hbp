@@ -1,0 +1,44 @@
+﻿# Projeto hbmk2 - DLL do DBU (Harbour com VM linkada), consumida pelo app Tauri.
+#
+# Tudo aqui e 32-bit: o Harbour instalado em C:\hbmsvc e x86, e o app Tauri
+# precisa ser i686 para conseguir carregar esta DLL (um processo 64-bit falha
+# com erro 193). Ver GUIA-DO-PROJETO.md.
+-hbdynvm
+-obin/dbudll
+-gtnul
+
+# Clipper Tools (hbct): STRZERO e outras funcoes que expressoes de indice NTX
+# de codigo antigo usam. 39 dos 395 indices de uma pasta real dependem disto.
+hbct.hbc
+
+# XLSX real (OOXML/ZIP), nao SpreadsheetML: numero sai numero e data sai data.
+# As tres .lib sao x86, entao linkam direto -- ver lib/harbour-xlsxwriter/README.md.
+lib/harbour-xlsxwriter/hbxlsxwriter.hbc
+-w3
+-dflag=/DEF:src/bridge/dbudll.def
+
+src/bridge/bridge.c
+src/bridge/progress.c
+
+# nucleo
+src/dispatch.prg
+src/session.prg
+src/util/err.prg
+src/util/cdp.prg
+src/util/paths.prg
+src/util/expr_funcs.prg
+src/util/expr.prg
+src/util/conv.prg
+src/util/log.prg
+
+# api, um arquivo por dominio
+src/api_meta.prg
+src/api_workspace.prg
+src/api_file.prg
+src/api_data.prg
+src/api_fields.prg
+src/api_index.prg
+src/api_filter.prg
+src/api_export.prg
+src/api_session.prg
+src/api_log.prg

@@ -1,0 +1,460 @@
+/*
+ * api_file.prg - abrir, fechar e inspecionar arquivos DBF.
+ *
+ * Cada arquivo aberto ganha um HANDLE opaco. Toda operacao posterior cita o
+ * handle, e comeca por dbSelectArea() -- e isso que impede uma chamada de vazar
+ * para a workarea de outra. Ver session.prg.
+ */
+
+#include "dbinfo.ch"
+#include "dbstruct.ch"
+#include "fileio.ch"
+
+/* ------------------------------------------------------------------ abrir */
+
+/*
+ * file.open {"caminho":"J:/bases/base01/NETCLI.DBF","exclusivo":false,"conexao":"base01"}
+ *   -> {"h":"h7","alias":"NETCLI",...}
+ *
+ * O mesmo arquivo aberto duas vezes e RECUSA, nao erro: e o comportamento do
+ * DBU original (DBU_OPENMSG4) e evita duas abas editando o mesmo registro.
+ */
+FUNCTION Api_File_Open( hP )
+
+   LOCAL cArq  := ParStr( hP, "path" )
+   LOCAL lExcl := ParLog( hP, "exclusive", .F. )
+   LOCAL cConn := ParStr( hP, "connection" )
+   LOCAL cAlias, cH, hJa, nArea, cMotivo, oErr
+
+   IF Empty( cArq )
+      RETURN Err( "ERROR_PARAM_REQUIRED", "file path is required", "path", ;
+                  { "param" => "path" } )
+   ENDIF
+
+   cArq := CaminhoOS( cArq )
+
+   IF ! hb_FileExists( cArq )
+      RETURN Err( "ERROR_FILE_NOT_FOUND", "file not found", "path", ;
+                  { "file" => cArq } )
+   ENDIF
+
+   hJa := HandleDoArquivo( cArq )
+   IF hJa != NIL
+      RETURN Err( "ERROR_FILE_ALREADY_OPEN", "file already open in this session", ;
+                  "path", { "file" => hb_FNameNameExt( cArq ) } )
+   ENDIF
+
+   /* Valida ANTES de mandar o Harbour abrir: um .DBF que e arquivo texto faria
+      o USE estourar erro de runtime, e erro previsivel tem de ser recusa. */
+   IF ! EhDbfValido( cArq, @cMotivo )
+      RETURN Err( "ERROR_NOT_A_DBF", "not a valid DBF", "path", ;
+                  { "file" => hb_FNameNameExt( cArq ), "reason" => cMotivo } )
+   ENDIF
+
+   /* Flag de memo ligada exige o arquivo memo ao lado. Acontece de alguem
+      copiar so o .DBF -- e em J:/bases/base01 ha um caso real ("NETLBL -
+      Copia.DBF"). Sem esta checagem o dbUseArea estoura "Open error", que
+      viraria "ERR:" quando na verdade e situacao previsivel. */
+   IF TemFlagMemo( cArq ) .AND. ! MemoAoLado( cArq, @cMotivo )
+      RETURN Err( "ERROR_MEMO_FILE_MISSING", "memo file missing next to the DBF", "path", ;
+                  { "file" => hb_FNameNameExt( cArq ), "memo" => cMotivo } )
+   ENDIF
+
+   cAlias := AliasLivre( cArq )
+
+   /* dbUseArea pode estourar por motivos previsiveis (arquivo travado por outro
+      processo, permissao, memo corrompido). Erro previsivel e RECUSA. */
+   BEGIN SEQUENCE WITH {| e | Break( e ) }
+      dbUseArea( .T.,, cArq, cAlias, ! lExcl, .F. )
+   RECOVER USING oErr
+      RETURN Err( "ERROR_OPEN_FAILED", "could not open the file", "path", ;
+                  { "file" => hb_FNameNameExt( cArq ), ;
+                    "reason" => iif( HB_ISOBJECT( oErr ) .AND. ;
+                                     HB_ISSTRING( oErr:description ), ;
+                                     oErr:description, "" ) } )
+   END SEQUENCE
+
+   IF ! Used()
+      RETURN Err( "ERROR_OPEN_FAILED", "could not open the file", ;
+                  "path", { "file" => hb_FNameNameExt( cArq ) } )
+   ENDIF
+
+   nArea := Select()
+
+   cH := SessNewHandle( { ;
+      "path"       => cArq, ;
+      "alias"      => cAlias, ;
+      "wa"         => nArea, ;
+      "exclusive"  => lExcl, ;
+      "connection" => cConn, ;
+      "indexes"    => {}, ;
+      "visible"    => {}, ;   /* colunas visiveis; vazio = todas (T4) */
+      "filter"     => "" } )
+
+   RETURN Ok( FileState( cH, .T. ) )
+
+/* ----------------------------------------------------------------- fechar */
+
+/* file.close {"h":"h7"} */
+FUNCTION Api_File_Close( hP )
+
+   LOCAL cH := ParStr( hP, "h" )
+   LOCAL xSel := SessSelect( cH )
+
+   IF xSel != NIL
+      RETURN xSel
+   ENDIF
+
+   dbCloseArea()
+   SessClose( cH, "file.close" )
+
+   RETURN Ok( { "h" => cH, "closed" => .T. } )
+
+/* file.close_all */
+FUNCTION Api_File_Close_All( hP )
+
+   LOCAL nQty := 0
+   LOCAL hInfo
+
+   HB_SYMBOL_UNUSED( hP )
+
+   FOR EACH hInfo IN SessOpenFiles()
+      IF SessSelect( hInfo[ "h" ] ) == NIL
+         dbCloseArea()
+         SessClose( hInfo[ "h" ], "file.close_all" )
+         nQty++
+      ENDIF
+   NEXT
+
+   RETURN Ok( { "closed" => nQty } )
+
+/* ------------------------------------------------------------------- info */
+
+/* file.info {"h":"h7"} -- estado atual, lido da workarea */
+FUNCTION Api_File_Info( hP )
+
+   LOCAL cH := ParStr( hP, "h" )
+   LOCAL xSel := SessSelect( cH )
+
+   IF xSel != NIL
+      RETURN xSel
+   ENDIF
+
+   RETURN Ok( FileState( cH, .T. ) )
+
+/* file.list -- os arquivos abertos, para a barra de abas */
+FUNCTION Api_File_List( hP )
+
+   LOCAL aRet := {}
+   LOCAL hInfo
+
+   HB_SYMBOL_UNUSED( hP )
+
+   FOR EACH hInfo IN SessOpenFiles()
+      AAdd( aRet, { ;
+         "h"       => hInfo[ "h" ], ;
+         "alias"   => hInfo[ "alias" ], ;
+         "caminho" => hInfo[ "path" ], ;
+         "conexao" => hInfo[ "connection" ] } )
+   NEXT
+
+   RETURN Ok( { "openFiles" => aRet } )
+
+/* ---------------------------------------------------------------- estrutura */
+
+/*
+ * file.struct {"h":"h7"} ou {"caminho":"..."}
+ *
+ * Por caminho, abre numa area temporaria e fecha -- ler a estrutura de um
+ * arquivo nao deveria obrigar a abri-lo como aba.
+ */
+FUNCTION Api_File_Struct( hP )
+
+   LOCAL cH  := ParStr( hP, "h" )
+   LOCAL cArq := ParStr( hP, "path" )
+   LOCAL aRet, xSel, cAlias, cMotivo
+
+   IF ! Empty( cH )
+      xSel := SessSelect( cH )
+      IF xSel != NIL
+         RETURN xSel
+      ENDIF
+      RETURN Ok( { "h" => cH, "fields" => AreaStructure() } )
+   ENDIF
+
+   IF Empty( cArq )
+      RETURN Err( "ERROR_PARAM_REQUIRED", "h or path is required", "h", ;
+                  { "param" => "h" } )
+   ENDIF
+
+   cArq := CaminhoOS( cArq )
+
+   IF ! hb_FileExists( cArq )
+      RETURN Err( "ERROR_FILE_NOT_FOUND", "file not found", "path", { "file" => cArq } )
+   ENDIF
+
+   IF ! EhDbfValido( cArq, @cMotivo )
+      RETURN Err( "ERROR_NOT_A_DBF", "not a valid DBF", "path", ;
+                  { "file" => hb_FNameNameExt( cArq ), "reason" => cMotivo } )
+   ENDIF
+
+   cAlias := AliasLivre( cArq )
+   dbUseArea( .T.,, cArq, cAlias, .T., .T. )
+
+   IF ! Used()
+      RETURN Err( "ERROR_NOT_A_DBF", "could not read the file", "path", ;
+                  { "file" => cArq } )
+   ENDIF
+
+   aRet := AreaStructure()
+   dbCloseArea()
+
+   RETURN Ok( { "path" => cArq, "fields" => aRet } )
+
+/* ----------------------------------------------------------------- apoio */
+
+STATIC FUNCTION ParStr( hP, cChave )
+
+   IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave )
+      RETURN ""
+   ENDIF
+
+   RETURN iif( HB_ISSTRING( hP[ cChave ] ), hP[ cChave ], "" )
+
+STATIC FUNCTION ParLog( hP, cChave, lPadrao )
+
+   IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave )
+      RETURN lPadrao
+   ENDIF
+
+   RETURN iif( HB_ISLOGICAL( hP[ cChave ] ), hP[ cChave ], lPadrao )
+
+/* Handle aberto que ja aponta para este arquivo, ou NIL. */
+STATIC FUNCTION HandleDoArquivo( cArq )
+
+   LOCAL hInfo
+
+   FOR EACH hInfo IN SessOpenFiles()
+      IF Upper( hInfo[ "path" ] ) == Upper( cArq )
+         RETURN hInfo
+      ENDIF
+   NEXT
+
+   RETURN NIL
+
+/*
+ * Alias unico. O nome do arquivo pode repetir entre conexoes (NETCLI existe em
+ * todo cliente), entao acrescenta sufixo quando ja houver.
+ */
+STATIC FUNCTION AliasLivre( cArq )
+
+   LOCAL cBase := Upper( hb_FNameName( cArq ) )
+   LOCAL cTenta := cBase
+   LOCAL n := 1
+
+   /* alias precisa comecar por letra e nao ter pontuacao */
+   cTenta := AllTrim( hb_StrReplace( cTenta, "-. ", "___" ) )
+   IF Empty( cTenta ) .OR. ! IsAlpha( Left( cTenta, 1 ) )
+      cTenta := "T" + cTenta
+   ENDIF
+
+   cBase := cTenta
+
+   DO WHILE Select( cTenta ) > 0
+      n++
+      cTenta := cBase + "_" + hb_ntos( n )
+   ENDDO
+
+   RETURN cTenta
+
+/*
+ * Valida o cabecalho antes de abrir. Devolve .F. e o motivo em cMotivo.
+ * Repete o cuidado de api_workspace: um .DBF que e INI faria o USE estourar.
+ */
+STATIC FUNCTION EhDbfValido( cArq, cMotivo )
+
+   LOCAL hFile, cBuf
+   LOCAL nSig, nRegs, nHdr, nRec, nTam
+
+   cMotivo := ""
+   hFile := hb_vfOpen( cArq, FO_READ + FO_SHARED )
+
+   IF hFile == NIL
+      cMotivo := "nao foi possivel abrir para leitura"
+      RETURN .F.
+   ENDIF
+
+   cBuf := Space( 32 )
+
+   IF hb_vfRead( hFile, @cBuf, 32 ) < 32
+      hb_vfClose( hFile )
+      cMotivo := "menor que 32 bytes"
+      RETURN .F.
+   ENDIF
+
+   hb_vfClose( hFile )
+
+   nSig  := hb_BPeek( cBuf, 1 )
+   nRegs := hb_BPeek( cBuf, 5 ) + hb_BPeek( cBuf, 6 ) * 256 + ;
+            hb_BPeek( cBuf, 7 ) * 65536 + hb_BPeek( cBuf, 8 ) * 16777216
+   nHdr  := hb_BPeek( cBuf, 9 )  + hb_BPeek( cBuf, 10 ) * 256
+   nRec  := hb_BPeek( cBuf, 11 ) + hb_BPeek( cBuf, 12 ) * 256
+
+   IF AScan( { 0x02, 0x03, 0x04, 0x05, 0x30, 0x31, 0x32, 0x43, 0x63, ;
+               0x83, 0x8B, 0x8E, 0xB3, 0xCB, 0xE5, 0xF5, 0xFB }, nSig ) == 0
+      cMotivo := "assinatura 0x" + hb_NumToHex( nSig, 2 ) + " nao e xBase"
+      RETURN .F.
+   ENDIF
+
+   IF nHdr < 33 .OR. nRec < 1
+      cMotivo := "cabecalho ou registro com tamanho impossivel"
+      RETURN .F.
+   ENDIF
+
+   nTam := hb_FSize( cArq )
+
+   IF nRegs > 0 .AND. Abs( nHdr + nRegs * nRec - nTam ) > nRec + 8
+      cMotivo := "cabecalho anuncia " + hb_ntos( nRegs ) + " registros, " + ;
+                 "incompativel com o tamanho do arquivo"
+      RETURN .F.
+   ENDIF
+
+   RETURN .T.
+
+/* Bit 0x80 do primeiro byte: o DBF declara ter campo memo. */
+STATIC FUNCTION TemFlagMemo( cArq )
+
+   LOCAL hFile := hb_vfOpen( cArq, FO_READ + FO_SHARED )
+   LOCAL cBuf := Space( 1 )
+   LOCAL lRet := .F.
+
+   IF hFile != NIL
+      IF hb_vfRead( hFile, @cBuf, 1 ) == 1
+         lRet := hb_bitAnd( hb_BPeek( cBuf, 1 ), 0x80 ) != 0
+      ENDIF
+      hb_vfClose( hFile )
+   ENDIF
+
+   RETURN lRet
+
+/* .DBT (DBFNTX/DBFCDX) ou .FPT (FoxPro) ao lado do DBF. */
+STATIC FUNCTION MemoAoLado( cArq, cQual )
+
+   LOCAL cBase := hb_FNameExtSet( cArq, "" )
+   LOCAL cExt
+
+   FOR EACH cExt IN { ".dbt", ".DBT", ".fpt", ".FPT" }
+      IF hb_FileExists( cBase + cExt )
+         cQual := cExt
+         RETURN .T.
+      ENDIF
+   NEXT
+
+   cQual := hb_FNameNameExt( cBase + ".dbt" )
+
+   RETURN .F.
+
+/* Estrutura da area corrente, no formato que a UI espera. */
+FUNCTION AreaStructure()
+
+   LOCAL aEstru := dbStruct()
+   LOCAL aRet := {}
+   LOCAL aField, i := 0
+
+   FOR EACH aField IN aEstru
+      i++
+      AAdd( aRet, { ;
+         "n"        => i, ;
+         "name"     => aField[ DBS_NAME ], ;
+         "type"     => aField[ DBS_TYPE ], ;
+         "len"      => aField[ DBS_LEN ], ;
+         "dec"      => aField[ DBS_DEC ] } )
+   NEXT
+
+   RETURN aRet
+
+/*
+ * Snapshot of one open file, READ FROM THE WORK AREA.
+ *
+ * Never from a copy kept aside: recno, total and mode are Harbour's truth, and
+ * duplicating them in the session object is how the original DBU ended up with
+ * 70 globals.
+ *
+ * Single place that describes a file -- session.state uses this too, so the UI
+ * never sees two different shapes for the same thing.
+ *
+ * lWithFields: the full structure is heavy (NETEST has 125 fields). file.open
+ * and file.info send it; session.state does not, since it lists every file.
+ */
+FUNCTION FileState( cH, lWithFields )
+
+   LOCAL hInfo := SessHandle( cH )
+   LOCAL nOld := Select()
+   LOCAL hRet, cMemo
+
+   IF hInfo == NIL
+      RETURN { => }
+   ENDIF
+
+   dbSelectArea( hInfo[ "wa" ] )
+
+   hRet := { => }
+   hb_HKeepOrder( hRet, .T. )
+
+   hRet[ "h" ]          := cH
+   hRet[ "alias" ]      := hInfo[ "alias" ]
+   hRet[ "path" ]       := hInfo[ "path" ]
+   hRet[ "file" ]       := hb_FNameNameExt( hInfo[ "path" ] )
+   hRet[ "connection" ] := hInfo[ "connection" ]
+   hRet[ "exclusive" ]  := hInfo[ "exclusive" ]
+   hRet[ "mode" ]       := iif( hInfo[ "exclusive" ], "EXCLUSIVE", "SHARED" )
+   hRet[ "records" ]    := LastRec()
+   hRet[ "recno" ]      := RecNo()
+   hRet[ "fieldCount" ] := FCount()
+   hRet[ "recordSize" ] := Max( 0, dbInfo( DBI_GETRECSIZE ) )
+   hRet[ "hasMemo" ]    := AScan( dbStruct(), {| a | a[ 2 ] $ "MP" } ) > 0
+   hRet[ "rdd" ]        := rddName()
+
+   /*
+    * O que o painel de informacoes precisa e a grade nao.
+    *
+    * `lastUpdate` sai do CABECALHO do DBF, e nao da data do arquivo em disco:
+    * copiar um DBF muda a data do arquivo e nao muda a do cabecalho -- e a
+    * pergunta "quando este dado mudou pela ultima vez" e sobre o dado.
+    */
+   hRet[ "lastUpdate" ] := dbInfo( DBI_LASTUPDATE )
+   hRet[ "headerSize" ] := Max( 0, dbInfo( DBI_GETHEADERSIZE ) )
+   hRet[ "codepage" ]   := CdpNativa()
+   hRet[ "bytes" ]      := Max( 0, hb_FSize( hInfo[ "path" ] ) )
+
+   /*
+    * O memo anda junto e some junto; saber o nome dele importa quando falta.
+    *
+    * Nao existe DBI_ que devolva o CAMINHO do memo -- so o handle (numero) e a
+    * extensao. O nome se monta trocando a extensao do proprio DBF, que e como o
+    * RDD o acha: mesma pasta, mesmo nome, extensao do DBI_MEMOEXT (.DBT no NTX,
+    * .FPT no CDX).
+    */
+   IF hRet[ "hasMemo" ]
+      cMemo := hb_FNameExtSet( hInfo[ "path" ], dbInfo( DBI_MEMOEXT ) )
+      hRet[ "memoFile" ]  := hb_FNameNameExt( cMemo )
+      hRet[ "memoBytes" ] := Max( 0, hb_FSize( cMemo ) )
+   ENDIF
+   hRet[ "deleted" ]    := Deleted()
+   hRet[ "bof" ]        := Bof()
+   hRet[ "eof" ]        := Eof()
+   hRet[ "indexes" ]    := hInfo[ "indexes" ]
+   hRet[ "visible" ]    := Visiveis( hInfo )   /* colunas escolhidas; {} = todas */
+   hRet[ "orders" ]     := EstadoIndices( cH )[ "indexes" ]   /* indices abertos (T5) */
+   hRet[ "order" ]      := IndexOrd()
+   /* dbFilter() e a verdade -- hInfo["filter"] e so o texto que guardamos para
+      persistir. Ler da work area evita os dois divergirem. */
+   hRet[ "filter" ]     := dbFilter()
+
+   IF hb_defaultValue( lWithFields, .F. )
+      hRet[ "fields" ] := AreaStructure()
+   ENDIF
+
+   dbSelectArea( nOld )
+
+   RETURN hRet

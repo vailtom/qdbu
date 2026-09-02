@@ -1,0 +1,13 @@
+# Author: Vailton Renato <vailtom at gmail dot com>
+
+description=libxlsxwriter wrapper (XLSX)
+
+incpaths=.
+
+libpaths=.
+
+headers=${hb_name}.ch
+
+libs=${_HB_DYNPREF}${hb_name}${_HB_DYNSUFF}
+libs=xlsxwriter
+libs=zlib

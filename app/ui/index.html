@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DBU</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="dot"></span>
+    <!-- O "∵" (U+2235, BECAUSE SIGN) faz parte da marca; não é sujeira nem erro
+         de codificação. É o símbolo matemático de "porque" — o mesmo "porque"
+         que este código persegue nos comentários: o que o programa faz se lê
+         nas linhas, o motivo não. Fica sem espaço antes, colado ao nome. -->
+    <h1>DBU∵</h1>
+    <span class="sub" data-i18n="UI_SUBTITLE"></span>
+  </div>
+  <div class="acoes-topo">
+    <!-- Seletor de idioma antes do botao de acao: e configuracao, nao tarefa.
+         Montado por js/idioma.js -- a bandeira e SVG embutido, nao emoji, porque
+         no Windows os pares de indicador regional saem como as letras "BR". -->
+    <!-- Tema antes do idioma: os dois sao preferencia de quem olha, e o de
+         cores e o mais mexido dos dois. Montado por js/tema.js. -->
+    <div class="tema" id="tema"></div>
+    <div class="idioma" id="idioma"></div>
+    <button id="btn-nova-conexao" class="primario" data-i18n="UI_NEW_CONNECTION"></button>
+  </div>
+</header>
+
+<div class="corpo">
+
+  <aside id="painel" class="painel">
+    <div class="busca">
+      <input id="busca" type="search" data-i18n-ph="UI_SEARCH_PLACEHOLDER" autocomplete="off">
+    </div>
+    <div id="arvore" class="arvore" data-i18n-aria="UI_CONNECTIONS"></div>
+  </aside>
+
+  <div id="divisoria" class="divisoria" role="separator" aria-orientation="vertical"
+       data-i18n-aria="UI_PANEL_WIDTH" tabindex="0" data-i18n-title="UI_DRAG_RESIZE"></div>
+
+  <main class="area">
+    <div id="abas" class="abas" role="tablist"></div>
+
+    <div id="vazio" class="estado-vazio">
+      <p class="titulo" data-i18n="UI_NO_FILE_OPEN"></p>
+      <p class="dica" data-i18n="UI_EMPTY_HINT"></p>
+    </div>
+
+    <div id="conteudo" class="conteudo" hidden>
+
+      <div class="visoes" role="tablist" data-i18n-aria="UI_FILE_VIEW">
+        <button type="button" class="visao" data-visao="estrutura" role="tab" data-i18n="UI_VIEW_STRUCTURE"></button>
+        <button type="button" class="visao ativa" data-visao="dados" role="tab" data-i18n="UI_VIEW_DATA"></button>
+
+        <!-- Ferramentas da grade ficam nesta barra, nao na de baixo: e onde o
+             Navicat poe `Columns` e `Filter & Sort`, e o Filtro (T6) entra aqui
+             do lado. O botao acende enquanto o painel esta aberto. -->
+        <span class="visoes-sep"></span>
+        <button type="button" id="pg-colunas" class="ferramenta"
+                data-i18n-title="UI_COLUMNS_TITLE" data-i18n="UI_COLUMNS"></button>
+        <button type="button" id="pg-indices" class="ferramenta"
+                data-i18n-title="UI_INDEXES_TITLE" data-i18n="UI_INDEXES"></button>
+        <button type="button" id="pg-filtro" class="ferramenta"
+                data-i18n-title="UI_FILTER_TITLE" data-i18n="UI_FILTER"></button>
+        <button type="button" id="pg-exportar" class="ferramenta"
+                data-i18n-title="UI_EXPORT_TITLE" data-i18n="UI_EXPORT"></button>
+        <span class="filtro-ativo" id="filtro-ativo" hidden></span>
+      </div>
+
+      <!-- visão: dados -->
+      <div id="visao-dados" class="visao-corpo">
+        <!-- Faixa horizontal acima da grade, e nao painel lateral: e onde o
+             Navicat poe o Filter & Sort, conferido no video. Filtro e uma linha
+             de texto larga; de lado ele ficaria espremido. -->
+        <div id="faixa-filtro" class="faixa-filtro" hidden>
+          <div class="ff-modos">
+            <label><input type="radio" name="ff-modo" value="guiado" checked> <span data-i18n="UI_MODE_GUIDED"></span></label>
+            <label><input type="radio" name="ff-modo" value="texto"> <span data-i18n="UI_MODE_EXPR"></span></label>
+          </div>
+
+          <div id="ff-guiado" class="ff-guiado">
+            <div id="ff-condicoes" class="ff-condicoes"></div>
+            <button type="button" id="ff-add" class="ff-add" data-i18n="UI_ADD_CONDITION"></button>
+            <span class="ff-parcial" id="ff-parcial" hidden
+                  data-i18n-title="UI_PARTIAL_SUGGESTIONS_TITLE"
+                  data-i18n="UI_PARTIAL_SUGGESTIONS"></span>
+            <datalist id="ff-sugestoes"></datalist>
+          </div>
+
+          <div id="ff-texto" class="ff-linha" hidden>
+            <input id="ff-expr" data-i18n-ph="UI_FILTER_PLACEHOLDER"
+                   autocomplete="off" spellcheck="false">
+          </div>
+
+          <div class="ff-acoes">
+            <button type="button" id="ff-check" data-i18n-title="UI_CHECK_TITLE" data-i18n="UI_CHECK"></button>
+            <button type="button" id="ff-aplicar" data-i18n="UI_APPLY"></button>
+            <button type="button" id="ff-limpar" data-i18n="UI_CLEAR"></button>
+            <button type="button" id="ff-contar" data-i18n-title="UI_COUNT_TITLE" data-i18n="UI_COUNT"></button>
+            <button type="button" id="ff-fechar" class="ff-x" data-i18n-title="UI_CLOSE">×</button>
+          </div>
+
+          <!-- Previa com os parenteses que a precedencia REALMENTE aplica.
+               Em xBase `.AND.` liga mais forte que `.OR.`, entao
+               `A .AND. B .OR. C` e `(A .AND. B) .OR. C` -- quem escreveu
+               pensando `A .AND. (B .OR. C)` leva outro conjunto e a grade nao
+               avisa. Mostrar o agrupamento e o que torna isso visivel. -->
+          <p class="ff-previa" id="ff-previa" hidden></p>
+          <p class="ff-msg" id="ff-msg"></p>
+        </div>
+
+        <div class="dados-linha">
+          <!-- A esquerda, entre a arvore e a grade, como no Navicat. -->
+          <aside id="painel-colunas" class="painel-colunas" hidden data-i18n-aria="UI_VISIBLE_COLUMNS">
+            <div class="pc-topo">
+              <strong data-i18n="UI_COLUMNS"></strong>
+              <button type="button" id="pc-fechar" data-i18n-title="UI_CLOSE">×</button>
+            </div>
+            <div class="pc-acoes">
+              <button type="button" id="pc-todas" data-i18n="UI_ALL_F"></button>
+              <button type="button" id="pc-inverter" data-i18n="UI_INVERT"></button>
+              <span class="pc-conta" id="pc-conta"></span>
+            </div>
+            <ul id="pc-lista" class="pc-lista"></ul>
+            <p class="pc-dica" data-i18n="UI_COLUMN_JUMP_HINT"></p>
+            <!-- Busca no rodape do painel, como no Navicat. -->
+            <input id="pc-busca" type="search" data-i18n-ph="UI_FIND_COLUMN"
+                   autocomplete="off" spellcheck="false">
+          </aside>
+
+          <aside id="painel-indices" class="painel-colunas" hidden data-i18n-aria="UI_INDEXES">
+            <div class="pc-topo">
+              <strong data-i18n="UI_INDEXES"></strong>
+              <button type="button" id="pi-fechar" data-i18n-title="UI_CLOSE">×</button>
+            </div>
+            <div class="pc-acoes">
+              <button type="button" id="pi-fechar-todos" data-i18n-title="UI_CLOSE_ALL_INDEXES" data-i18n="UI_CLOSE_ALL"></button>
+              <button type="button" id="pi-novo" data-i18n-title="UI_CREATE_INDEX_TITLE" data-i18n="UI_CREATE_ELLIPSIS"></button>
+              <span class="pc-conta" id="pi-conta"></span>
+            </div>
+
+            <!-- Criar índice. Fica embutido no painel, não num diálogo: a lista
+                 de índices existentes é a informação que evita criar um igual ao
+                 que já está ali. -->
+            <form id="pi-form" class="pi-form" hidden>
+              <label><span data-i18n="UI_KEY"></span>
+                <input id="pi-chave" placeholder="CLI_NOME" autocomplete="off" spellcheck="false" required>
+              </label>
+              <label><span data-i18n="UI_FILE"></span>
+                <input id="pi-arquivo" placeholder="MEUIDX.ntx" autocomplete="off" spellcheck="false" required>
+              </label>
+              <label><span data-i18n="UI_ONLY_RECORDS_THAT"></span>
+                <span class="pi-opc" data-i18n="UI_OPTIONAL"></span>
+                <input id="pi-for" placeholder="!Deleted()" autocomplete="off" spellcheck="false">
+              </label>
+              <label class="pi-check">
+                <input type="checkbox" id="pi-unico"> <span data-i18n="UI_UNIQUE_KEYS"></span>
+              </label>
+              <p class="pi-destino" id="pi-destino"></p>
+              <div class="pi-botoes">
+                <button type="button" id="pi-conferir" data-i18n="UI_CHECK"></button>
+                <button type="submit" id="pi-criar" data-i18n="UI_CREATE"></button>
+                <button type="button" id="pi-cancelar-form" data-i18n="UI_CANCEL"></button>
+              </div>
+              <p class="ff-msg" id="pi-msg"></p>
+            </form>
+            <ul id="pi-abertos" class="pc-lista pi-abertos"></ul>
+            <p class="pi-secao" data-i18n="UI_IN_FOLDER"></p>
+            <ul id="pi-pasta" class="pc-lista"></ul>
+            <input id="pi-busca" type="search" data-i18n-ph="UI_FILTER_INDEX"
+                   autocomplete="off" spellcheck="false">
+          </aside>
+
+          <div class="grade-wrap" id="grade-wrap">
+            <table class="grade" id="grade">
+              <thead><tr></tr></thead>
+              <tbody></tbody>
+            </table>
+            <p id="grade-vazia" class="grade-vazia" hidden></p>
+          </div>
+        </div>
+
+        <!-- Barra inferior consolidada: navegação, posição e frescor num lugar
+             só. No DBU original isso estava espalhado por cantos da tela. -->
+        <div class="barra-grade">
+          <div class="nav">
+            <button type="button" id="pg-topo"     data-i18n-title="UI_FIRST_PAGE">⏮</button>
+            <button type="button" id="pg-anterior" data-i18n-title="UI_PREV_PAGE">◀</button>
+            <button type="button" id="pg-proxima"  data-i18n-title="UI_NEXT_PAGE">▶</button>
+            <button type="button" id="pg-fim"      data-i18n-title="UI_LAST_PAGE">⏭</button>
+          </div>
+
+          <label class="ir"><span data-i18n="UI_GOTO"></span>
+            <input id="pg-ir" type="text" inputmode="numeric" size="8"
+                   data-i18n-ph="UI_RECORD" autocomplete="off">
+          </label>
+
+          <!-- Busca incremental. Muda de natureza conforme haja indice: com
+               indice e seek pela chave (instantaneo, a cada tecla); sem indice
+               e varredura, e varredura a cada tecla travaria a UI -- por isso
+               so no Enter. O placeholder diz qual dos dois esta valendo. -->
+          <label class="busca-inc">
+            <input id="pg-buscar" type="search" size="16"
+                   data-i18n-ph="UI_SEARCH" autocomplete="off" spellcheck="false">
+          </label>
+          <button type="button" id="pg-proximo" data-i18n-title="UI_NEXT_MATCH">↓</button>
+
+          <label class="ord"><span data-i18n="UI_ORDER"></span>
+            <select id="pg-ordem" data-i18n-title="UI_ORDER_TITLE">
+              <option value="0" data-i18n="UI_ORDER_PHYSICAL"></option>
+            </select>
+          </label>
+
+          <label class="tam">
+            <select id="pg-tamanho" data-i18n-title="UI_ROWS_PER_PAGE_TITLE">
+              <option>50</option><option>100</option>
+              <option selected>200</option><option>500</option>
+            </select>
+            <span data-i18n="UI_ROWS_PER_PAGE"></span>
+          </label>
+
+          <span class="posicao" id="pg-posicao">—</span>
+          <span class="refresh" id="pg-refresh" data-i18n-title="UI_LAST_READ"></span>
+          <button type="button" id="pg-recarregar" data-i18n-title="UI_RELOAD">⟳</button>
+        </div>
+      </div>
+
+      <!-- visão: estrutura -->
+      <div id="visao-estrutura" class="visao-corpo" hidden>
+        <div class="cartoes" id="cartoes"></div>
+        <div class="tabela-wrap">
+          <table class="estrutura" id="estrutura">
+            <thead>
+              <tr><th>#</th><th data-i18n="UI_FIELD"></th><th data-i18n="UI_TYPE"></th>
+                  <th class="num" data-i18n="UI_SIZE"></th>
+                  <th class="num" data-i18n="UI_DEC"></th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+</div>
+
+<!-- Barra de tarefa. Fica sobre o rodape, nao num modal: a grade continua
+     legivel enquanto a contagem corre, e o "Parar" nao exige achar um dialogo. -->
+<div id="tarefa" class="tarefa" hidden>
+  <span class="tf-msg" id="tf-msg"></span>
+  <div class="tf-barra"><div class="tf-cheia" id="tf-cheia"></div></div>
+  <span class="tf-num" id="tf-num"></span>
+  <button type="button" id="tf-parar" data-i18n="UI_STOP"></button>
+</div>
+
+<section class="status">
+  <span class="badge" id="badge" data-i18n="UI_CHECKING"></span>
+  <code id="dll-path">—</code>
+  <span class="hint" id="hint"></span>
+  <span class="arch" id="arch"></span>
+</section>
+
+<section class="logbar">
+  <span data-i18n="UI_LOG"></span><code id="log-path">—</code>
+  <!-- O log de OPERACOES nao e o log do app: um registra o que foi feito nos
+       arquivos do usuario, o outro registra o que o processo fez. Ficam lado a
+       lado porque e onde se procura por qualquer um dos dois. -->
+  <button type="button" id="btn-log" class="btn-log" data-i18n="UI_OPERATIONS_LOG"></button>
+  <span class="cdp" id="cdp">—</span>
+</section>
+
+<!-- Diálogo de exportação.
+     NÃO fecha ao concluir (antipadrão F do docs/05): o autor do vídeo do
+     Navicat foi explícito — "posso ter errado o formato, aí volto, corrijo e
+     exporto de novo". Fechar obrigaria a remontar tudo. -->
+<dialog id="dlg-export">
+  <form method="dialog" id="form-export">
+    <h2><span data-i18n="UI_EXPORT_TO"></span> <span id="ex-titulo-arq" class="ex-titulo-arq"></span></h2>
+
+    <div class="ex-linha">
+      <label><span data-i18n="UI_FORMAT"></span>
+        <select id="ex-formato">
+          <option value="csv" data-i18n="UI_FMT_CSV"></option>
+          <option value="json" data-i18n="UI_FMT_JSON"></option>
+          <option value="xlsx" data-i18n="UI_FMT_XLSX"></option>
+          <option value="dbf" data-i18n="UI_FMT_DBF"></option>
+        </select>
+      </label>
+      <label class="ex-cresce"><span data-i18n="UI_FILE"></span>
+        <span class="ex-arq-linha">
+          <input id="ex-arquivo" autocomplete="off" spellcheck="false" required>
+          <button type="button" id="ex-procurar" data-i18n-title="UI_CHOOSE_WHERE_SAVE">⌕</button>
+        </span>
+      </label>
+    </div>
+    <p class="ex-destino" id="ex-destino"></p>
+
+    <!-- Opcoes DO FORMATO, logo abaixo de onde ele e escolhido. Estavam duas
+         linhas adiante, com "Registros" no meio: quem acabava de escolher CSV
+         nao encontrava o separador onde era natural procurar. -->
+    <fieldset class="ex-grupo" id="ex-opcoes-formato">
+      <legend id="ex-opcoes-titulo" data-i18n="UI_CSV_OPTIONS"></legend>
+
+      <div class="ex-linha" id="ex-so-csv">
+        <label><span data-i18n="UI_SEPARATOR"></span>
+          <select id="ex-sep">
+            <option value=";" data-i18n="UI_SEP_SEMICOLON"></option>
+            <option value="," data-i18n="UI_SEP_COMMA"></option>
+            <option value="&#9;" data-i18n="UI_SEP_TAB"></option>
+          </select>
+        </label>
+        <label><span data-i18n="UI_ENCODING"></span>
+          <select id="ex-cdp">
+            <option value="UTF8">UTF-8</option>
+            <option value="ANSI" data-i18n="UI_ENC_ANSI"></option>
+            <option value="CP850" data-i18n="UI_ENC_CP850"></option>
+          </select>
+        </label>
+        <!-- Combo e nao caixa de marcar: os tres controlam a mesma coisa (como o
+             CSV sai) e alinhados na linha se leem de uma vez so. -->
+        <label><span data-i18n="UI_HEADER"></span>
+          <select id="ex-cab">
+            <option value="1" data-i18n="UI_HEADER_FIRST_LINE"></option>
+            <option value="0" data-i18n="UI_HEADER_NONE"></option>
+          </select>
+        </label>
+      </div>
+
+      <!-- DBF e o unico formato com ESTRUTURA: o arquivo novo nasce com os
+           tipos originais dos campos escolhidos. Nao ha o que configurar, mas
+           dizer isso evita a duvida de "vai virar tudo texto?". -->
+      <div class="ex-linha" id="ex-so-dbf" hidden>
+        <p class="ex-nota" data-i18n="UI_DBF_NOTE"></p>
+      </div>
+
+      <div class="ex-linha" id="ex-so-xlsx" hidden>
+        <label class="ex-cresce"><span data-i18n="UI_SHEET_NAME"></span>
+          <input id="ex-aba" data-i18n-value="UI_SHEET_DEFAULT" autocomplete="off"
+                 spellcheck="false" maxlength="31">
+        </label>
+      </div>
+    </fieldset>
+
+    <div class="ex-linha" id="ex-linha-registros">
+      <!-- A expressao do filtro NAO aparece aqui: ela pode ter varias linhas
+           (condicoes com .AND./.OR. encadeadas) e empurraria o resto do
+           dialogo. Vai no tooltip, como o caminho da conexao na arvore. -->
+      <label id="ex-escopo-campo" hidden><span data-i18n="UI_RECORDS"></span>
+        <select id="ex-escopo"></select>
+      </label>
+    </div>
+
+    <div class="ex-cols">
+      <div class="ex-cols-topo">
+        <strong data-i18n="UI_COLUMNS"></strong>
+        <input id="ex-busca" type="search" data-i18n-ph="UI_FILTER_BY_NAME"
+               autocomplete="off" spellcheck="false">
+        <span class="ex-conta" id="ex-conta"></span>
+      </div>
+      <div class="ex-cols-topo ex-cols-acoes">
+        <button type="button" id="ex-todas" data-i18n="UI_ALL_F"></button>
+        <button type="button" id="ex-nenhuma" data-i18n="UI_NONE_F"></button>
+        <button type="button" id="ex-inverter" data-i18n="UI_INVERT"></button>
+        <button type="button" id="ex-visiveis" data-i18n="UI_ONLY_GRID"></button>
+        <span class="ex-escopo-botoes" id="ex-escopo-botoes"></span>
+      </div>
+      <ul id="ex-lista" class="ex-lista"></ul>
+    </div>
+
+    <div class="ex-previa">
+      <div class="ex-cols-topo">
+        <strong data-i18n="UI_PREVIEW"></strong>
+        <button type="button" id="ex-atualizar" data-i18n="UI_REFRESH"></button>
+        <span class="ex-conta" id="ex-quantos"></span>
+      </div>
+      <pre id="ex-amostra" class="ex-amostra"></pre>
+    </div>
+
+    <p class="ff-msg" id="ex-msg"></p>
+
+    <!-- As duas opcoes ficam na barra de acoes, a esquerda: sao ajustes de
+         ultima hora ("ah, sem os deletados"), lidos no mesmo olhar em que se
+         confere a previa e se clica em Exportar. -->
+    <div class="acoes">
+      <div class="ex-acoes-esq">
+        <label class="ex-check">
+          <input type="checkbox" id="ex-sem-deletados"> <span data-i18n="UI_SKIP_DELETED"></span>
+        </label>
+        <label class="ex-check">
+          <input type="checkbox" id="ex-stamp"> <span data-i18n="UI_TIMESTAMP_NAME"></span>
+        </label>
+      </div>
+      <button type="button" id="ex-fechar" data-i18n="UI_CLOSE"></button>
+      <button type="submit" id="ex-gravar" data-i18n="UI_EXPORT"></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Menu de ações da conexão. UM para todas: com 278 pastas, um menu por
+     linha seriam 278 subárvores de DOM criadas para talvez nunca abrirem. -->
+<div id="menu-conexao" role="menu" hidden></div>
+
+<!-- Visualizador do log de operações. -->
+<dialog id="dlg-log">
+  <form method="dialog" id="form-log">
+    <h2 data-i18n="UI_OPERATIONS_LOG"></h2>
+    <p class="explica" data-i18n="UI_LOG_EXPLAIN"></p>
+
+    <div class="lg-linha">
+      <label><span data-i18n="UI_LOG_DAY"></span>
+        <select id="lg-dia"></select>
+      </label>
+      <label class="lg-cresce"><span data-i18n="UI_LOG_SEARCH"></span>
+        <input id="lg-busca" type="search" data-i18n-ph="UI_LOG_SEARCH_PH"
+               autocomplete="off" spellcheck="false">
+      </label>
+      <span class="lg-conta" id="lg-conta"></span>
+    </div>
+
+    <div class="lg-tabela-wrap">
+      <table class="lg-tabela" id="lg-tabela">
+        <thead>
+          <tr>
+            <th data-i18n="UI_LOG_TIME"></th>
+            <th data-i18n="UI_LOG_OPERATION"></th>
+            <th data-i18n="UI_FILE"></th>
+            <th data-i18n="UI_LOG_RESULT"></th>
+            <th class="num" data-i18n="UI_LOG_ELAPSED"></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <p class="lg-vazio" id="lg-vazio" hidden></p>
+    </div>
+
+    <p class="ff-msg" id="lg-msg"></p>
+
+    <div class="acoes">
+      <span class="lg-caminho" id="lg-caminho"></span>
+      <button type="button" id="lg-pasta" data-i18n="UI_MENU_OPEN_FOLDER"></button>
+      <button type="button" id="lg-fechar" data-i18n="UI_CLOSE"></button>
+    </div>
+  </form>
+</dialog>
+
+<!-- diálogo: nova conexão -->
+<dialog id="dlg-conexao">
+  <form method="dialog" id="form-conexao">
+    <h2 data-i18n="UI_NEW_CONNECTION_TITLE"></h2>
+    <p class="explica" data-i18n="UI_CONNECTION_EXPLAIN"></p>
+
+    <label>
+      <span data-i18n="UI_FOLDER"></span>
+      <input id="con-dir" name="dir" placeholder="J:\bases\base03" required spellcheck="false">
+    </label>
+    <label>
+      <span data-i18n="UI_NAME"></span> <span class="opcional" data-i18n="UI_NAME_OPTIONAL"></span>
+      <input id="con-nome" name="nome" data-i18n-ph="UI_PH_CONNECTION_NAME" spellcheck="false">
+    </label>
+
+    <p id="con-erro" class="erro-campo" hidden></p>
+
+    <div class="acoes">
+      <button type="button" id="con-cancelar" class="ghost" data-i18n="UI_CANCEL"></button>
+      <button type="submit" class="primario" data-i18n="UI_ADD"></button>
+    </div>
+  </form>
+</dialog>
+
+<script src="js/i18n/pt-BR.js"></script>
+<script src="js/i18n/en.js"></script>
+<script src="js/i18n/es.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/tema.js"></script>
+<script src="js/idioma.js"></script>
+<script src="js/rpc.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

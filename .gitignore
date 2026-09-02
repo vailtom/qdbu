@@ -1,0 +1,81 @@
+# ---- Dados: NUNCA commitar arquivo de banco ----
+# As fixtures sao GERADAS por tests/fixtures/gen_fixtures.prg.
+# Nenhum DBF real (de cliente ou de producao) entra neste repositorio.
+*.dbf
+*.DBF
+*.dbt
+*.DBT
+*.fpt
+*.FPT
+*.ntx
+*.NTX
+*.cdx
+*.CDX
+*.vew
+*.VEW
+*.bak
+*.tmp
+
+# ---- Build ----
+bin/
+target/
+app/src-tauri/gen/
+*.obj
+*.exp
+*.lib
+*.o
+*.ppo
+*.hrb
+
+# A hbxlsxwriter e dependencia versionada, nao produto de build: sem esta
+# excecao o `*.lib` acima a engoliria e o projeto nao compilaria em outra
+# maquina. Ver lib/harbour-xlsxwriter/LICENSE (BSD-2 + zlib).
+!lib/harbour-xlsxwriter/*.lib
+
+# ---- Backups gerados por arjota.bat ----
+ARJ/
+
+# ---- Runtime: tudo que o projeto gera fica em .run/ ----
+.run/
+*.log
+
+# ---- Configuracao local da maquina (caminhos de toolchain) ----
+env.local.bat
+
+# ---- Material bruto de analise: video nao vai para o repositorio ----
+# As transcricoes .txt VAO -- e nelas que estao as decisoes faladas, citadas
+# como evidencia em cada documento de docs/.
+docs/fontes/*.mp4
+docs/fontes/*.mkv
+docs/fontes/*.avi
+docs/fontes/*.mov
+
+# ---- Estado local da aplicacao ----
+# .dbu/ e o que ESTA maquina abriu: connections.json com os caminhos reais
+# (J:\bases\...), session.json com abas e expressoes de filtro, e o log de
+# alteracoes. E estado de quem rodou, nao do projeto -- e leva nome de pasta de
+# cliente junto. Mesma razao de .run/ estar fora.
+.dbu/
+
+# ---- Material de estudo de terceiros: NUNCA commitar ----
+# documentos_para_projeto/navicat/ sao recursos EXTRAIDOS do executavel do
+# Navicat -- 356 .dfm (os formularios internos deles), .bin, .bmp, icones,
+# cursores. Estudar a interface de um concorrente e legitimo; republicar os
+# binarios dele num repositorio open source nao e. Fica no disco como material
+# de estudo, igual a pasta delphi/ do dll-harbour. Fora do git, sempre.
+documentos_para_projeto/
+
+# ---- Atalhos do Windows: carregam caminho absoluto da maquina ----
+*.lnk
+
+# ---- Artefatos dos testes de exportacao ----
+# Gerados por tests/, como as fixtures. Regeram-se rodando o teste.
+tests/fixtures/*.xlsx
+tests/fixtures/*.csv
+tests/fixtures/*.json
+
+# ---- Editor / SO ----
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
