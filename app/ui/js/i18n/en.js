@@ -492,4 +492,13 @@
 
   ERROR_LOG_DAY_NOT_FOUND: "Nothing was changed on {day}.",
 
+
+  // ------------------------------------------- long-running task labels
+  UI_JOB_SEARCHING: "Searching…",
+  UI_JOB_COUNTING: "Counting filtered records…",
+  UI_JOB_INDEXING: "Building index {file}…",
+  UI_JOB_EXPORTING: "Exporting {file}…",
+  UI_JOB_COPYING: "Copying to {file}…",
+  UI_JOB_WORKING: "Working…",
+
 };

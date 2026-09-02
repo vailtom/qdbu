@@ -94,7 +94,7 @@ FUNCTION Api_Export_Csv( hP )
    ENDIF
 
    nTotal := LastRec()
-   Dbu_JobBegin( "Exportando " + hb_FNameNameExt( cArq ), nTotal )
+   Dbu_JobBegin( JobMsg( "UI_JOB_EXPORTING", cArq ), nTotal )
 
    /* BOM antes de qualquer byte, senao o Excel nao o reconhece. */
    IF lBom .AND. cCdp == "UTF8"
@@ -177,7 +177,7 @@ FUNCTION Api_Export_Json( hP )
    ENDIF
 
    nTotal := LastRec()
-   Dbu_JobBegin( "Exportando " + hb_FNameNameExt( cArq ), nTotal )
+   Dbu_JobBegin( JobMsg( "UI_JOB_EXPORTING", cArq ), nTotal )
 
    FWrite( nHandle, "[" + hb_eol() )
 
@@ -270,7 +270,7 @@ FUNCTION Api_Export_Xlsx( hP )
    ENDIF
 
    nTotal := LastRec()
-   Dbu_JobBegin( "Exportando " + hb_FNameNameExt( cArq ), nTotal )
+   Dbu_JobBegin( JobMsg( "UI_JOB_EXPORTING", cArq ), nTotal )
 
    oXls:AddSheet( cAba )
 
@@ -430,7 +430,7 @@ FUNCTION Api_Export_Dbf( hP )
    nOrigem := Select()
    nTotal := LastRec()
 
-   Dbu_JobBegin( "Copiando para " + hb_FNameNameExt( cArq ), nTotal )
+   Dbu_JobBegin( JobMsg( "UI_JOB_COPYING", cArq ), nTotal )
 
    BEGIN SEQUENCE WITH {| e | Break( e ) }
       /* dbCreate cria o .DBT junto quando ha campo memo na estrutura. */

@@ -515,4 +515,13 @@
 
   ERROR_LOG_DAY_NOT_FOUND: "Nada foi alterado em {day}.",
 
+
+  // ------------------------------------------- rótulos de tarefa longa
+  UI_JOB_SEARCHING: "Procurando…",
+  UI_JOB_COUNTING: "Contando os registros do filtro…",
+  UI_JOB_INDEXING: "Criando o índice {file}…",
+  UI_JOB_EXPORTING: "Exportando {file}…",
+  UI_JOB_COPYING: "Copiando para {file}…",
+  UI_JOB_WORKING: "Trabalhando…",
+
 };

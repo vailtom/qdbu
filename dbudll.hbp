@@ -30,6 +30,7 @@ src/util/expr_funcs.prg
 src/util/expr.prg
 src/util/conv.prg
 src/util/log.prg
+src/util/job.prg
 
 # api, um arquivo por dominio
 src/api_meta.prg

@@ -200,7 +200,7 @@ FUNCTION Api_Filter_Count( hP )
     * (src/bridge/progress.c), entao o Rust acompanha por outra thread enquanto
     * este laco roda.
     */
-   Dbu_JobBegin( "Contando registros do filtro", nTotal )
+   Dbu_JobBegin( JobMsg( "UI_JOB_COUNTING" ), nTotal )
 
    dbGoTop()
    DO WHILE ! Eof()

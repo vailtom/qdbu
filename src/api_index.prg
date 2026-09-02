@@ -447,7 +447,7 @@ FUNCTION Api_Index_Create( hP )
 
    nTotal := LastRec()
 
-   Dbu_JobBegin( "Criando indice " + hb_FNameNameExt( cArq ), nTotal )
+   Dbu_JobBegin( JobMsg( "UI_JOB_INDEXING", cArq ), nTotal )
 
    BEGIN SEQUENCE WITH {| e | Break( e ) }
 

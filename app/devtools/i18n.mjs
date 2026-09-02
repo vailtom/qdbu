@@ -80,10 +80,18 @@ const fontes = [];
  * tres apareceriam como chaves orfas. Uma ferramenta que acusa o que nao e
  * problema deixa de ser lida.
  */
+// O comentario vira BRANCO DO MESMO TAMANHO, e nao um espaco so.
+//
+// Colapsar mudava todos os deslocamentos seguintes, e o numero de linha
+// calculado por `s.slice(0, m.index).split("\n").length` saia menor que o real
+// -- api_data.prg:251 para um achado que estava na 334. Um relatorio que aponta
+// para a linha errada custa mais tempo que o achado economiza.
+const branco = (t) => t.replace(/[^\n]/g, " ");
+
 function semComentarios(s, arq) {
-  if (arq.endsWith(".prg")) return s.replace(/\/\*[\s\S]*?\*\//g, " ");
-  if (arq.endsWith(".html")) return s.replace(/<!--[\s\S]*?-->/g, " ");
-  return s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/^\s*\/\/.*$/gm, " ");
+  if (arq.endsWith(".prg")) return s.replace(/\/\*[\s\S]*?\*\//g, branco);
+  if (arq.endsWith(".html")) return s.replace(/<!--[\s\S]*?-->/g, branco);
+  return s.replace(/\/\*[\s\S]*?\*\//g, branco).replace(/^\s*\/\/.*$/gm, branco);
 }
 
 // Prefixo + pelo menos um segmento. O sufixo pode ser minusculo: e assim que
@@ -143,6 +151,28 @@ for (const f of fontes) {
   }
 }
 
+// ---------------------------------------- rotulo de tarefa nascendo no Harbour
+
+// O ponto cego que deixou sete frases em portugues dentro da DLL por tres
+// telas: o SOLTOS acima so varre .js, e a barra de tarefa recebe o rotulo como
+// DADO vindo do Harbour -- nao como chave. Nenhuma das duas varreduras o via.
+//
+// A regra e simples e verificavel: o argumento de Dbu_JobBegin() vem de
+// JobMsg(). Ver src/util/job.prg.
+const JOB = /Dbu_JobBegin\(\s*([^,)]*)/g;
+
+const rotulos = [];
+for (const f of fontes) {
+  if (!f.endsWith(".prg")) continue;
+  const s = semComentarios(readFileSync(f, "utf8"), f);
+  for (const m of s.matchAll(JOB)) {
+    const arg = m[1].trim();
+    if (/^JobMsg\s*\(/.test(arg)) continue;
+    const linha = s.slice(0, m.index).split("\n").length;
+    rotulos.push(`${f.replace(raiz + "\\", "")}:${linha}  ${arg}`);
+  }
+}
+
 // ------------------------------------------------------------------ saida
 
 const lista = (a) => (a.length ? "\n    " + a.join("\n    ") : "");
@@ -179,6 +209,15 @@ if (soltos.length) {
   console.log(lista(soltos));
 } else {
   console.log("SOLTOS: nenhum");
+}
+
+console.log("");
+if (rotulos.length) {
+  falhou = true;
+  console.log(`ROTULOS -- Dbu_JobBegin() sem JobMsg(), frase nasce na DLL (${rotulos.length}):`);
+  console.log(lista(rotulos));
+} else {
+  console.log("ROTULOS: nenhum rotulo de tarefa fora do dicionario");
 }
 
 console.log("");

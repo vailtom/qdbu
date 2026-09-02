@@ -2593,6 +2593,29 @@ const PULSO_TAREFA = 120;
 
 let vigiaTarefa = null;
 
+/*
+ * O rótulo da barra de tarefa.
+ *
+ * O Harbour manda `{"c":"UI_JOB_EXPORTING","f":"NETCLI.csv"}` — código e nome
+ * do arquivo, não a frase pronta. Ver src/util/job.prg: a barra de tarefa era o
+ * último lugar do app com texto de usuário nascendo na DLL, e o auditor de i18n
+ * não a pegava porque a frase chega como DADO, não como chave.
+ *
+ * Rótulo que não seja esse JSON é exibido cru. É o que permitiu trocar os sete
+ * pontos de chamada um a um sem a barra ficar em branco no meio do caminho — e
+ * é o que protege se algum dia um rótulo passar por aqui sem código.
+ */
+function rotuloDaTarefa(bruto) {
+  if (!bruto) return T("UI_JOB_WORKING");
+  try {
+    const m = JSON.parse(bruto);
+    if (m && m.c) return T(m.c, m.f ? { file: m.f } : undefined);
+  } catch (e) {
+    // não é JSON: é rótulo cru, mostra como veio
+  }
+  return bruto;
+}
+
 function mostrarTarefa(a) {
   const cx = $("tarefa");
   if (!a || !a.ativo) {
@@ -2601,7 +2624,7 @@ function mostrarTarefa(a) {
   }
 
   cx.hidden = false;
-  $("tf-msg").textContent = a.mensagem || "trabalhando…";
+  $("tf-msg").textContent = rotuloDaTarefa(a.mensagem);
 
   const barra = cx.querySelector(".tf-barra");
   const temTotal = a.total > 0;

@@ -331,7 +331,7 @@ FUNCTION Api_Data_Locate( hP )
    /* SEM TETO desde a T12: a varredura roda como tarefa, com progresso e
       cancelamento por fora da VM. O que impedia percorrer 421 mil registros nao
       era o tempo, e sim a UI ficar sem resposta e sem saida. */
-   Dbu_JobBegin( "Procurando", LastRec() )
+   Dbu_JobBegin( JobMsg( "UI_JOB_SEARCHING" ), LastRec() )
 
    DO WHILE ! Eof()
       nLidos++
