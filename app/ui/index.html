@@ -405,6 +405,41 @@
      linha seriam 278 subárvores de DOM criadas para talvez nunca abrirem. -->
 <div id="menu-conexao" role="menu" hidden></div>
 
+<!-- Pré-voo: as conferências que rodam antes de qualquer alteração.
+
+     NÃO é um "tem certeza?". Um aviso genérico ensina a clicar em OK sem ler;
+     este diálogo mostra o que foi conferido, o resultado de cada item, e o que
+     vai ser copiado. Quem confirma sabendo o que vai acontecer confia na
+     ferramenta -- e é essa confiança que permite a ferramenta fazer PACK e ZAP,
+     que é a razão de o DBU existir. -->
+<dialog id="dlg-prevoo">
+  <form method="dialog" id="form-prevoo">
+    <h2 data-i18n="UI_PREFLIGHT"></h2>
+    <p class="explica" data-i18n="UI_PREFLIGHT_EXPLAIN"></p>
+
+    <div class="pv-alvo"><code id="pv-arquivo"></code></div>
+
+    <ul class="pv-checks" id="pv-checks"></ul>
+
+    <details class="pv-conjunto" id="pv-conjunto-box">
+      <summary id="pv-conjunto-resumo"></summary>
+      <table class="pv-tabela"><tbody id="pv-conjunto"></tbody></table>
+    </details>
+
+    <label class="pv-confirma" id="pv-confirma-box" hidden>
+      <input type="checkbox" id="pv-confirma">
+      <span data-i18n="UI_CONFIRM_LARGE"></span>
+    </label>
+
+    <p class="ff-msg" id="pv-msg"></p>
+
+    <div class="acoes">
+      <button type="button" id="pv-cancelar" data-i18n="UI_CANCEL"></button>
+      <button type="button" id="pv-rodar" class="primario" data-i18n="UI_BACKUP_RUN"></button>
+    </div>
+  </form>
+</dialog>
+
 <!-- Visualizador do log de operações. -->
 <dialog id="dlg-log">
   <form method="dialog" id="form-log">

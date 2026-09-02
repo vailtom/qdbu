@@ -576,6 +576,81 @@ fn selftest() -> i32 {
         saida("  --   tarefa: DLL sem HbProgressGet/HbCancel, pulando");
     }
 
+    // --- TA: pre-voo e religar estado ---
+    //
+    // Roda contra uma fixture do proprio repositorio, e nao contra J:\bases: o
+    // selftest precisa funcionar em maquina limpa, e a base de homologacao nao
+    // vai junto (nem poderia).
+    let fixture = achar_dll()
+        .parent()
+        .and_then(|p| p.parent())
+        .map(|raiz| raiz.join("tests").join("fixtures").join("TIPOS.DBF"))
+        .filter(|p| p.exists());
+
+    if let Some(dbf) = fixture {
+        let caminho = dbf.to_string_lossy().replace('\\', "/");
+        let aberto = rpc_bruto(&hb, "file.open", &format!(r#"{{"path":"{caminho}"}}"#))
+            .ok()
+            .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+
+        let h = aberto
+            .as_ref()
+            .and_then(|v| v.pointer("/result/h"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        if h.is_empty() {
+            t.ok("TA: abrir a fixture para o pre-voo", false, "file.open nao devolveu handle");
+        } else {
+            // --- o checklist responde, e nao toca em nada ---
+            match rpc_bruto(&hb, "backup.check", &format!(r#"{{"h":"{h}"}}"#)) {
+                Ok(r) => {
+                    t.ok(
+                        "TA: o checklist responde com niveis e um veredito",
+                        r.contains("\"level\"") && r.contains("\"canProceed\""),
+                        &format!("esperava level e canProceed em {r}"),
+                    );
+                    // 3x o conjunto: a R2 quer original + backup + temporario.
+                    t.ok(
+                        "TA: o espaco exigido e 3x o conjunto",
+                        r.contains("\"factor\":3"),
+                        &format!("esperava factor:3 em {r}"),
+                    );
+                }
+                Err(e) => {
+                    t.ok("TA: o checklist responde com niveis e um veredito", false, &e);
+                    t.ok("TA: o espaco exigido e 3x o conjunto", false, &e);
+                }
+            }
+
+            // --- desligar -> operar -> religar, nas DUAS formas ---
+            //
+            // A comparacao acontece dentro da DLL de proposito: `data.page` MOVE
+            // o ponteiro de registro, entao sondar de fora mede o proprio
+            // instrumento. A primeira versao deste teste acusava o cursor
+            // "mudando" de 25 para 26 quando quem o movera fora a sonda.
+            for (fecha, nome) in [
+                (false, "TA: religar preserva o ambiente (caminho PACK/ZAP)"),
+                (true, "TA: religar preserva o ambiente (caminho estrutura)"),
+            ] {
+                let corpo = format!(r#"{{"h":"{h}","close":{fecha}}}"#);
+                match rpc_bruto(&hb, "meta.rebindtest", &corpo) {
+                    Ok(r) => t.ok(
+                        nome,
+                        r.contains("\"restored\":true"),
+                        &format!("esperava restored:true em {r}"),
+                    ),
+                    Err(e) => t.ok(nome, false, &e),
+                }
+            }
+
+            let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h}"}}"#));
+        }
+    } else {
+        saida("  --   TA: fixture TIPOS.DBF ausente, pulando (rode tests/fixtures/fixtures.bat)");
+    }
+
     t.resumo()
 }
 

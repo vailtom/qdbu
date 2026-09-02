@@ -136,3 +136,99 @@ FUNCTION Api_Meta_Slowjob( hP )
       "steps"    => nPassos, ;
       "done"     => nFeitos, ;
       "canceled" => lParou } )
+
+
+/*
+ * meta.rebindtest {"h":"h7"} -- exercita o ComEstadoPreservado com uma operacao
+ * que nao faz nada.
+ *
+ * POR QUE ELE EXISTE
+ *
+ * A rotina de religar estado (src/util/rebind.prg) e o item que o plano marca
+ * como o mais perigoso do checklist inteiro, e o sintoma de ela estar errada e
+ * o pior que existe: a operacao "funciona" e a grade depois mostra dados
+ * errados, sem nenhum erro na tela.
+ *
+ * Ela nasce ANTES das telas que a consomem (T10, T13, T14), entao nao ha
+ * operacao destrutiva com que testa-la. Sem isto, a primeira vez que
+ * desligar->religar rodasse seria em cima do arquivo de um cliente.
+ *
+ * A operacao aqui e um bloco vazio: desliga o ambiente, nao faz nada, religa. O
+ * que se afirma e que ordem, filtro, indices e cursor voltam identicos -- se
+ * nao voltam com uma operacao que nao mexeu em nada, nao vao voltar com um
+ * PACK.
+ *
+ * `close` escolhe a forma: .F. e o caminho de PACK/ZAP (indices ficam abertos),
+ * .T. e o de alterar estrutura (indices sao fechados e reabertos). As duas
+ * precisam ser testadas porque sao caminhos diferentes.
+ */
+FUNCTION Api_Meta_Rebindtest( hP )
+
+   LOCAL cH := iif( HB_ISHASH( hP ) .AND. hb_HHasKey( hP, "h" ), hP[ "h" ], "" )
+   LOCAL lFechar := HB_ISHASH( hP ) .AND. hb_HHasKey( hP, "close" ) .AND. ;
+                    HB_ISLOGICAL( hP[ "close" ] ) .AND. hP[ "close" ]
+   LOCAL xErro, hRes, hAntes
+
+   IF ( xErro := SessSelect( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   hRes := ComEstadoPreservado( cH, {|| NIL }, lFechar )
+
+   hAntes := hRes[ "before" ]
+
+   /*
+    * A comparacao e feita AQUI, e nao pelo chamador.
+    *
+    * O estado "antes" so existe dentro do ComEstadoPreservado, e sondar de fora
+    * nao serve: `data.page` MOVE o ponteiro de registro (le a pagina e para
+    * depois da ultima linha). A primeira versao deste teste fotografava com
+    * data.page e media o proprio instrumento -- acusava o cursor "mudando" de
+    * 25 para 26 quando quem o movera fora a sonda.
+    */
+   RETURN Ok( { ;
+      "closedIndexes" => lFechar, ;
+      "opError"       => iif( hRes[ "error" ] == NIL, "", ;
+                              hRes[ "error" ][ "error" ][ "code" ] ), ;
+      "rebindErrors"  => hRes[ "rebindErrors" ], ;
+      "recnoBefore"   => hAntes[ "recno" ], ;
+      "recnoAfter"    => RecNo(), ;
+      "orderBefore"   => hAntes[ "order" ], ;
+      "orderAfter"    => IndexOrd(), ;
+      "filterBefore"  => hAntes[ "filter" ], ;
+      "filterAfter"   => dbFilter(), ;
+      "indexesBefore" => Len( hAntes[ "indexes" ] ), ;
+      "indexesAfter"  => ordCount(), ;
+      "keyDuplicated" => ChaveRepetida( hAntes[ "key" ] ), ;
+      "restored"      => hAntes[ "recno" ] == RecNo() .AND. ;
+                         hAntes[ "order" ] == IndexOrd() .AND. ;
+                         hAntes[ "filter" ] == dbFilter() .AND. ;
+                         Len( hAntes[ "indexes" ] ) == ordCount() } )
+
+/*
+ * A chave do registro corrente se repete no arquivo?
+ *
+ * Serve para o teste poder AFIRMAR que exercitou o caso dificil. Ancorar so
+ * pela chave funciona por acidente quando a chave e unica; o defeito
+ * (voltar noutro registro) so aparece quando ha homonimos, e em dado real eles
+ * sempre existem -- em NETCLI, "VALE PRESENTE" aparece varias vezes.
+ */
+STATIC FUNCTION ChaveRepetida( xChave )
+
+   LOCAL nGuarda := RecNo()
+   LOCAL nQuantos := 0
+
+   IF xChave == NIL .OR. IndexOrd() == 0
+      RETURN .F.
+   ENDIF
+
+   IF dbSeek( xChave )
+      DO WHILE ! Eof() .AND. ordKeyVal() == xChave .AND. nQuantos < 2
+         nQuantos++
+         dbSkip( 1 )
+      ENDDO
+   ENDIF
+
+   dbGoTo( nGuarda )
+
+   RETURN nQuantos > 1

@@ -522,7 +522,7 @@
   UI_CHECK_DISK_UNKNOWN: "Espacio en disco",
   UI_CHECK_DISK_UNKNOWN_MSG: "no se pudo medir el espacio libre en {path}",
   UI_CHECK_FILE_SET: "Archivos que se copiarán",
-  UI_CHECK_FILE_SET_MSG: { one: "{n} archivo, {bytes}", other: "{n} archivos, {bytes}" },
+  UI_CHECK_FILE_SET_MSG: { one: "{n} archivo, {bytes:size}", other: "{n} archivos, {bytes:size}" },
   UI_CHECK_LARGE_FILE: "Archivo grande",
   UI_CHECK_LARGE_FILE_MSG: "{bytes:size} — por encima de {limit:size}, la copia va a tardar",
   UI_CHECK_NOT_EXCLUSIVE: "Modo de apertura",
@@ -537,5 +537,23 @@
   UI_BACKUP_DONE: "Copia guardada en {dir}",
   UI_BACKUP_FILES: { one: "{n} archivo copiado", other: "{n} archivos copiados" },
   UI_CONFIRM_LARGE: "Entiendo que va a tardar, adelante",
+
+  // El papel de cada archivo del conjunto.
+  UI_ROLE_DATA: "datos",
+  UI_ROLE_MEMO: "memo",
+  UI_ROLE_INDEX: "índice",
+
+
+  // ---------------------- restablecer el estado tras una operación exclusiva
+  ERROR_REBIND_INDEX_FAILED:
+    "El índice '{file}' no volvió a abrirse. Clave: {key}",
+  ERROR_REBIND_ORDER_LOST:
+    "El orden '{name}' ya no existe; el listado volvió al orden natural.",
+  ERROR_REBIND_FILTER_FAILED:
+    "El filtro no se volvió a aplicar — {expr}",
+  ERROR_OPERATION_FAILED:
+    "La operación sobre '{file}' falló. El archivo no fue alterado.",
+  WARN_REBIND_RECORD_GONE:
+    "El registro en el que estaba ya no existe; volví al principio.",
 
 };

@@ -1252,3 +1252,52 @@ body.arrastando-aba .aba { cursor: grabbing; }
   flex: 1; color: var(--dim2); font-family: var(--mono); font-size: 10.5px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+
+/* ---------------------------------------------- pré-voo (TA) */
+
+#dlg-prevoo { max-width: 620px; width: 92vw; }
+
+.pv-alvo { margin: 2px 0 12px; }
+.pv-alvo code {
+  font-size: 12px; color: var(--txt2);
+  background: var(--bg3); padding: 3px 8px; border-radius: 4px;
+}
+
+.pv-checks { list-style: none; margin: 0 0 12px; padding: 0; }
+
+.pv-checks li {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 2px 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+}
+.pv-checks li:last-child { border-bottom: 0; }
+
+/* O símbolo é a leitura rápida; o nível define a cor. Nunca só a cor: quem não
+   distingue vermelho de verde continua lendo ✓ / ! / ✕. */
+.pv-icone { font-size: 13px; line-height: 1.5; text-align: center; }
+.pv-nome  { font-size: 12px; font-weight: 600; }
+.pv-detalhe { grid-column: 2; font-size: 12px; color: var(--txt2); }
+
+.pv-checks li.pass .pv-icone { color: var(--ok); }
+.pv-checks li.warn .pv-icone { color: var(--aviso); }
+.pv-checks li.fail .pv-icone { color: var(--erro); }
+.pv-checks li.fail .pv-nome  { color: var(--erro); }
+
+.pv-conjunto { margin-bottom: 12px; }
+.pv-conjunto summary {
+  cursor: pointer; font-size: 12px; color: var(--txt2); padding: 4px 0;
+}
+.pv-tabela { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; }
+.pv-tabela td { padding: 3px 8px; border-bottom: 1px solid var(--line); }
+.pv-tabela td.num { text-align: right; color: var(--txt2); white-space: nowrap; }
+.pv-tabela td.papel { color: var(--txt2); width: 60px; }
+
+.pv-confirma {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 12px; padding: 9px 11px; margin-bottom: 10px;
+  background: var(--bg3); border-radius: 5px;
+  border-left: 3px solid var(--aviso);
+}
+.pv-confirma input { margin-top: 1px; }

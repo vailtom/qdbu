@@ -45,6 +45,11 @@ const chaves = new Set(Object.keys(DIC[REF]));
 
 /** Chaves montadas em tempo de execucao; procurar pelo nome inteiro nao acha. */
 const IMPLICITAS = [
+  // Pré-voo: o app monta `"UI_" + c.id`, `"UI_" + c.id + "_MSG"` e
+  // `"UI_ROLE_" + role` a partir do que a DLL devolve em backup.check.
+  /^UI_CHECK_[A-Z_]+$/,
+  /^UI_ROLE_[A-Z]+$/,
+  /^UI_BACKUP_FILES$/,
   /^UI_TYPE_[A-Z]$/, //            window.I.tipo(letra)
   /^UI_THEME_[A-Z]+$/, //          "UI_THEME_" + tema.id (js/tema.js)
   /^ERROR_PARAM_REQUIRED_/, //     especializacao por params.param (i18n.js)

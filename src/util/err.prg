@@ -111,6 +111,13 @@
  *     ERROR_BACKUP_NEEDS_CONFIRM    file, bytes
  *     WARN_CANCELED_BACKUP          file
  *
+ *   religar estado (R5)
+ *     ERROR_REBIND_INDEX_FAILED     file, key
+ *     ERROR_REBIND_ORDER_LOST       name
+ *     ERROR_REBIND_FILTER_FAILED    expr
+ *     ERROR_OPERATION_FAILED        file
+ *     WARN_REBIND_RECORD_GONE
+ *
  *   log
  *     ERROR_LOG_DAY_NOT_FOUND       day
  *

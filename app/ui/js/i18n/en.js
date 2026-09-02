@@ -526,7 +526,7 @@
   UI_CHECK_DISK_UNKNOWN: "Disk space",
   UI_CHECK_DISK_UNKNOWN_MSG: "could not measure free space on {path}",
   UI_CHECK_FILE_SET: "Files to be copied",
-  UI_CHECK_FILE_SET_MSG: { one: "{n} file, {bytes}", other: "{n} files, {bytes}" },
+  UI_CHECK_FILE_SET_MSG: { one: "{n} file, {bytes:size}", other: "{n} files, {bytes:size}" },
   UI_CHECK_LARGE_FILE: "Large file",
   UI_CHECK_LARGE_FILE_MSG: "{bytes:size} — above {limit:size}, the copy will take a while",
   UI_CHECK_NOT_EXCLUSIVE: "Open mode",
@@ -541,5 +541,23 @@
   UI_BACKUP_DONE: "Backup written to {dir}",
   UI_BACKUP_FILES: { one: "{n} file copied", other: "{n} files copied" },
   UI_CONFIRM_LARGE: "I understand it will take a while, go ahead",
+
+  // What each file in the set is.
+  UI_ROLE_DATA: "data",
+  UI_ROLE_MEMO: "memo",
+  UI_ROLE_INDEX: "index",
+
+
+  // ------------------------------- rebinding state after an exclusive operation
+  ERROR_REBIND_INDEX_FAILED:
+    "Index '{file}' failed to reopen. Key: {key}",
+  ERROR_REBIND_ORDER_LOST:
+    "Order '{name}' no longer exists; the listing fell back to natural order.",
+  ERROR_REBIND_FILTER_FAILED:
+    "The filter was not reapplied — {expr}",
+  ERROR_OPERATION_FAILED:
+    "The operation on '{file}' failed. The file was not altered.",
+  WARN_REBIND_RECORD_GONE:
+    "The record you were on no longer exists; moved to the top.",
 
 };

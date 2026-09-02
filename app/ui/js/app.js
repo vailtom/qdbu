@@ -4012,3 +4012,148 @@ $("lg-pasta").addEventListener("click", () => {
     msgLog(T("ERROR_OPEN_FOLDER_FAILED", { detail: msgErro(e) }), "erro")
   );
 });
+
+
+// ------------------------------------------------------------------- pré-voo
+
+/*
+ * O diálogo que mostra as conferências antes de alterar um arquivo.
+ *
+ * NÃO É UM "TEM CERTEZA?". Um aviso genérico ensina a clicar em OK sem ler, e
+ * depois de três vezes ninguém lê mais nenhum. Aqui a pessoa vê o que foi
+ * conferido, o resultado de cada item, e a lista do que vai ser copiado.
+ *
+ * É essa transparência que autoriza a ferramenta a fazer PACK e ZAP — que é a
+ * razão de o DBU existir. Recusar-se a operar não é segurança: é uma ferramenta
+ * que não serve.
+ *
+ * O fluxo é sempre o mesmo, e vem de src/api_backup.prg:
+ *
+ *   backup.check   →  mostra           (não toca em nada)
+ *   confirma       →  backup.run       (confere de novo, copia, verifica)
+ *   backup ok      →  a operação real  (T10/T13/T14, via o callback)
+ */
+
+let prevooHandle = null;
+let prevooDepois = null; // o que rodar depois do backup confirmado
+
+const PV_ICONE = { pass: "✓", warn: "!", fail: "✕" };
+
+/*
+ * Abre o pré-voo para o handle, e chama `aoConfirmar(resultadoDoBackup)`
+ * depois de o backup estar feito e verificado.
+ *
+ * T10/T13/T14 entram por aqui e não por `backup.run` direto: assim nenhuma
+ * delas pode esquecer a conferência, e a ordem — conferir, copiar, verificar,
+ * só então operar — mora num lugar só.
+ */
+async function abrirPrevoo(h, aoConfirmar) {
+  prevooHandle = h;
+  prevooDepois = aoConfirmar || null;
+
+  const dlg = $("dlg-prevoo");
+  msgPrevoo("");
+  $("pv-confirma").checked = false;
+
+  try {
+    desenharPrevoo(await DBU.rpc("backup.check", { h }));
+    dlg.showModal();
+  } catch (e) {
+    msgPrevoo(msgErro(e), sevErro(e));
+    dlg.showModal();
+  }
+}
+
+function desenharPrevoo(r) {
+  $("pv-arquivo").textContent = paraExibir(r.path);
+
+  // --- as conferências ------------------------------------------------------
+  const lista = $("pv-checks");
+  lista.textContent = "";
+  for (const c of r.checks) {
+    const li = elemento("li", c.level);
+    li.appendChild(elemento("span", "pv-icone", PV_ICONE[c.level] || "·"));
+    li.appendChild(elemento("span", "pv-nome", T("UI_" + c.id)));
+    li.appendChild(elemento("span", "pv-detalhe", detalheDoCheck(c)));
+    lista.appendChild(li);
+  }
+
+  // --- o conjunto que vai ser copiado --------------------------------------
+  const corpo = $("pv-conjunto");
+  corpo.textContent = "";
+  for (const f of r.set) {
+    const tr = elemento("tr");
+    tr.appendChild(elemento("td", "papel", T("UI_ROLE_" + f.role.toUpperCase())));
+    tr.appendChild(elemento("td", "", f.path.split(/[\/]/).pop()));
+    tr.appendChild(elemento("td", "num", window.I.tamanho(f.bytes)));
+    corpo.appendChild(tr);
+  }
+  // Bytes CRUS, não pré-formatados: o molde traz `{bytes:size}` e formata
+  // sozinho. Passar já formatado daqui funcionaria, mas deixaria dois lugares
+  // decidindo a mesma coisa — e o dia em que um mudasse, o outro não mudaria.
+  $("pv-conjunto-resumo").textContent = T("UI_CHECK_FILE_SET_MSG", {
+    n: r.set.length,
+    bytes: r.bytes,
+  });
+
+  // --- confirmação de arquivo grande ---------------------------------------
+  $("pv-confirma-box").hidden = !r.large;
+
+  // Só `fail` impede. `warn` informa e deixa seguir — foi por confundir os dois
+  // que a primeira versão mostrava um X vermelho num item que não bloqueia
+  // nada. Ver o comentário sobre níveis em src/api_backup.prg.
+  $("pv-rodar").disabled = !r.canProceed;
+}
+
+/*
+ * A frase de detalhe de uma conferência.
+ *
+ * `CHECK_DISK_SPACE` tem duas frases — a que passou e a que não passou — porque
+ * "17,1 GB livres; precisa de 2,5 GB" e "só 3 GB livres, e precisa de 2,5 GB"
+ * não são a mesma frase com uma palavra trocada. Uma tranquiliza, a outra
+ * explica o que fazer.
+ */
+function detalheDoCheck(c) {
+  const p = c.params || {};
+  if (c.id === "CHECK_DISK_SPACE") {
+    return T(c.level === "pass" ? "UI_CHECK_DISK_SPACE_OK" : "UI_CHECK_DISK_SPACE_BAD", p);
+  }
+  return T("UI_" + c.id + "_MSG", p);
+}
+
+function msgPrevoo(txt, classe) {
+  const el = $("pv-msg");
+  el.textContent = txt || "";
+  el.className = "ff-msg" + (txt && classe ? " " + classe : "");
+}
+
+$("pv-cancelar").addEventListener("click", () => $("dlg-prevoo").close());
+
+$("pv-rodar").addEventListener("click", async () => {
+  if (!prevooHandle) return;
+  const botao = $("pv-rodar");
+  botao.disabled = true;
+  msgPrevoo("");
+
+  try {
+    const r = await comProgresso(
+      DBU.rpc("backup.run", {
+        h: prevooHandle,
+        confirmLarge: $("pv-confirma").checked,
+      })
+    );
+    msgPrevoo(T("UI_BACKUP_DONE", { dir: paraExibir(r.dir) }), "ok");
+
+    // A operação real só agora — depois de a cópia existir E ter sido
+    // conferida. É o passo 3 da sequência que dá valor a todos os outros.
+    if (prevooDepois) {
+      const seguir = prevooDepois;
+      prevooDepois = null;
+      await seguir(r);
+    }
+  } catch (e) {
+    msgPrevoo(msgErro(e), sevErro(e));
+  } finally {
+    botao.disabled = false;
+  }
+});

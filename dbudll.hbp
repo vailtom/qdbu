@@ -38,6 +38,7 @@ src/util/conv.prg
 src/util/log.prg
 src/util/job.prg
 src/util/backup.prg
+src/util/rebind.prg
 
 # api, um arquivo por dominio
 src/api_meta.prg
