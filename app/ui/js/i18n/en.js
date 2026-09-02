@@ -560,4 +560,6 @@
   WARN_REBIND_RECORD_GONE:
     "The record you were on no longer exists; moved to the top.",
 
+  UI_SEE_FILES: "See the files",
+
 };

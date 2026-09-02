@@ -583,4 +583,6 @@
   WARN_REBIND_RECORD_GONE:
     "O registro onde você estava não existe mais; voltei ao início.",
 
+  UI_SEE_FILES: "Ver os arquivos",
+
 };

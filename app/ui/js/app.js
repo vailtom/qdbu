@@ -4084,17 +4084,24 @@ function desenharPrevoo(r) {
   for (const f of r.set) {
     const tr = elemento("tr");
     tr.appendChild(elemento("td", "papel", T("UI_ROLE_" + f.role.toUpperCase())));
-    tr.appendChild(elemento("td", "", f.path.split(/[\/]/).pop()));
+    // SEP_BARRA em vez de uma classe de regex com barra invertida: o caminho
+    // vem do Windows (`J:\bases\base01\NETCLI.DBF`) e a pasta já está no
+    // topo do diálogo — repeti-la em cada linha só empurra o tamanho para fora
+    // da tela.
+    tr.appendChild(
+      elemento("td", "", f.path.split(SEP_BARRA).pop().split("/").pop())
+    );
     tr.appendChild(elemento("td", "num", window.I.tamanho(f.bytes)));
     corpo.appendChild(tr);
   }
-  // Bytes CRUS, não pré-formatados: o molde traz `{bytes:size}` e formata
-  // sozinho. Passar já formatado daqui funcionaria, mas deixaria dois lugares
-  // decidindo a mesma coisa — e o dia em que um mudasse, o outro não mudaria.
-  $("pv-conjunto-resumo").textContent = T("UI_CHECK_FILE_SET_MSG", {
-    n: r.set.length,
-    bytes: r.bytes,
-  });
+  /*
+   * O resumo é só o rótulo de abrir, e não a contagem de novo.
+   *
+   * Ele repetia "1 arquivo, 160,2 KB" — a mesma frase que a conferência
+   * "Arquivos que serão copiados" diz uma linha acima. Ler o DOM não denunciou
+   * isso (os dois valores estavam certos); só apareceu ao olhar a tela.
+   */
+  $("pv-conjunto-resumo").textContent = T("UI_SEE_FILES");
 
   // --- confirmação de arquivo grande ---------------------------------------
   $("pv-confirma-box").hidden = !r.large;

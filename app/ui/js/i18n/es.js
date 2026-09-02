@@ -556,4 +556,6 @@
   WARN_REBIND_RECORD_GONE:
     "El registro en el que estaba ya no existe; volví al principio.",
 
+  UI_SEE_FILES: "Ver los archivos",
+
 };
