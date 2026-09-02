@@ -667,4 +667,93 @@
   UI_ERROR: "Não deu",
   UI_OK: "Entendi",
 
+
+  // ============================================ T10: editor de estrutura
+  UI_EDIT_STRUCTURE: "Editar estrutura",
+  UI_ADD_FIELD: "Acrescentar campo no fim",
+  UI_INSERT_FIELD: "Inserir campo acima do selecionado",
+  UI_REMOVE_FIELD: "Marcar o campo para remoção",
+  UI_MOVE_UP: "Mover para cima",
+  UI_MOVE_DOWN: "Mover para baixo",
+  UI_APPLY: "Aplicar",
+  UI_DISCARD: "Descartar",
+  UI_DISCARD_TITLE: "Descartar as alterações?",
+  UI_DISCARD_ASK: "As alterações que você fez na estrutura serão perdidas. O arquivo não foi tocado.",
+
+  UI_ROW_NOVO: "campo novo",
+  UI_ROW_MUDOU: "campo alterado",
+  UI_ROW_SUMIU: "campo marcado para remoção",
+
+  UI_STRUCT_SUMMARY: { one: "{n} campo · {bytes} bytes por registro", other: "{n} campos · {bytes} bytes por registro" },
+  UI_STRUCT_ERRORS: { one: "{n} campo com problema", other: "{n} campos com problema" },
+
+  UI_IMPACT: "O que acontece com os dados",
+  UI_IMPACT_REMOVED: "'{field}' é removido — os dados dessa coluna são perdidos.",
+  UI_IMPACT_ADDED: "'{field}' é criado, vazio em todos os registros.",
+  UI_IMPACT_TYPE: "'{field}' muda de {from} para {to} — valores que não converterem são perdidos.",
+  UI_IMPACT_SHRUNK: "'{field}' encolhe de {from} para {to} — valores mais longos são truncados.",
+  UI_IMPACT_RENAMED: "'{from}' passa a se chamar '{to}' — os dados são mantidos.",
+  UI_IMPACT_REORDERED: "A ordem dos campos muda. Índices e expressões que citam posição precisam ser conferidos.",
+
+  ERROR_FIELD_NAME_EMPTY: "o nome não pode ficar vazio",
+  ERROR_FIELD_NAME_BAD: "só letras, números e _, começando por letra",
+  ERROR_FIELD_NAME_LONG: "no máximo 10 caracteres",
+  ERROR_FIELD_NAME_DUP: "já existe um campo com esse nome",
+  ERROR_FIELD_TYPE_BAD: "tipo inválido",
+  ERROR_FIELD_LEN_C: "texto: de 1 a 1024",
+  ERROR_FIELD_LEN_N: "número: de 1 a 19",
+  ERROR_FIELD_LEN_MEMO: "memo tem sempre 10",
+  ERROR_FIELD_LEN_DATE: "data tem sempre 8",
+  ERROR_FIELD_LEN_LOGIC: "lógico tem sempre 1",
+  ERROR_FIELD_DEC: "decimais demais para esse tamanho",
+
+  UI_NOT_YET_TITLE: "Ainda não",
+  UI_NOT_YET:
+    "A tela está pronta para ser avaliada, mas a parte que reescreve o " +
+    "arquivo ainda não foi implementada. Nada foi alterado.",
+
+  UI_RESTORE_FIELD: "Trazer '{field}' de volta",
+  UI_IMPACT_UNDO: "Para trazer '{field}' de volta, clique no ↺ na linha dele.",
+
+  UI_ADD_SHORT: "Campo",
+  UI_INSERT_SHORT: "Inserir",
+  UI_REMOVE_SHORT: "Remover",
+  UI_RESTORE_SHORT: "Restaurar",
+  UI_UP_SHORT: "Subir",
+  UI_DOWN_SHORT: "Descer",
+
+  UI_FIELD_WILL_GO: "Este campo será removido",
+
+  UI_APPLY_BLOCKED: { one: "Corrija o campo com problema para poder aplicar", other: "Corrija os {n} campos com problema para poder aplicar" },
+  UI_APPLY_NOTHING: "Nada foi alterado ainda",
+
+  UI_FIELD_AT: "campo {n}",
+
+
+  // ---------------------------------------------- T10: criar arquivo novo
+  UI_NEW_FILE: "Criar arquivo",
+  UI_NEW_FILE_EXPLAIN:
+    "O arquivo nasce vazio, com a estrutura que você montou. Nenhum registro " +
+    "é criado.",
+  UI_NEW_DBF: "Criar arquivo aqui…",
+  UI_CREATE: "Criar",
+  UI_NEW_SUMMARY: { one: "{n} campo · {bytes} bytes por registro", other: "{n} campos · {bytes} bytes por registro" },
+  UI_CREATED: "'{file}' criado com {n} campos.",
+  UI_OVERWRITE_TITLE: "O arquivo já existe",
+  UI_OVERWRITE_ASK:
+    "Já existe '{file}' nessa pasta. Substituir apaga o que está lá, " +
+    "incluindo os registros.",
+  UI_OVERWRITE: "Substituir",
+  UI_NEW_UNTITLED: "SEM_NOME",
+
+  ERROR_CREATE_FAILED: "Não foi possível criar '{file}'. {reason}",
+  ERROR_FIELD_BAD: "O campo {n} veio malformado.",
+  ERROR_NO_FIELDS: "Defina ao menos um campo antes de criar o arquivo.",
+  ERROR_RECORD_TOO_BIG:
+    "O registro ficaria com {bytes} bytes, e o formato DBF só guarda até " +
+    "{max}. Reduza o tamanho de algum campo.",
+
+  ERROR_FILE_IS_OPEN:
+    "'{file}' está aberto na aba {alias}. Feche a aba antes de substituir.",
+
 };

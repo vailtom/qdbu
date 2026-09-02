@@ -501,21 +501,393 @@ function desenharConteudo() {
   desenharGrade();
   desenharComboOrdem();
 
+  desenharEstrutura(a);
+}
+
+/*
+ * A tabela de campos, em dois modos.
+ *
+ * LEITURA é o que sempre existiu: uma linha por campo, nada clicável. EDIÇÃO
+ * troca as células por controles e acrescenta a coluna de marca. A tabela é a
+ * mesma de propósito — trocar de modo não pode reorganizar a tela, senão a
+ * pessoa perde de vista onde estava.
+ */
+function desenharEstrutura(a) {
   const corpo = $("estrutura").querySelector("tbody");
   corpo.textContent = "";
-  for (const c of a.fields || []) {
+
+  const emEdicao = esEditando && esRascunho;
+  const lista = emEdicao ? esRascunho : (a.fields || []);
+
+  $("es-editar").hidden = emEdicao || !a.fields;
+  $("es-acoes").hidden = !emEdicao;
+  $("es-confirmar").hidden = !emEdicao;
+
+  lista.forEach((c, i) => {
     const tr = document.createElement("tr");
-    for (const [v, cls] of [
-      [c.n, "num dim"],
-      [c.name, "nome"],
-      [c.type, "tipo"],
-      [c.len, "num"],
-      [c.dec, "num"],
-    ]) {
-      const td = elemento("td", cls, String(v));
-      tr.appendChild(td);
+
+    if (!emEdicao) {
+      tr.appendChild(elemento("td", "es-marca", ""));
+      for (const [v, cls] of [
+        [c.n, "num dim"], [c.name, "nome"], [c.type, "tipo"],
+        [c.len, "num"], [c.dec, "num"],
+      ]) {
+        tr.appendChild(elemento("td", cls, String(v)));
+      }
+      corpo.appendChild(tr);
+      return;
     }
+
+    // --- modo edição ---------------------------------------------------
+    const erros = c._removido ? [] : esValidaCampo(c, esRascunho, i);
+    const estado = c._removido ? "sumiu" : !c._de ? "novo" : esMudou(c) ? "mudou" : "";
+    tr.className = (estado ? estado + " " : "") + (i === esSel ? "sel" : "");
+    tr.dataset.i = String(i);
+
+    /*
+     * NA LINHA REMOVIDA, A MARCA É UM BOTÃO DE VOLTAR.
+     *
+     * Desfazer sempre foi possível — bastava clicar `−` de novo — mas nada na
+     * tela dizia isso: a linha riscada com os campos desabilitados PARECE
+     * morte, não pendência, e o botão continuava rotulado "marcar para
+     * remoção". Poder desfazer e não descobrir como equivale a não poder.
+     */
+    const tdM = elemento("td", "es-marca");
+    if (estado === "sumiu") {
+      const volta = elemento("button", "es-voltar", "↺");
+      volta.type = "button";
+      volta.title = T("UI_RESTORE_FIELD", { field: c.name });
+      volta.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        c._removido = false;
+        desenharConteudo();
+      });
+      tdM.appendChild(volta);
+    } else {
+      tdM.textContent = { novo: "+", mudou: "•" }[estado] || "";
+      if (estado) tdM.title = T("UI_ROW_" + estado.toUpperCase());
+    }
+    tr.appendChild(tdM);
+
+    tr.appendChild(elemento("td", "num dim", String(i + 1)));
+
+    tr.appendChild(esCelulaNome(c, erros));
+    tr.appendChild(esCelulaTipo(c));
+    tr.appendChild(esCelula(c, "len", "number", erros.some((e) => e.includes("LEN")), "num"));
+    tr.appendChild(esCelula(c, "dec", "number", erros.some((e) => e.includes("DEC")), "num"));
+
+    if (erros.length) tr.title = erros.map((e) => T(e)).join(" · ");
     corpo.appendChild(tr);
+  });
+
+  if (emEdicao) esResumo();
+}
+
+/* Mudou em relação ao que está no disco? */
+function esMudou(c) {
+  if (!c._de) return false;
+  return ["name", "type", "len", "dec"].some((k) => String(c[k]) !== String(c._de[k]));
+}
+
+/*
+ * A célula do nome, que na linha removida ganha o aviso.
+ *
+ * O `line-through` do CSS não alcançava o nome: ele está dentro de um `<input>`,
+ * e a decoração da célula não atravessa o controle. O resultado era o número
+ * riscado e o nome intacto — meia mensagem. Aqui o próprio input recebe a
+ * decoração, e um `⚠` ao lado amarra a ideia.
+ */
+function esCelulaNome(c, erros) {
+  const td = esCelula(c, "name", "text", erros.some((e) => e.includes("NAME")));
+  if (!c._removido) return td;
+
+  td.classList.add("nome-com-aviso");
+  const aviso = elemento("span", "es-aviso", "⚠");
+  aviso.setAttribute("role", "img");
+  aviso.dataset.dica = T("UI_FIELD_WILL_GO");
+  aviso.setAttribute("aria-label", T("UI_FIELD_WILL_GO"));
+  td.appendChild(aviso);
+  return td;
+}
+
+function esCelula(c, campo, tipo, ruim, classe) {
+  const td = elemento("td", classe || "");
+  const inp = document.createElement("input");
+  /*
+   * NÚMERO É `type="text"` COM TECLADO NUMÉRICO, e não `type="number"`.
+   *
+   * Três motivos, e o primeiro é o que a reclamação expôs:
+   *
+   *   1. `input[type=number]` NÃO EXPÕE SELEÇÃO -- `selectionStart` devolve
+   *      `null` por especificação. Então `select()` no foco não pode nem ser
+   *      verificado, e era exatamente o comportamento que faltava: clicar num
+   *      tamanho `0` deixava o cursor ao lado dele, e digitar `8` dava `08`.
+   *   2. A setinha de incremento polui uma grade densa e rouba largura.
+   *   3. Com texto, os dígitos são filtrados por nós -- nada de `e`, `+` ou
+   *      `-`, que o campo numérico do navegador aceita e o DBF não.
+   */
+  if (tipo === "number") {
+    inp.type = "text";
+    inp.inputMode = "numeric";
+    inp.autocomplete = "off";
+  } else {
+    inp.type = tipo;
+  }
+  inp.value = c[campo];
+  inp.disabled = !!c._removido;
+  if (ruim) inp.className = "ruim";
+
+  /*
+   * O NÚMERO É SELECIONADO AO RECEBER O FOCO.
+   *
+   * Sem isto, clicar num tamanho que vale `0` deixa o cursor ao lado do zero:
+   * digitar `8` produz `08` ou `80`, e a pessoa precisa apagar antes de
+   * escrever. Com a seleção, digitar SUBSTITUI — que é o que se espera de uma
+   * grade, e o que toda planilha faz.
+   *
+   * Só nos numéricos: no nome, selecionar tudo faria a primeira tecla apagar um
+   * nome existente que a pessoa só queria corrigir.
+   */
+  if (tipo === "number") {
+    /*
+     * A seleção acontece no QUADRO SEGUINTE, e não dentro do `focus`.
+     *
+     * Chamado direto no manipulador, o `select()` roda e o navegador recolhe a
+     * seleção logo depois -- ele posiciona o cursor por conta própria ao
+     * terminar de processar o foco (e, no clique, ao processar o `mouseup`).
+     * Medido: `selectionStart` saía 1 num valor "8", ou seja, cursor no fim e
+     * nada selecionado. Adiar um tique deixa o navegador terminar primeiro.
+     */
+    inp.addEventListener("focus", () => setTimeout(() => inp.select(), 0));
+  }
+  /*
+   * `input` atualiza o modelo e o resumo, sem tocar na tabela: redesenhar a
+   * cada tecla tiraria o cursor do campo. O que precisa mudar de imediato é a
+   * marca de erro na própria célula, e isso é uma classe.
+   */
+  inp.addEventListener("input", () => {
+    /*
+     * O NOME É NORMALIZADO ENQUANTO SE DIGITA, e não conferido no fim.
+     *
+     * A posição do cursor é preservada: sem isso, digitar no meio de um nome
+     * jogava o cursor para o fim a cada tecla — o campo "corrigia" e a pessoa
+     * perdia o lugar. O ajuste é a diferença de tamanho, porque `esNomeValido`
+     * pode encurtar (símbolo removido) sem mexer no que veio antes.
+     */
+    if (campo === "name") {
+      const antes = inp.value;
+      const cursor = inp.selectionStart;
+      const limpo = esNomeValido(antes);
+      if (limpo !== antes) {
+        inp.value = limpo;
+        const delta = limpo.length - antes.length;
+        inp.setSelectionRange(Math.max(0, cursor + delta), Math.max(0, cursor + delta));
+      }
+    }
+    /*
+     * Vazio CONTINUA vazio enquanto se digita.
+     *
+     * `Number("")` é 0, então apagar tudo escrevia 0 no modelo e o zero voltava
+     * ao campo no próximo desenho -- era impossível deixar em branco nem por um
+     * instante para digitar outro valor. O modelo guarda 0 (a validação precisa
+     * de número), mas o INPUT fica como está até a pessoa sair dele.
+     */
+    /*
+     * Só dígitos, e o cursor fica onde estava.
+     *
+     * Com `type="text"` a filtragem é nossa: uma letra teclada some sem mexer
+     * no resto, e sem mandar o cursor para o fim -- que é o que acontecia no
+     * campo do nome antes de eu preservar a posição.
+     */
+    if (tipo === "number") {
+      const antes = inp.value;
+      const so = antes.replace(/[^0-9]/g, "");
+      if (so !== antes) {
+        const cur = inp.selectionStart;
+        inp.value = so;
+        const d = so.length - antes.length;
+        inp.setSelectionRange(Math.max(0, cur + d), Math.max(0, cur + d));
+      }
+    }
+
+    /*
+     * Vazio CONTINUA vazio enquanto se digita.
+     *
+     * `Number("")` é 0, então apagar tudo escrevia 0 no modelo e o zero voltava
+     * ao campo no próximo desenho -- era impossível deixar em branco nem por um
+     * instante para digitar outro valor. O modelo guarda 0 (a validação precisa
+     * de número), mas o INPUT fica como está até a pessoa sair dele.
+     */
+    c[campo] = tipo === "number" ? Number(inp.value || 0) : inp.value;
+    const i = esRascunho.indexOf(c);
+    const erros = esValidaCampo(c, esRascunho, i);
+    inp.classList.toggle(
+      "ruim",
+      erros.some((e) => e.includes(campo === "name" ? "NAME" : campo === "len" ? "LEN" : "DEC"))
+    );
+    esMarcaDaLinha(c, i);
+    esResumo();
+  });
+  /* No `change` (ao sair do campo) a tabela se redesenha: é quando a validação
+     cruzada — nome duplicado com OUTRA linha — precisa aparecer nas duas. */
+  inp.addEventListener("change", () => desenharConteudo());
+  td.appendChild(inp);
+  return td;
+}
+
+/*
+ * O tipo é um `select`, e não texto livre.
+ *
+ * São cinco valores e um deles errado invalida o arquivo inteiro. Digitar "X"
+ * e descobrir no Aplicar seria pior que não poder digitar.
+ */
+function esCelulaTipo(c) {
+  const td = elemento("td", "tipo");
+  const sel = document.createElement("select");
+  sel.disabled = !!c._removido;
+  for (const t of ES_TIPOS) {
+    const o = new Option(t + " — " + window.I.tipo(t), t);
+    sel.appendChild(o);
+  }
+  sel.value = c.type;
+  sel.addEventListener("change", () => {
+    c.type = sel.value;
+    // Os tipos de tamanho fixo se ajustam sozinhos: deixar a pessoa digitar
+    // "7" num campo Data só produziria um erro que o app já sabe evitar.
+    if (c.type === "D") { c.len = 8; c.dec = 0; }
+    if (c.type === "L") { c.len = 1; c.dec = 0; }
+    if (c.type === "M") { c.len = 10; c.dec = 0; }
+    // `dec` só tem significado em N. Em C ele era parte da largura no Clipper,
+    // mas aqui a largura vai inteira em `len` — ver esValidaCampo().
+    if (c.type !== "N") c.dec = 0;
+    desenharConteudo();
+  });
+  td.appendChild(sel);
+  return td;
+}
+
+/*
+ * A lista de erros: nome do campo e o que está errado.
+ *
+ * Cada item leva ATÉ o campo — clicar seleciona a linha, rola até ela e põe o
+ * foco na célula culpada. Dizer "SUJO está errado" numa tabela de 120 campos e
+ * deixar a pessoa procurar seria só metade do trabalho.
+ */
+function esListaErros() {
+  const ul = $("es-erros-lista");
+  ul.textContent = "";
+
+  /*
+   * UMA LINHA POR CAMPO, com os problemas dele MESCLADOS.
+   *
+   * Contando erros em vez de campos, um campo sem nome e com tamanho inválido
+   * aparecia duas vezes na lista e o título dizia "3 campos com problema"
+   * havendo 2. Quem lê conta campos, não violações.
+   *
+   * Campo sem nome é chamado pela POSIÇÃO — "campo 9" —, porque "(campo sem
+   * nome)" repetido não distingue um do outro e não ajuda a achar nenhum.
+   */
+  const achados = [];
+  (esRascunho || []).forEach((c, i) => {
+    if (c._removido) return;
+    const erros = esValidaCampo(c, esRascunho, i);
+    if (!erros.length) return;
+    achados.push({
+      i,
+      campo: (c.name || "").trim() || T("UI_FIELD_AT", { n: i + 1 }),
+      erro: erros[0],                                  // guia o foco
+      texto: erros.map((e) => T(e)).join(" · "),       // todos, mesclados
+    });
+  });
+
+  $("es-erros").hidden = achados.length === 0;
+  $("es-erros-titulo").textContent = T("UI_STRUCT_ERRORS", { n: achados.length }) + ":";
+
+  for (const a of achados) {
+    const li = document.createElement("li");
+    const nome = elemento("button", "es-erro-campo", a.campo);
+    nome.type = "button";
+    nome.addEventListener("click", () => {
+      esSelecionar(a.i);
+      const tr = $("estrutura").querySelector('tbody tr[data-i="' + a.i + '"]');
+      if (!tr) return;
+      tr.scrollIntoView({ block: "nearest" });
+      // O foco vai para a célula que o erro cita, e não para a primeira: quem
+      // clicou num erro de tamanho quer digitar o tamanho.
+      const qual = a.erro.includes("NAME") ? 0 : a.erro.includes("DEC") ? 2 : 1;
+      const campos = tr.querySelectorAll("input");
+      const alvoInp = campos[Math.min(qual, campos.length - 1)];
+      if (alvoInp) alvoInp.focus();
+    });
+    li.appendChild(nome);
+    li.appendChild(document.createTextNode(" — " + a.texto));
+    ul.appendChild(li);
+  }
+
+  return achados;
+}
+
+/* Atualiza só a marca de estado da linha, sem recriar nada. */
+function esMarcaDaLinha(c, i) {
+  const tr = $("estrutura").querySelector('tbody tr[data-i="' + i + '"]');
+  if (!tr) return;
+  const estado = c._removido ? "sumiu" : !c._de ? "novo" : esMudou(c) ? "mudou" : "";
+  tr.classList.remove("novo", "mudou", "sumiu");
+  if (estado) tr.classList.add(estado);
+  const td = tr.querySelector("td.es-marca");
+  if (td) {
+    td.textContent = { novo: "+", mudou: "•", sumiu: "×" }[estado] || "";
+    td.title = estado ? T("UI_ROW_" + estado.toUpperCase()) : "";
+  }
+}
+
+/* A barra: quantos campos, o tamanho do registro, e quantos erros faltam. */
+function esResumo() {
+  if (!esRascunho) { $("es-resumo").textContent = ""; return; }
+
+  const vivos = esRascunho.filter((c) => !c._removido);
+  const achados = esListaErros();
+  const bytes = esTamanhoRegistro(esRascunho);
+  const mudou = esRascunho.some((c) => c._removido || !c._de || esMudou(c));
+
+  /*
+   * A BARRA NÃO REPETE O ERRO.
+   *
+   * Ela chegou a mostrar "SUJO — número: de 1 a 19", a mesma frase que a faixa
+   * acima da tabela já dizia — as duas separadas por meia tela. Informação
+   * repetida longe de si mesma é pior que dita uma vez: a pessoa lê duas
+   * vezes, e ainda tem de conferir se são a mesma coisa.
+   *
+   * A faixa é o lugar: fica colada na tabela, cabe a lista inteira, e os nomes
+   * lá são clicáveis. Aqui fica só o que a faixa não diz — quantos campos e
+   * quantos bytes o registro vai ter.
+   */
+  $("es-resumo").textContent = T("UI_STRUCT_SUMMARY", { n: vivos.length, bytes });
+  $("es-resumo").className = "es-resumo";
+
+  /* O botão travado DIZ o que o trava, no próprio `title`: cinza e mudo é o que
+     leva a pessoa a clicar várias vezes sem entender. */
+  const bAplicar = $("es-aplicar");
+  /* Num arquivo novo o botão CRIA, e o texto tem de dizer isso: "Aplicar" sobre
+     algo que ainda não existe não descreve o que vai acontecer. E não há "nada
+     alterado" -- há campos montados, que bastam. */
+  bAplicar.textContent = T(esNovo ? "UI_CREATE" : "UI_APPLY");
+  bAplicar.disabled = achados.length > 0 || (!esNovo && !mudou);
+  bAplicar.title = achados.length
+    ? T("UI_APPLY_BLOCKED", { n: achados.length })
+    : !esNovo && !mudou
+    ? T("UI_APPLY_NOTHING")
+    : bAplicar.textContent;
+
+  esBotoes();
+
+  // O impacto nos dados
+  const itens = esImpacto();
+  $("es-impacto").hidden = itens.length === 0;
+  const ul = $("es-impacto-lista");
+  ul.textContent = "";
+  for (const it of itens) {
+    ul.appendChild(elemento("li", it.grave ? "grave" : "", T(it.chave, it.p)));
   }
 }
 
@@ -3888,6 +4260,21 @@ function menuConexao(botao) {
     hint(nome + ": " + T("UI_FILES_COUNT", { n: n }));
   });
 
+  /*
+   * CRIAR ENTRA PELA CONEXÃO, e não por um "Novo arquivo" no cabeçalho.
+   *
+   * Um DBF precisa de uma pasta, e conexão É uma pasta: entrando por aqui o
+   * destino já vem preenchido e não há um campo vazio esperando alguém digitar
+   * um caminho de cabeça. Some quando a pasta não existe, pelo mesmo motivo que
+   * o "abrir no Explorer" some.
+   */
+  if (con.exists) {
+    itemMenu(cx, "▤", "UI_NEW_DBF", () => {
+      fecharMenuConexao();
+      esCriarNovo(con.dir);
+    });
+  }
+
   cx.appendChild(elemento("div", "mc-linha"));
 
   // Destrutivo separado por uma linha: e o unico daqui que apaga cadastro, e
@@ -4435,6 +4822,506 @@ $("pv-rodar").addEventListener("click", async () => {
   }
 });
 
+
+
+// ------------------------------------------------- T10: editor de estrutura
+
+/*
+ * AS EDIÇÕES SE ACUMULAM; APLICAR É UM ATO SÓ.
+ *
+ * Alterar estrutura reconstrói o arquivo inteiro fora do lugar (R2 de
+ * docs/10-integridade.md). Fazer isso a cada tecla, num arquivo de 800 MB,
+ * seria absurdo — e pior, deixaria a pessoa a meio caminho de uma mudança que
+ * ela ainda estava pensando.
+ *
+ * Então o editor é uma ÁREA DE RASCUNHO: `esRascunho` é a estrutura que a
+ * pessoa está montando, `esOriginal` é a que está no disco, e a diferença entre
+ * as duas é o que a tela mostra e o que a DLL vai receber.
+ */
+
+let esEditando = false;
+let esOriginal = null;   // [{name,type,len,dec}] como está no arquivo
+let esRascunho = null;   // o mesmo, com as edições — cada item ganha `_id` e `_de`
+let esSel = -1;          // índice da linha selecionada
+let esSeq = 0;           // gerador de `_id` para campos novos
+let esNovo = null;       // { dir } quando se está montando um arquivo NOVO
+
+/* Os tipos que este editor oferece. NTX/DBF clássico: sem os exóticos do FoxPro,
+   que o RDD daqui não escreve. */
+const ES_TIPOS = ["C", "N", "D", "L", "M"];
+
+/*
+ * MAIÚSCULO E SEM ACENTO — a mesma regra do Kairo, e o mesmo código.
+ *
+ * Copiada de `upperSemAcento` (Kairo, src/lib/dominios.js:129), onde o
+ * comentário registra o porquê: ela espelha o `RemoveAcentoPT850` do
+ * `_Encode` do TDbfModel no servidor. Reescrever aqui uma segunda versão da
+ * mesma regra seria criar duas verdades sobre o que é um nome válido.
+ *
+ * Nome de campo DBF não aceita acento nem minúscula: o formato guarda 10 bytes
+ * ASCII maiúsculos. Normalizar ao digitar é melhor que recusar depois — quem
+ * escreve "endereço" quer `ENDERECO`, e o app sabe disso.
+ */
+const upperSemAcento = (v) =>
+  String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
+
+/*
+ * O que sobra depois de tirar o que o DBF não aceita.
+ *
+ * Espaço, hífen e ponto viram `_` em vez de sumirem: quem digita "DATA NASC"
+ * quer `DATA_NASC`, e apagar o espaço daria `DATANASC`, que é outra palavra.
+ * O resto — símbolos, acentos que sobraram, qualquer coisa fora de A-Z 0-9 _ —
+ * some, porque não há tradução óbvia.
+ *
+ * O primeiro caractere não pode ser dígito nem `_`: é regra do formato, e
+ * cortá-lo aqui evita a pessoa digitar um nome inteiro para ser recusada no fim.
+ */
+function esNomeValido(v) {
+  return upperSemAcento(v)
+    .replace(/[ .\-]/g, "_")
+    .replace(/[^A-Z0-9_]/g, "")
+    .replace(/^[0-9_]+/, "")
+    .slice(0, 10);
+}
+
+/*
+ * A validação, portada de `field_check` (DBUSTRU.PRG:1027).
+ *
+ * As regras são do formato DBF, não do gosto de ninguém — por isso valem
+ * literalmente, inclusive o truque do Clipper para campo C longo: o tamanho
+ * real é `256 * dec + len`, o que permite até 1024 bytes num campo caractere
+ * usando o byte de decimais como parte alta.
+ *
+ * Devolve um array de códigos; vazio significa campo válido.
+ */
+function esValidaCampo(c, todos, indice) {
+  const erros = [];
+  const nome = (c.name || "").trim().toUpperCase();
+
+  if (!nome) erros.push("ERROR_FIELD_NAME_EMPTY");
+  else {
+    if (!/^[A-Z][A-Z0-9_]*$/.test(nome)) erros.push("ERROR_FIELD_NAME_BAD");
+    if (nome.length > 10) erros.push("ERROR_FIELD_NAME_LONG");
+    const igual = todos.findIndex(
+      (o, i) => i !== indice && !o._removido && (o.name || "").trim().toUpperCase() === nome
+    );
+    if (igual >= 0) erros.push("ERROR_FIELD_NAME_DUP");
+  }
+
+  if (!ES_TIPOS.includes(c.type)) erros.push("ERROR_FIELD_TYPE_BAD");
+
+  const len = Number(c.len) || 0;
+  const dec = Number(c.dec) || 0;
+
+  if (c.type === "C") {
+    /*
+     * A largura inteira vai em `len` — o Harbour parte em dois bytes sozinho.
+     *
+     * Havia aqui a conta do Clipper (`256 * dec + len`), na suposição de que a
+     * forma dividida chegasse pronta. Medido contra a DLL: pedir `C 300`
+     * devolve `300.0`; pedir `len=44, dec=1` devolve `44.0`, e não 300. A conta
+     * fazia a tela aceitar uma largura que o arquivo não teria.
+     */
+    if (len <= 0 || len > 1024) erros.push("ERROR_FIELD_LEN_C");
+  } else if (c.type === "M") {
+    if (len !== 10) erros.push("ERROR_FIELD_LEN_MEMO");
+  } else if (c.type === "D") {
+    if (len !== 8) erros.push("ERROR_FIELD_LEN_DATE");
+  } else if (c.type === "L") {
+    if (len !== 1) erros.push("ERROR_FIELD_LEN_LOGIC");
+  } else if (len <= 0 || len > 19) {
+    erros.push("ERROR_FIELD_LEN_N");
+  }
+
+  if (c.type === "N") {
+    const maximo = len < 3 ? 0 : len > 17 ? 15 : len - 2;
+    if (dec > maximo) erros.push("ERROR_FIELD_DEC");
+  }
+
+  return erros;
+}
+
+/* O tamanho do registro: 1 byte de marca de exclusão + a soma dos campos. */
+function esTamanhoRegistro(campos) {
+  return campos
+    .filter((c) => !c._removido)
+    .reduce((n, c) => n + (Number(c.len) || 0), 1);
+}
+
+/*
+ * Abre o editor com uma estrutura VAZIA, para um arquivo que ainda não existe.
+ *
+ * O editor nasceu para alterar a estrutura de um arquivo aberto, e o caminho de
+ * criar reusa a mesma tela de propósito: são a mesma tarefa -- montar uma lista
+ * de campos. O que muda é que aqui não há original para comparar, então não há
+ * marcas de alteração nem bloco de impacto; e no fim, em vez de reescrever, se
+ * grava um arquivo novo.
+ */
+function esCriarNovo(dirPadrao) {
+  esNovo = { dir: dirPadrao || "" };
+  esEditando = true;
+  esOriginal = [];
+  /* Um campo para começar: uma tabela vazia com um botão "+" obriga a
+     descobrir por onde se começa. */
+  esRascunho = [{ name: "CODIGO", type: "C", len: 10, dec: 0, _id: "n" + ++esSeq, _de: null }];
+  esSel = 0;
+  desenharConteudo();
+}
+
+function esEntrarNoModo(ligado) {
+  if (!ligado) esNovo = null;
+  esEditando = ligado;
+  $("es-acoes").hidden = !ligado;
+  $("es-confirmar").hidden = !ligado;
+  $("es-editar").hidden = ligado;
+  if (ligado) {
+    const aba = abas.find((a) => a.h === abaAtiva);
+    esOriginal = (aba && aba.fields ? aba.fields : []).map((c) => ({
+      name: c.name, type: c.type, len: c.len, dec: c.dec,
+    }));
+    esRascunho = esOriginal.map((c, i) => ({ ...c, _id: "o" + i, _de: { ...c } }));
+    esSel = esRascunho.length ? 0 : -1;
+  } else {
+    esOriginal = esRascunho = null;
+    esSel = -1;
+  }
+  desenharConteudo();
+}
+
+/*
+ * O QUE VAI ACONTECER COM OS DADOS.
+ *
+ * É a razão de esta tela existir. Nada disto se lê na tabela de campos, e
+ * descobrir depois de aplicar, no arquivo de um cliente, é tarde.
+ */
+function esImpacto() {
+  const itens = [];
+  /* Num arquivo novo não há dado a perder: todo campo é "criado, vazio", o que
+     seria uma lista de óbvios do tamanho da estrutura. */
+  if (!esRascunho || esNovo) return itens;
+
+  for (const c of esRascunho) {
+    if (c._removido) {
+      itens.push({ grave: true, chave: "UI_IMPACT_REMOVED", p: { field: c.name } });
+      // A saída fica escrita ao lado do estrago: quem lê "os dados são
+      // perdidos" é exatamente quem precisa saber como desfazer.
+      itens.push({ grave: false, chave: "UI_IMPACT_UNDO", p: { field: c.name } });
+      continue;
+    }
+    if (!c._de) {
+      itens.push({ grave: false, chave: "UI_IMPACT_ADDED", p: { field: c.name } });
+      continue;
+    }
+    const de = c._de;
+    if (de.type !== c.type) {
+      itens.push({
+        grave: true, chave: "UI_IMPACT_TYPE",
+        p: { field: c.name, from: window.I.tipo(de.type), to: window.I.tipo(c.type) },
+      });
+    } else if (Number(c.len) < Number(de.len)) {
+      itens.push({
+        grave: true, chave: "UI_IMPACT_SHRUNK",
+        p: { field: c.name, from: de.len, to: c.len },
+      });
+    }
+    if (de.name !== c.name && !c._removido) {
+      itens.push({ grave: false, chave: "UI_IMPACT_RENAMED", p: { from: de.name, to: c.name } });
+    }
+  }
+
+  const ordemMudou = esRascunho
+    .filter((c) => !c._removido && c._de)
+    .some((c, i, arr) => arr[i]._de && esOriginal[i] && esOriginal[i].name !== c._de.name);
+  if (ordemMudou) itens.push({ grave: false, chave: "UI_IMPACT_REORDERED", p: {} });
+
+  return itens;
+}
+
+/* ---------------------------------------------------- T10: os botões */
+
+$("es-editar").addEventListener("click", () => esEntrarNoModo(true));
+
+$("es-descartar").addEventListener("click", async () => {
+  const mudou = esRascunho && esRascunho.some((c) => c._removido || !c._de || esMudou(c));
+  if (mudou) {
+    const r = await Swal.fire(
+      swalBase({
+        icon: "warning",
+        title: T("UI_DISCARD_TITLE"),
+        html: escapaHtml(T("UI_DISCARD_ASK")),
+        showCancelButton: true,
+        confirmButtonText: T("UI_DISCARD"),
+        cancelButtonText: T("UI_CANCEL"),
+      })
+    );
+    if (!r.isConfirmed) return;
+  }
+  esEntrarNoModo(false);
+});
+
+/*
+ * Clicar numa linha a seleciona — mas SEM REDESENHAR.
+ *
+ * A primeira versão chamava `desenharConteudo()` aqui, e o clique no `select`
+ * subia até a tabela: o combo abria e fechava no mesmo instante, porque o
+ * redesenho DESTRUÍA o elemento que o navegador tinha acabado de abrir. O
+ * mesmo mataria o cursor no meio de um nome sendo digitado.
+ *
+ * Selecionar é uma troca de classe. Redesenhar a tabela inteira para mover um
+ * destaque era caro e errado — e o sintoma só aparece em quem usa, não em quem
+ * lê o DOM.
+ */
+$("estrutura").addEventListener("click", (ev) => {
+  if (!esEditando) return;
+  const el = alvo(ev);
+  if (!el) return;
+
+  const tr = el.closest("tr");
+  if (!tr || !tr.dataset.i) return;
+
+  esSelecionar(Number(tr.dataset.i));
+});
+
+/* Move o destaque trocando classes. Nenhum controle é recriado. */
+function esSelecionar(i) {
+  esSel = i;
+  const corpo = $("estrutura").querySelector("tbody");
+  for (const tr of corpo.querySelectorAll("tr")) {
+    tr.classList.toggle("sel", Number(tr.dataset.i) === i);
+  }
+  esBotoes();
+}
+
+/*
+ * Liga e desliga os botões — e o de remover diz o que VAI fazer.
+ *
+ * Um botão que se chama "remover" sobre uma linha já removida mente sobre o
+ * próprio efeito. Aqui ele vira "restaurar", com o ícone trocado.
+ */
+function esBotoes() {
+  const temSel = esSel >= 0 && esRascunho && esSel < esRascunho.length;
+  const c = temSel ? esRascunho[esSel] : null;
+  const removido = !!(c && c._removido);
+
+  const bDel = $("es-del");
+  bDel.querySelector(".es-ico").textContent = removido ? "↺" : "−";
+  $("es-del-rotulo").textContent = T(removido ? "UI_RESTORE_SHORT" : "UI_REMOVE_SHORT");
+  bDel.title = removido
+    ? T("UI_RESTORE_FIELD", { field: c.name })
+    : T("UI_REMOVE_FIELD");
+  bDel.classList.toggle("risco", !removido);
+  bDel.disabled = !temSel;
+  $("es-ins").disabled = !esRascunho;
+  $("es-up").disabled = !temSel || esSel === 0;
+  $("es-down").disabled = !temSel || esSel === esRascunho.length - 1;
+}
+
+function esNovoCampo() {
+  return { name: "", type: "C", len: 10, dec: 0, _id: "n" + ++esSeq, _de: null };
+}
+
+$("es-add").addEventListener("click", () => {
+  if (!esRascunho) return;
+  esRascunho.push(esNovoCampo());
+  esSel = esRascunho.length - 1;
+  desenharConteudo();
+});
+
+/* Inserir ACIMA do selecionado. A posição do campo importa no DBF — é a ordem
+   física dos bytes no registro — então "adicionar no fim" e "inserir aqui" são
+   operações diferentes, e as duas são necessárias. */
+$("es-ins").addEventListener("click", () => {
+  if (!esRascunho) return;
+  const i = esSel >= 0 ? esSel : esRascunho.length;
+  esRascunho.splice(i, 0, esNovoCampo());
+  desenharConteudo();
+});
+
+/*
+ * Remover é MARCAR, não apagar da lista.
+ *
+ * A linha continua visível, riscada, até Aplicar. Some da tela imediatamente
+ * quem some é o campo — e a pessoa perde a referência do que estava fazendo,
+ * além de não ter como desfazer sem recomeçar. Campo NOVO, esse sim, sai de
+ * vez: não há dado por trás dele para se lamentar.
+ */
+$("es-del").addEventListener("click", () => {
+  if (!esRascunho || esSel < 0) return;
+  const c = esRascunho[esSel];
+  if (!c._de) {
+    esRascunho.splice(esSel, 1);
+    if (esSel >= esRascunho.length) esSel = esRascunho.length - 1;
+  } else {
+    c._removido = !c._removido;
+  }
+  desenharConteudo();
+});
+
+const esMove = (d) => {
+  if (!esRascunho || esSel < 0) return;
+  const j = esSel + d;
+  if (j < 0 || j >= esRascunho.length) return;
+  const t = esRascunho[esSel];
+  esRascunho[esSel] = esRascunho[j];
+  esRascunho[j] = t;
+  esSel = j;
+  desenharConteudo();
+};
+
+$("es-up").addEventListener("click", () => esMove(-1));
+$("es-down").addEventListener("click", () => esMove(1));
+
+/*
+ * APLICAR — ainda inerte.
+ *
+ * A tela está pronta para ser julgada; a parte que reescreve o arquivo do
+ * cliente ainda não existe. Dizer isso em voz alta é melhor que um botão que
+ * não faz nada, e melhor que implementar antes de o desenho ser aprovado.
+ */
+$("es-aplicar").addEventListener("click", async () => {
+  /* Criar já funciona; alterar a estrutura de um arquivo existente ainda não.
+     Dizer isso em voz alta é melhor que um botão que não faz nada. */
+  if (esNovo) {
+    await abrirNovo();
+    return;
+  }
+  await Swal.fire(
+    swalBase({
+      icon: "info",
+      title: T("UI_NOT_YET_TITLE"),
+      html: escapaHtml(T("UI_NOT_YET")),
+      confirmButtonText: T("UI_OK"),
+      showCancelButton: false,
+    })
+  );
+});
+
+/* ------------------------------------------- T10: gravar o arquivo novo */
+
+/*
+ * O caminho sugerido: a pasta da conexão e um nome que não colide.
+ *
+ * Nome padrão em maiúsculas e sem acento pela mesma regra dos campos -- é o que
+ * o DBF aceita, e o que o resto da pasta vai parecer.
+ */
+function nvSugestao(dir) {
+  const base = dir ? dir.replace(/[\\/]+$/, "") + SEP_BARRA : "";
+  return base + T("UI_NEW_UNTITLED") + ".DBF";
+}
+
+function msgNovo(txt, classe) {
+  const el = $("nv-msg");
+  el.textContent = txt || "";
+  el.className = "ff-msg" + (txt && classe ? " " + classe : "");
+}
+
+async function abrirNovo() {
+  if (!esRascunho || !esNovo) return;
+  const vivos = esRascunho.filter((c) => !c._removido);
+  $("nv-caminho").value = nvSugestao(esNovo.dir);
+  $("nv-resumo").textContent = T("UI_NEW_SUMMARY", {
+    n: vivos.length,
+    bytes: esTamanhoRegistro(esRascunho),
+  });
+  msgNovo("");
+  $("dlg-novo").showModal();
+  // O nome fica selecionado, sem a pasta nem a extensão: é a parte que a pessoa
+  // veio trocar.
+  const v = $("nv-caminho").value;
+  const ini = v.lastIndexOf(SEP_BARRA) + 1;
+  const fim = v.lastIndexOf(".");
+  $("nv-caminho").focus();
+  setTimeout(() => $("nv-caminho").setSelectionRange(ini, fim > ini ? fim : v.length), 0);
+}
+
+/*
+ * Cria o arquivo. `substituir` só chega como `true` depois de a pessoa
+ * confirmar no aviso -- a DLL recusa por padrão, e é ela que decide.
+ */
+async function nvCriar(substituir) {
+  const caminho = $("nv-caminho").value.trim();
+  if (!caminho) return;
+
+  const campos = esRascunho
+    .filter((c) => !c._removido)
+    .map((c) => ({ name: c.name, type: c.type, len: c.len, dec: c.dec }));
+
+  try {
+    const r = await DBU.rpc("struct.create", {
+      path: caminho,
+      fields: campos,
+      replace: !!substituir,
+    });
+
+    $("dlg-novo").close();
+    esEntrarNoModo(false);
+
+    /* Abre o que acabou de nascer: criar um arquivo e não mostrá-lo obrigaria a
+       procurá-lo na árvore para conferir se saiu como se pediu. */
+    const a = await DBU.rpc("file.open", { path: r.path });
+    await repintarDoEstado();
+    ativarAba(a.h);
+    hint(T("UI_CREATED", { file: r.file, n: r.fields }));
+    return;
+  } catch (e) {
+    /*
+     * Já existe: PERGUNTA, não recusa seca.
+     *
+     * É o trâmite que todo aplicativo faz, e o próprio DBU original fazia em
+     * DBUCOPY.PRG:194 (`rsvp( DBU_COPYTEXT2 )`). A DLL recusa por padrão porque
+     * ela não pergunta nada; quem pergunta é a tela.
+     */
+    if (e.codigo === "ERROR_FILE_EXISTS") {
+      const nome = (e.params && e.params.file) || caminho;
+      const r = await Swal.fire(
+        swalBase({
+          icon: "warning",
+          title: T("UI_OVERWRITE_TITLE"),
+          html: escapaHtml(T("UI_OVERWRITE_ASK", { file: nome })),
+          showCancelButton: true,
+          confirmButtonText: T("UI_OVERWRITE"),
+          cancelButtonText: T("UI_CANCEL"),
+        })
+      );
+      if (r.isConfirmed) return nvCriar(true);
+      return;
+    }
+    msgNovo(msgErro(e), sevErro(e));
+  }
+}
+
+$("nv-criar").addEventListener("click", () => nvCriar(false));
+$("nv-cancelar").addEventListener("click", () => $("dlg-novo").close());
+
+/*
+ * O ⌕ abre o seletor do sistema -- e é ATALHO, não a única porta.
+ *
+ * O campo ao lado aceita o caminho digitado, e é por ele que o fluxo funciona
+ * mesmo sem ninguém na frente da máquina. Um seletor nativo é uma janela modal
+ * do Windows: se ela abrir sem quem a feche, o app fica parado esperando.
+ */
+$("nv-procurar").addEventListener("click", async () => {
+  const inv = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+  if (!inv) {
+    msgNovo(T("ERROR_DIALOG_UNAVAILABLE"), "aviso");
+    return;
+  }
+  try {
+    const escolhido = await inv("plugin:dialog|save", {
+      options: {
+        title: T("UI_NEW_FILE"),
+        defaultPath: $("nv-caminho").value.trim(),
+        filters: [
+          { name: T("UI_FT_DBF"), extensions: ["dbf"] },
+          { name: T("UI_FT_ALL"), extensions: ["*"] },
+        ],
+      },
+    });
+    if (escolhido) $("nv-caminho").value = escolhido;
+  } catch (e) {
+    msgNovo(T("ERROR_DIALOG_FAILED", { detail: e.message || e }), "erro");
+  }
+});
 
 // ------------------------------------------------------- T14: PACK e ZAP
 

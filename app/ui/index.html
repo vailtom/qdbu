@@ -245,15 +245,90 @@
       <!-- visão: estrutura -->
       <div id="visao-estrutura" class="visao-corpo" hidden>
         <div class="cartoes" id="cartoes"></div>
+
+        <!-- T10: a barra do editor.
+
+             AS EDIÇÕES SE ACUMULAM E SÃO APLICADAS DE UMA VEZ. Cada alteração
+             de estrutura reconstrói o arquivo inteiro fora do lugar (R2), e
+             fazer isso a cada tecla num arquivo de 800 MB seria absurdo. Aqui a
+             pessoa monta o que quer, VÊ o que vai acontecer com os dados, e
+             confirma uma vez só. -->
+        <div class="es-barra">
+          <button type="button" id="es-editar" data-i18n="UI_EDIT_STRUCTURE"></button>
+
+          <!-- ÍCONE + RÓTULO, e não símbolo sozinho.
+
+               Cinco botões com "+ ↱ − ↑ ↓" obrigam a passar o mouse em cada um
+               para descobrir o que fazem — e o `title` só aparece depois de um
+               segundo parado. É o mesmo padrão do menu ⋯ de conexão, que já
+               tinha aprendido isto. O ícone fica: ele é o que se reconhece de
+               relance depois da primeira vez. -->
+          <span class="es-grupo" id="es-acoes" hidden>
+            <button type="button" id="es-add" data-i18n-title="UI_ADD_FIELD">
+              <span class="es-ico">+</span><span data-i18n="UI_ADD_SHORT"></span>
+            </button>
+            <button type="button" id="es-ins" data-i18n-title="UI_INSERT_FIELD">
+              <span class="es-ico">↱</span><span data-i18n="UI_INSERT_SHORT"></span>
+            </button>
+            <button type="button" id="es-del" class="risco" data-i18n-title="UI_REMOVE_FIELD">
+              <span class="es-ico">−</span><span id="es-del-rotulo"></span>
+            </button>
+            <span class="es-sep"></span>
+            <button type="button" id="es-up" data-i18n-title="UI_MOVE_UP">
+              <span class="es-ico">↑</span><span data-i18n="UI_UP_SHORT"></span>
+            </button>
+            <button type="button" id="es-down" data-i18n-title="UI_MOVE_DOWN">
+              <span class="es-ico">↓</span><span data-i18n="UI_DOWN_SHORT"></span>
+            </button>
+          </span>
+
+          <span class="es-espaco"></span>
+          <span class="es-resumo" id="es-resumo"></span>
+
+          <span class="es-grupo" id="es-confirmar" hidden>
+            <button type="button" id="es-descartar" data-i18n="UI_DISCARD"></button>
+            <button type="button" id="es-aplicar" class="primario" data-i18n="UI_APPLY"></button>
+          </span>
+        </div>
+
         <div class="tabela-wrap">
           <table class="estrutura" id="estrutura">
             <thead>
-              <tr><th>#</th><th data-i18n="UI_FIELD"></th><th data-i18n="UI_TYPE"></th>
+              <tr><th class="es-marca"></th>
+                  <th>#</th><th data-i18n="UI_FIELD"></th><th data-i18n="UI_TYPE"></th>
                   <th class="num" data-i18n="UI_SIZE"></th>
                   <th class="num" data-i18n="UI_DEC"></th></tr>
             </thead>
             <tbody></tbody>
           </table>
+        </div>
+
+        <!-- OS ERROS, COM NOME E MOTIVO, LOGO ABAIXO DA TABELA.
+
+             A versão anterior dizia só "1 campo com problema": nem qual campo,
+             nem qual problema. A única pista era uma borda vermelha perdida
+             entre nove linhas, e a explicação ficava escondida no `title`, que
+             só aparece depois de um segundo parado.
+
+             Ficou ACIMA da tabela por um tempo, com o argumento de ser lida
+             antes da tentativa de aplicar. Custou caro na prática: empurrava a
+             tabela para baixo e afastava a barra de botões daquilo sobre o que
+             ela age. Aqui embaixo os erros continuam à vista, e a barra volta a
+             encostar na tabela. -->
+        <div class="es-erros" id="es-erros" hidden>
+          <h4 id="es-erros-titulo"></h4>
+          <ul id="es-erros-lista"></ul>
+        </div>
+
+        <!-- O QUE VAI ACONTECER COM OS DADOS.
+
+             É por isto que esta tela existe. Encolher um campo TRUNCA valores;
+             remover um APAGA a coluna; trocar o tipo pode não converter. Nada
+             disso é óbvio na tabela acima, e descobrir depois de aplicar num
+             arquivo de cliente é tarde demais. -->
+        <div class="es-impacto" id="es-impacto" hidden>
+          <h4 data-i18n="UI_IMPACT"></h4>
+          <ul id="es-impacto-lista"></ul>
         </div>
       </div>
 
@@ -435,6 +510,35 @@
     </div>
   </div>
 </div>
+
+<!-- Onde salvar o DBF novo.
+
+     DIÁLOGO DO APP, e não o "Salvar como" do Windows como única porta. O
+     seletor nativo abre uma janela modal do sistema: se ela travar, ou se
+     ninguém estiver na frente da máquina, o app inteiro fica parado esperando
+     um clique que não vem. Aqui o caminho se digita; o ⌕ é atalho, não
+     exigência. Mesmo desenho do destino da exportação. -->
+<dialog id="dlg-novo">
+  <form method="dialog" id="form-novo">
+    <h2 data-i18n="UI_NEW_FILE"></h2>
+    <p class="explica" data-i18n="UI_NEW_FILE_EXPLAIN"></p>
+
+    <label class="nv-linha"><span data-i18n="UI_SAVE_AS"></span>
+      <span class="nv-arq">
+        <input id="nv-caminho" autocomplete="off" spellcheck="false" required>
+        <button type="button" id="nv-procurar" data-i18n-title="UI_CHOOSE_WHERE_SAVE">⌕</button>
+      </span>
+    </label>
+
+    <p class="nv-resumo" id="nv-resumo"></p>
+    <p class="ff-msg" id="nv-msg"></p>
+
+    <div class="acoes">
+      <button type="button" id="nv-cancelar" data-i18n="UI_CANCEL"></button>
+      <button type="button" id="nv-criar" class="primario" data-i18n="UI_CREATE"></button>
+    </div>
+  </form>
+</dialog>
 
 <!-- Pré-voo: as conferências que rodam antes de qualquer alteração.
 

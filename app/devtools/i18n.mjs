@@ -49,6 +49,8 @@ const IMPLICITAS = [
   // `"UI_ROLE_" + role` a partir do que a DLL devolve em backup.check.
   /^UI_CHECK_[A-Z_]+$/,
   /^UI_ROLE_[A-Z]+$/,
+  // T10: o editor monta `"UI_ROW_" + estado.toUpperCase()`.
+  /^UI_ROW_[A-Z]+$/,
   /^UI_BACKUP_FILES$/,
   /^UI_TYPE_[A-Z]$/, //            window.I.tipo(letra)
   /^UI_THEME_[A-Z]+$/, //          "UI_THEME_" + tema.id (js/tema.js)

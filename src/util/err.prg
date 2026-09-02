@@ -111,6 +111,23 @@
  *     ERROR_BACKUP_NEEDS_CONFIRM    file, bytes
  *     WARN_CANCELED_BACKUP          file
  *
+ *   T10 -- estrutura
+ *     ERROR_NO_FIELDS
+ *     ERROR_FIELD_BAD               n
+ *     ERROR_FIELD_NAME_EMPTY        n
+ *     ERROR_FIELD_NAME_LONG         field
+ *     ERROR_FIELD_NAME_BAD          field
+ *     ERROR_FIELD_NAME_DUP          field
+ *     ERROR_FIELD_TYPE_BAD          field
+ *     ERROR_FIELD_LEN_C             field
+ *     ERROR_FIELD_LEN_N             field
+ *     ERROR_FIELD_LEN_DATE          field
+ *     ERROR_FIELD_LEN_LOGIC         field
+ *     ERROR_FIELD_LEN_MEMO          field
+ *     ERROR_FIELD_DEC               field
+ *     ERROR_RECORD_TOO_BIG          bytes, max
+ *     ERROR_CREATE_FAILED           file, reason
+ *
  *   T14 -- PACK e ZAP
  *     ERROR_ZAP_CREATE_FAILED       file
  *     ERROR_ZAP_FAILED              file

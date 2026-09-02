@@ -642,4 +642,93 @@
   UI_ERROR: "Did not work",
   UI_OK: "Got it",
 
+
+  // ============================================ T10: structure editor
+  UI_EDIT_STRUCTURE: "Edit structure",
+  UI_ADD_FIELD: "Append a field at the end",
+  UI_INSERT_FIELD: "Insert a field above the selected one",
+  UI_REMOVE_FIELD: "Mark the field for removal",
+  UI_MOVE_UP: "Move up",
+  UI_MOVE_DOWN: "Move down",
+  UI_APPLY: "Apply",
+  UI_DISCARD: "Discard",
+  UI_DISCARD_TITLE: "Discard the changes?",
+  UI_DISCARD_ASK: "The structure changes you made will be lost. The file was not touched.",
+
+  UI_ROW_NOVO: "new field",
+  UI_ROW_MUDOU: "changed field",
+  UI_ROW_SUMIU: "field marked for removal",
+
+  UI_STRUCT_SUMMARY: { one: "{n} field · {bytes} bytes per record", other: "{n} fields · {bytes} bytes per record" },
+  UI_STRUCT_ERRORS: { one: "{n} field with a problem", other: "{n} fields with problems" },
+
+  UI_IMPACT: "What happens to the data",
+  UI_IMPACT_REMOVED: "'{field}' is removed — the data in that column is lost.",
+  UI_IMPACT_ADDED: "'{field}' is created, empty in every record.",
+  UI_IMPACT_TYPE: "'{field}' changes from {from} to {to} — values that fail to convert are lost.",
+  UI_IMPACT_SHRUNK: "'{field}' shrinks from {from} to {to} — longer values are truncated.",
+  UI_IMPACT_RENAMED: "'{from}' becomes '{to}' — the data is kept.",
+  UI_IMPACT_REORDERED: "Field order changes. Indexes and expressions that rely on position need checking.",
+
+  ERROR_FIELD_NAME_EMPTY: "the name cannot be empty",
+  ERROR_FIELD_NAME_BAD: "letters, digits and _ only, starting with a letter",
+  ERROR_FIELD_NAME_LONG: "10 characters at most",
+  ERROR_FIELD_NAME_DUP: "a field with this name already exists",
+  ERROR_FIELD_TYPE_BAD: "invalid type",
+  ERROR_FIELD_LEN_C: "text: 1 to 1024",
+  ERROR_FIELD_LEN_N: "number: 1 to 19",
+  ERROR_FIELD_LEN_MEMO: "memo is always 10",
+  ERROR_FIELD_LEN_DATE: "date is always 8",
+  ERROR_FIELD_LEN_LOGIC: "logical is always 1",
+  ERROR_FIELD_DEC: "too many decimals for this length",
+
+  UI_NOT_YET_TITLE: "Not yet",
+  UI_NOT_YET:
+    "The screen is ready to be reviewed, but the part that rewrites the file " +
+    "has not been implemented. Nothing was changed.",
+
+  UI_RESTORE_FIELD: "Bring '{field}' back",
+  UI_IMPACT_UNDO: "To bring '{field}' back, click the ↺ on its row.",
+
+  UI_ADD_SHORT: "Field",
+  UI_INSERT_SHORT: "Insert",
+  UI_REMOVE_SHORT: "Remove",
+  UI_RESTORE_SHORT: "Restore",
+  UI_UP_SHORT: "Up",
+  UI_DOWN_SHORT: "Down",
+
+  UI_FIELD_WILL_GO: "This field will be removed",
+
+  UI_APPLY_BLOCKED: { one: "Fix the field with a problem to apply", other: "Fix the {n} fields with problems to apply" },
+  UI_APPLY_NOTHING: "Nothing has been changed yet",
+
+  UI_FIELD_AT: "field {n}",
+
+
+  // ---------------------------------------------- T10: create a new file
+  UI_NEW_FILE: "Create file",
+  UI_NEW_FILE_EXPLAIN:
+    "The file is born empty, with the structure you built. No records are " +
+    "created.",
+  UI_NEW_DBF: "Create a file here…",
+  UI_CREATE: "Create",
+  UI_NEW_SUMMARY: { one: "{n} field · {bytes} bytes per record", other: "{n} fields · {bytes} bytes per record" },
+  UI_CREATED: "'{file}' created with {n} fields.",
+  UI_OVERWRITE_TITLE: "The file already exists",
+  UI_OVERWRITE_ASK:
+    "'{file}' is already in that folder. Replacing deletes what is there, " +
+    "records included.",
+  UI_OVERWRITE: "Replace",
+  UI_NEW_UNTITLED: "SEM_NOME",
+
+  ERROR_CREATE_FAILED: "Could not create '{file}'. {reason}",
+  ERROR_FIELD_BAD: "Field {n} is malformed.",
+  ERROR_NO_FIELDS: "Define at least one field before creating the file.",
+  ERROR_RECORD_TOO_BIG:
+    "The record would be {bytes} bytes, and the DBF format only holds up to " +
+    "{max}. Shrink one of the fields.",
+
+  ERROR_FILE_IS_OPEN:
+    "'{file}' is open in tab {alias}. Close the tab before replacing it.",
+
 };

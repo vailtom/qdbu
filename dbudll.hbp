@@ -53,3 +53,4 @@ src/api_session.prg
 src/api_log.prg
 src/api_backup.prg
 src/api_bulk.prg
+src/api_struct.prg

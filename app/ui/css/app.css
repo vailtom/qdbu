@@ -458,10 +458,21 @@ dialog .acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 
   margin: 0 0 8px; font-size: 10.5px; font-weight: 600;
   text-transform: uppercase; letter-spacing: .8px; color: var(--dim2);
 }
+/* ROLA, não corta.
+
+   Era `overflow: hidden` -- posto para as bordas arredondadas recortarem o
+   conteúdo. Com um DBF de 120 campos (o NETEST tem 122, e há arquivos com 366),
+   os campos que não coubessem sumiam SEM barra de rolagem e sem nenhum sinal:
+   medido com 12 campos numa área de 284 px, `todasAsLinhasVisiveis: false`.
+   `auto` recorta igual e ainda deixa rolar. */
 .tabela-wrap {
-  border: 1px solid var(--line); border-radius: 6px; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 6px; overflow: auto;
   background: var(--bg2);
 }
+
+/* O cabeçalho fica na tela enquanto se rola: numa lista de 122 campos, saber se
+   a coluna é TAM. ou DEC. depois de rolar exigiria voltar ao topo. */
+.estrutura thead th { position: sticky; top: 0; z-index: 2; background: var(--bg3); }
 .estrutura { width: 100%; border-collapse: collapse; font-size: 12px; }
 .estrutura th {
   text-align: left; padding: 6px 12px; font-weight: 600; font-size: 10.5px;
@@ -1390,3 +1401,218 @@ body.arrastando-aba .aba { cursor: grabbing; }
   font-family: var(--mono); font-size: 12px;
   background: var(--bg3); padding: 1px 5px; border-radius: 3px;
 }
+
+/* ------------------------------------------------- T10: editor de estrutura */
+
+.es-barra {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 0 10px; border-bottom: 1px solid var(--line); margin-bottom: 10px;
+}
+.es-grupo { display: flex; align-items: center; gap: 4px; }
+.es-sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; }
+.es-espaco { flex: 1; }
+.es-resumo { font-size: 12px; color: var(--dim); margin-right: 8px; }
+.es-barra button { padding: 4px 9px; font-size: 12px; display: inline-flex; align-items: center; gap: 5px; }
+/* O ícone num tamanho próprio: os símbolos matemáticos (− ↱ ↺) saem menores
+   que as letras na mesma fonte, e sem isto pareciam meio apagados ao lado do
+   rótulo. */
+.es-ico { font-size: 13px; line-height: 1; opacity: .85; }
+.es-barra button.risco { color: var(--erro); }
+.es-barra button:disabled { opacity: .35; cursor: default; }
+
+/* A marca de estado da linha: a coluna mais estreita da tabela, e a primeira,
+   porque é o que se lê antes de qualquer outra coisa. */
+.estrutura th.es-marca, .estrutura td.es-marca { width: 18px; text-align: center; padding-left: 4px; }
+.estrutura tr.novo    td.es-marca { color: var(--ok); }
+.estrutura tr.mudou   td.es-marca { color: var(--aviso); }
+.estrutura tr.sumiu   td.es-marca { color: var(--erro); }
+/* O ESMAECIDO É POR COR, NÃO POR `opacity`.
+
+   `opacity` num pai cria um contexto de composição e vale para a subárvore
+   INTEIRA: o ⚠ dentro da célula e o balão de dica dele saíam a 50%, e nenhum
+   `opacity: 1` no filho escapa disso — não dá para "desfazer" opacidade
+   herdada. Com `color`, cada filho decide a sua. */
+/* A CÉLULA DO NOME FICA DE FORA DO RISCO.
+
+   O conteúdo dela já é riscado sozinho: o <input> tem a sua própria regra
+   abaixo. O risco no `td` só existe para as células de texto puro (o número da
+   posição), e na célula do nome ele atravessava também o ⚠.
+
+   `display: inline-block` no ícone NÃO resolve: a célula é `display: flex`, e
+   um flex container BLOCKIFICA os filhos -- o inline-block computa para block e
+   o escape se perde. Testado: `getComputedStyle(icone).display` saía "block".
+
+   Também não adianta `text-decoration: none` no filho: a decoração é desenhada
+   pelo ANCESTRAL atravessando os descendentes, e o valor computado do filho sai
+   honestamente "none" enquanto a linha do pai continua passando por cima. */
+.estrutura tr.sumiu td:not(.es-marca):not(.nome-com-aviso) {
+  text-decoration: line-through; color: var(--dim2);
+}
+.estrutura tr.sumiu td.nome-com-aviso { color: var(--dim2); }
+
+/* O botão de restaurar mora na linha removida. Fica com a cor de aviso, e não
+   de erro: ele é a SAÍDA do problema, não parte dele. */
+/* ALTURA FIXA DE 18 px, igual ao resto do conteúdo da linha.
+
+   Medido: o botão saía com 19 px (18 de line-height + 1 de borda) e empurrava a
+   célula da marca para 30, enquanto todas as outras linhas ficavam em 29. Um
+   pixel só -- e o suficiente para a linha marcada "pular" no meio da lista.
+   `box-sizing` faz a borda caber DENTRO dos 18. */
+.es-voltar {
+  background: transparent; border: 1px solid var(--line2); color: var(--aviso);
+  border-radius: 3px; cursor: pointer; padding: 0 4px; font-size: 12px;
+  height: 18px; line-height: 1; box-sizing: border-box;
+  display: inline-flex; align-items: center; justify-content: center;
+  /* `vertical-align: middle` e não o `baseline` padrão: um elemento
+     inline-flex alinhado pela linha de base reserva o espaço de DESCIDA da
+     fonte abaixo dele, e a célula saía com 29,5 px -- meio pixel que arredonda
+     para 30 e faz a linha marcada pular. Medido, não deduzido. */
+  vertical-align: middle;
+}
+.es-voltar:hover { border-color: var(--aviso); background: color-mix(in srgb, var(--aviso) 15%, transparent); }
+.estrutura tr.sel { background: var(--bg3); }
+.estrutura tr.sel td { border-top: 1px solid var(--amber); border-bottom: 1px solid var(--amber); }
+
+/* Célula editável: parece texto até receber o foco. Uma tabela cheia de caixas
+   de entrada vira um formulário ilegível; aqui o que se lê continua sendo a
+   estrutura, e a edição é um detalhe de quem está editando. */
+.estrutura input, .estrutura select {
+  width: 100%; background: transparent; border: 1px solid transparent;
+  color: inherit; font: inherit; padding: 1px 4px; border-radius: 3px;
+}
+.estrutura input:focus, .estrutura select:focus {
+  background: var(--bg); border-color: var(--amber); outline: none;
+}
+.estrutura input.ruim { border-color: var(--erro); background: color-mix(in srgb, var(--erro) 10%, transparent); }
+.estrutura td.num input { text-align: right; }
+
+.es-impacto {
+  margin-top: 12px; padding: 10px 12px;
+  background: var(--bg2); border-left: 3px solid var(--aviso); border-radius: 4px;
+}
+.es-impacto h4 { margin: 0 0 6px; font-size: 12px; color: var(--fg); }
+.es-impacto ul { margin: 0; padding-left: 18px; }
+.es-impacto li { font-size: 12px; color: var(--dim); line-height: 1.6; }
+.es-impacto li.grave { color: var(--erro); }
+
+/* AS COLUNAS TÊM LARGURA, e não se espalham pela tela.
+
+   Sem isto o TIPO ocupava metade da largura e o TAM. ficava na extrema
+   direita: para ligar um campo ao tamanho dele o olho atravessava um vazio de
+   800 px. A tabela existe para ser LIDA em linha, e leitura em linha morre
+   quando as colunas se afastam. */
+.estrutura { table-layout: fixed; max-width: 900px; }
+.estrutura th:nth-child(1), .estrutura td:nth-child(1) { width: 30px; }   /* marca */
+.estrutura th:nth-child(2), .estrutura td:nth-child(2) { width: 40px; }   /* # */
+.estrutura th:nth-child(3), .estrutura td:nth-child(3) { width: 200px; }  /* campo */
+.estrutura th:nth-child(4), .estrutura td:nth-child(4) { width: 190px; }  /* tipo */
+.estrutura th:nth-child(5), .estrutura td:nth-child(5) { width: 90px; }   /* tamanho */
+.estrutura th:nth-child(6), .estrutura td:nth-child(6) { width: 70px; }   /* decimais */
+
+/* O impacto acompanha a tabela: uma faixa de 1600 px sob uma tabela de 900
+   parecia pertencer a outra tela. */
+.es-impacto { max-width: 900px; }
+
+/* O NOME RISCADO TAMBÉM.
+
+   `text-decoration` na célula não atravessa o <input> que está dentro dela: o
+   número saía riscado e o nome intacto, o que é meia mensagem. */
+.estrutura tr.sumiu input,
+.estrutura tr.sumiu select { text-decoration: line-through; color: var(--dim2); }
+
+/* O aviso ao lado do nome, com dica própria.
+
+   O `title` do navegador demora quase um segundo e sai com a fonte do sistema,
+   fora do tema. Este aparece na hora e é do app. */
+.estrutura td { position: relative; }
+/* O AVISO FICA NA LINHA, e não embaixo.
+
+   O <input> do nome tem `width: 100%`, então o ⚠ ao lado dele era empurrado
+   para a linha seguinte e a altura da linha dobrava. A célula vira flex e o
+   input passa a dividir o espaço: `min-width: 0` é o que permite ele encolher
+   dentro do flex, sem isso ele mantém a largura e o problema volta. */
+/* NADA DE `display: flex` NUM <td>.
+
+   O ⚠ ao lado do nome precisa ficar na mesma linha do input, e o caminho óbvio
+   era `display: flex` na célula. Custou meio pixel: a linha do campo removido
+   media 29,5 e as demais 29, e a lista "pulava" nela. Um <td> com `flex` sai do
+   algoritmo de altura da tabela e passa a se medir sozinho.
+
+   Levou quatro tentativas erradas até eu medir em vez de deduzir -- altura no
+   botão, `box-sizing`, `vertical-align: middle`, altura fixa na linha. Nenhuma
+   pegou, porque nenhuma era a causa. O teste que resolveu foi trocar o `flex`
+   por `table-cell` ao vivo e ver a altura cair para 29.
+
+   `nowrap` é o que mantém o ícone na linha: sem ele o input de 100% empurra o
+   ⚠ para baixo e a linha vai a 47 px. `width: auto` tira o 100% do input, que
+   é o que criava o empurrão. */
+.estrutura td.nome-com-aviso { white-space: nowrap; }
+.estrutura td.nome-com-aviso input { width: calc(100% - 22px); }
+
+/* O aviso não é parte do que está sendo apagado: ele EXPLICA o apagamento.
+
+   `display: inline-block` é o que o tira do risco, e NÃO o `text-decoration:
+   none`. A decoração é desenhada pelo elemento ANCESTRAL atravessando os
+   descendentes: um filho não consegue desligá-la, e o valor computado dele sai
+   `none` enquanto a linha do pai continua passando por cima. Só um contexto de
+   formatação próprio escapa.
+
+   Foi um caso em que medir a propriedade computada MENTIU: ela dizia "none" e
+   a tela mostrava o risco. Só a imagem denunciou. */
+.es-aviso {
+  display: inline-block;
+  color: var(--aviso); font-size: 12px; cursor: help; flex: none;
+  text-decoration: none;
+}
+.es-aviso::after {
+  content: attr(data-dica);
+  position: absolute; left: 0; bottom: calc(100% + 4px); z-index: 30;
+  white-space: nowrap; padding: 5px 9px; border-radius: 4px;
+  background: var(--bg4); color: var(--fg); border: 1px solid var(--line2);
+  font-size: 11.5px; box-shadow: 0 4px 14px rgba(0,0,0,.45);
+  text-decoration: none; font-weight: 400;
+  opacity: 0; visibility: hidden; transition: opacity .12s;
+}
+.es-aviso:hover::after { opacity: 1; visibility: visible; }
+
+/* Nota: houve aqui um bloco fixando `height` em `tr` e `td` mais `overflow:
+   hidden` na célula -- a quarta tentativa contra o meio pixel, que não era a
+   causa (era o `display: flex` no <td>). Removido: CSS morto de tentativa
+   fracassada é o que produz surpresa três semanas depois, e `overflow: hidden`
+   numa célula de tabela some com conteúdo sem avisar. */
+
+/* ------------------------------------------------- T10: a lista de erros */
+
+/* Entre a tabela e o bloco de impacto: os dois falam do que está montado, e
+   ficam juntos. Acima da tabela, esta faixa afastava a barra de botões daquilo
+   sobre o que ela age. */
+.es-erros {
+  margin-top: 10px; padding: 8px 12px; max-width: 900px;
+  background: color-mix(in srgb, var(--erro) 10%, var(--bg2));
+  border-left: 3px solid var(--erro); border-radius: 4px;
+}
+.es-erros h4 { margin: 0 0 5px; font-size: 12px; color: var(--erro); }
+.es-erros ul { margin: 0; padding-left: 16px; }
+.es-erros li { font-size: 12px; color: var(--fg); line-height: 1.7; }
+
+/* O nome do campo é um botão: clicar leva até a linha e põe o foco na célula
+   que o erro cita. Numa tabela de 120 campos, dizer o nome sem levar até ele
+   seria só metade do trabalho. */
+.es-erro-campo {
+  background: transparent; border: 0; padding: 0; cursor: pointer;
+  color: var(--erro); font: inherit; font-weight: 600; text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.es-erro-campo:hover { color: var(--fg); }
+
+.es-resumo.erro { color: var(--erro); }
+
+/* ------------------------------------------------- T10: criar arquivo novo */
+
+#dlg-novo { max-width: 560px; width: 92vw; }
+.nv-linha { display: block; margin-bottom: 10px; }
+.nv-linha > span:first-child { display: block; font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+.nv-arq { display: flex; gap: 6px; }
+.nv-arq input { flex: 1; min-width: 0; font-family: var(--mono); font-size: 11.5px; }
+.nv-arq button { flex: none; padding: 0 10px; }
+.nv-resumo { font-size: 12px; color: var(--dim); margin: 0 0 8px; }

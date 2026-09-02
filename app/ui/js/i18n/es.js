@@ -638,4 +638,93 @@
   UI_ERROR: "No salió",
   UI_OK: "Entendido",
 
+
+  // ============================================ T10: editor de estructura
+  UI_EDIT_STRUCTURE: "Editar estructura",
+  UI_ADD_FIELD: "Añadir campo al final",
+  UI_INSERT_FIELD: "Insertar campo encima del seleccionado",
+  UI_REMOVE_FIELD: "Marcar el campo para eliminación",
+  UI_MOVE_UP: "Mover arriba",
+  UI_MOVE_DOWN: "Mover abajo",
+  UI_APPLY: "Aplicar",
+  UI_DISCARD: "Descartar",
+  UI_DISCARD_TITLE: "¿Descartar los cambios?",
+  UI_DISCARD_ASK: "Los cambios que hizo en la estructura se perderán. El archivo no fue tocado.",
+
+  UI_ROW_NOVO: "campo nuevo",
+  UI_ROW_MUDOU: "campo modificado",
+  UI_ROW_SUMIU: "campo marcado para eliminación",
+
+  UI_STRUCT_SUMMARY: { one: "{n} campo · {bytes} bytes por registro", other: "{n} campos · {bytes} bytes por registro" },
+  UI_STRUCT_ERRORS: { one: "{n} campo con problema", other: "{n} campos con problemas" },
+
+  UI_IMPACT: "Qué pasa con los datos",
+  UI_IMPACT_REMOVED: "'{field}' se elimina — los datos de esa columna se pierden.",
+  UI_IMPACT_ADDED: "'{field}' se crea, vacío en todos los registros.",
+  UI_IMPACT_TYPE: "'{field}' cambia de {from} a {to} — los valores que no conviertan se pierden.",
+  UI_IMPACT_SHRUNK: "'{field}' se reduce de {from} a {to} — los valores más largos se truncan.",
+  UI_IMPACT_RENAMED: "'{from}' pasa a llamarse '{to}' — los datos se mantienen.",
+  UI_IMPACT_REORDERED: "El orden de los campos cambia. Índices y expresiones que dependen de la posición deben revisarse.",
+
+  ERROR_FIELD_NAME_EMPTY: "el nombre no puede quedar vacío",
+  ERROR_FIELD_NAME_BAD: "solo letras, números y _, empezando por letra",
+  ERROR_FIELD_NAME_LONG: "10 caracteres como máximo",
+  ERROR_FIELD_NAME_DUP: "ya existe un campo con ese nombre",
+  ERROR_FIELD_TYPE_BAD: "tipo no válido",
+  ERROR_FIELD_LEN_C: "texto: de 1 a 1024",
+  ERROR_FIELD_LEN_N: "número: de 1 a 19",
+  ERROR_FIELD_LEN_MEMO: "memo siempre es 10",
+  ERROR_FIELD_LEN_DATE: "fecha siempre es 8",
+  ERROR_FIELD_LEN_LOGIC: "lógico siempre es 1",
+  ERROR_FIELD_DEC: "demasiados decimales para esa longitud",
+
+  UI_NOT_YET_TITLE: "Todavía no",
+  UI_NOT_YET:
+    "La pantalla está lista para ser evaluada, pero la parte que reescribe el " +
+    "archivo aún no fue implementada. No se cambió nada.",
+
+  UI_RESTORE_FIELD: "Traer '{field}' de vuelta",
+  UI_IMPACT_UNDO: "Para traer '{field}' de vuelta, haga clic en el ↺ de su fila.",
+
+  UI_ADD_SHORT: "Campo",
+  UI_INSERT_SHORT: "Insertar",
+  UI_REMOVE_SHORT: "Eliminar",
+  UI_RESTORE_SHORT: "Restaurar",
+  UI_UP_SHORT: "Subir",
+  UI_DOWN_SHORT: "Bajar",
+
+  UI_FIELD_WILL_GO: "Este campo será eliminado",
+
+  UI_APPLY_BLOCKED: { one: "Corrija el campo con problema para poder aplicar", other: "Corrija los {n} campos con problemas para poder aplicar" },
+  UI_APPLY_NOTHING: "Todavía no se cambió nada",
+
+  UI_FIELD_AT: "campo {n}",
+
+
+  // ---------------------------------------------- T10: crear archivo nuevo
+  UI_NEW_FILE: "Crear archivo",
+  UI_NEW_FILE_EXPLAIN:
+    "El archivo nace vacío, con la estructura que usted armó. No se crea " +
+    "ningún registro.",
+  UI_NEW_DBF: "Crear un archivo aquí…",
+  UI_CREATE: "Crear",
+  UI_NEW_SUMMARY: { one: "{n} campo · {bytes} bytes por registro", other: "{n} campos · {bytes} bytes por registro" },
+  UI_CREATED: "'{file}' creado con {n} campos.",
+  UI_OVERWRITE_TITLE: "El archivo ya existe",
+  UI_OVERWRITE_ASK:
+    "Ya existe '{file}' en esa carpeta. Sustituirlo borra lo que está allí, " +
+    "incluidos los registros.",
+  UI_OVERWRITE: "Sustituir",
+  UI_NEW_UNTITLED: "SEM_NOME",
+
+  ERROR_CREATE_FAILED: "No se pudo crear '{file}'. {reason}",
+  ERROR_FIELD_BAD: "El campo {n} vino mal formado.",
+  ERROR_NO_FIELDS: "Defina al menos un campo antes de crear el archivo.",
+  ERROR_RECORD_TOO_BIG:
+    "El registro quedaría con {bytes} bytes, y el formato DBF solo guarda " +
+    "hasta {max}. Reduzca el tamaño de algún campo.",
+
+  ERROR_FILE_IS_OPEN:
+    "'{file}' está abierto en la pestaña {alias}. Cierre la pestaña antes de sustituirlo.",
+
 };
