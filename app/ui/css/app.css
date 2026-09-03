@@ -1782,3 +1782,17 @@ dialog select:focus { outline: none; border-color: var(--amber); }
 /* Fora da página à vista: tracejado, porque a marca na grade não está lá para
    confirmar o número. */
 .atual.fora { border-style: dashed; border-color: var(--line2); color: var(--dim); }
+
+/* Opções que só o CSV tem, e a linha que explica o mapeamento. */
+.ms-check { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; font-size: 12.5px; }
+.ms-check input[type=checkbox] {
+  display: inline-block; width: auto; margin: 0; padding: 0;
+  accent-color: var(--amber); cursor: pointer; flex: none;
+}
+/* COMO os campos serão casados, dito antes de executar: é a diferença entre o
+   dado chegar na coluna certa e na de ao lado. */
+.ms-mapa {
+  margin: 0 0 10px; padding: 7px 10px; border-radius: 5px;
+  background: var(--bg3); border-left: 3px solid var(--amber);
+  font-size: 11.5px; color: var(--dim); line-height: 1.5;
+}

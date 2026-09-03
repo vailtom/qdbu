@@ -856,7 +856,6 @@
   UI_MASS_FORMAT: "Formato",
   UI_FMT_DBF: "DBF (outro arquivo do mesmo tipo)",
   UI_FMT_SDF: "Texto de largura fixa (SDF)",
-  UI_FMT_DELIM: "Texto delimitado",
   UI_MASS_TEXT_NOTE:
     "Arquivos de texto são lidos pelo motor do Harbour, que não informa progresso: a barra não anda e não há como interromper. Em DBF há progresso e cancelamento.",
 
@@ -895,5 +894,33 @@
   UI_CURRENT_RECORD: "reg. {n} de {total}",
   UI_CURRENT_RECORD_HINT: "Registro atual — é daqui que partem \"próximos n\" e \"até o fim\".",
   UI_CURRENT_RECORD_AWAY: "Registro atual, fora da página à vista. Clique para voltar até ele.",
+
+
+  // ------------------------------------- T13: importar de CSV e JSON
+  UI_FMT_CSV: "CSV / texto delimitado",
+  UI_FMT_JSON: "JSON (lista de objetos)",
+  UI_MASS_HAS_HEADER: "A primeira linha é o cabeçalho com os nomes das colunas",
+  UI_MASS_DELIM: "Separador",
+  UI_DELIM_AUTO: "Detectar sozinho",
+  UI_DELIM_SEMI: "Ponto e vírgula  ;",
+  UI_DELIM_COMMA: "Vírgula  ,",
+  UI_DELIM_TAB: "Tabulação",
+
+  UI_MAP_BY_NAME_DBF: "Os campos são casados por NOME. O que não existir dos dois lados fica de fora ou nasce vazio.",
+  UI_MAP_BY_NAME_CSV: "As colunas são casadas por NOME, usando o cabeçalho. Coluna sem campo de mesmo nome é ignorada.",
+  UI_MAP_BY_NAME_JSON: "As chaves de cada objeto são casadas por NOME com os campos. Chave sem campo correspondente é ignorada.",
+  UI_MAP_BY_POSITION: "Sem nomes para casar: a primeira coluna vai no primeiro campo, e assim por diante.",
+
+  ERROR_CSV_UNCLOSED_QUOTE:
+    "'{file}' tem um campo entre aspas que nunca foi fechado — do ponto da aspa até o fim do arquivo viraria um campo só. Confira as aspas.",
+  ERROR_SOURCE_EMPTY: "'{file}' não tem nada a ler.",
+  ERROR_JSON_INVALID: "'{file}' não é um JSON válido.",
+  ERROR_JSON_NOT_ARRAY:
+    "'{file}' precisa ser uma lista de objetos — como a que o próprio Exportar gera.",
+
+  UI_MASS_ENCODING: "Codificação do arquivo",
+  UI_CDP_UTF8: "UTF-8 (o mais comum)",
+  UI_CDP_ANSI: "ANSI / Windows-1252",
+  UI_CDP_CP850: "CP850 (DOS)",
 
 };

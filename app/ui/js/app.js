@@ -5923,9 +5923,28 @@ async function msAbrir() {
 
   const fmt = $("ms-formato");
   fmt.textContent = "";
-  for (const par of [["dbf", "UI_FMT_DBF"], ["sdf", "UI_FMT_SDF"], ["delim", "UI_FMT_DELIM"]]) {
+  for (const par of [["dbf", "UI_FMT_DBF"], ["csv", "UI_FMT_CSV"],
+                     ["json", "UI_FMT_JSON"], ["sdf", "UI_FMT_SDF"]]) {
     fmt.appendChild(new Option(T(par[1]), par[0]));
   }
+
+  /* "Detectar" é o padrão porque acerta sozinho na esmagadora maioria: conta
+     `;` contra `,` na primeira linha. As opções explícitas existem para o
+     arquivo esquisito em que a primeira linha mente. */
+  const del = $("ms-delim");
+  del.textContent = "";
+  for (const par of [["", "UI_DELIM_AUTO"], [";", "UI_DELIM_SEMI"],
+                     [",", "UI_DELIM_COMMA"], ["\t", "UI_DELIM_TAB"]]) {
+    del.appendChild(new Option(T(par[1]), par[0]));
+  }
+  const cdp = $("ms-cdp");
+  cdp.textContent = "";
+  for (const par of [["UTF8", "UI_CDP_UTF8"], ["ANSI", "UI_CDP_ANSI"],
+                     ["CP850", "UI_CDP_CP850"]]) {
+    cdp.appendChild(new Option(T(par[1]), par[0]));
+  }
+
+  $("ms-cabecalho").checked = true;
 
   const modo = $("ms-modo");
   modo.textContent = "";
@@ -5938,7 +5957,15 @@ async function msAbrir() {
   $("ms-origem").value = pastaDe(aba.caminho || "");
   $("ms-for").value = "";
   $("ms-while").value = "";
-  $("ms-n").value = "100";
+  /*
+   * COMEÇA EM 1, e não em 100.
+   *
+   * "Próximos" com 100 pré-carregado é um número que ninguém pediu na frente de
+   * uma operação que apaga: se a pessoa não reparar, deleta 100 registros
+   * achando que confirmou o que estava vendo. 1 é o menor estrago possível e o
+   * significado literal de "o próximo" -- quem quer mais, digita.
+   */
+  $("ms-n").value = "1";
 
   msDesenhar();
   $("dlg-massa").showModal();
@@ -6005,12 +6032,34 @@ function msDesenhar() {
   li.textContent = filtro ? T("UI_MASS_RULE_FILTER", { expr: filtro }) : T("UI_MASS_RULE_NOFILTER");
   li.className = filtro ? "ms-atencao" : "";
 
-  /* Texto de largura fixa e delimitado não passam pelo laço próprio: quem lê é
-     o motor do Harbour, que não tem como informar progresso. Dizer antes é
-     melhor que uma barra que não anda. */
-  const texto = msOp === "appendfrom" && $("ms-formato").value !== "dbf";
-  $("ms-nota-texto").hidden = !texto;
-  if (texto) $("ms-nota-texto").textContent = T("UI_MASS_TEXT_NOTE");
+  /* Cabeçalho e separador só existem em CSV. Num JSON as chaves JÁ são os
+     nomes, e num SDF não há nem uma coisa nem outra. */
+  const ehCsv = msOp === "appendfrom" && $("ms-formato").value === "csv";
+  $("ms-csv").hidden = !ehCsv;
+
+  /*
+   * A NOTA agora é só do SDF, e o motivo mudou.
+   *
+   * Enquanto o delimitado passava pelo `__dbApp`, a nota avisava que não havia
+   * progresso nem cancelamento. CSV e JSON passaram a ter os dois -- são lidos
+   * pelo nosso próprio laço. O SDF continua com o motor do Harbour, e continua
+   * merecendo o aviso.
+   */
+  const semProgresso = msOp === "appendfrom" && $("ms-formato").value === "sdf";
+  $("ms-nota-texto").hidden = !semProgresso;
+  if (semProgresso) $("ms-nota-texto").textContent = T("UI_MASS_TEXT_NOTE");
+
+  /* Como os campos serão casados, dito antes de executar: por NOME quando há
+     cabeçalho ou chaves, por POSIÇÃO quando não há. É a diferença entre o dado
+     chegar na coluna certa e chegar na de ao lado. */
+  const comoMapeia =
+    msOp !== "appendfrom" ? "" :
+    $("ms-formato").value === "dbf" ? "UI_MAP_BY_NAME_DBF" :
+    $("ms-formato").value === "json" ? "UI_MAP_BY_NAME_JSON" :
+    $("ms-formato").value === "sdf" ? "UI_MAP_BY_POSITION" :
+    $("ms-cabecalho").checked ? "UI_MAP_BY_NAME_CSV" : "UI_MAP_BY_POSITION";
+  $("ms-mapa").hidden = !comoMapeia;
+  if (comoMapeia) $("ms-mapa").textContent = T(comoMapeia);
 }
 
 function msEscopo() {
@@ -6061,6 +6110,11 @@ async function msExecutar() {
   } else if (msOp === "appendfrom") {
     params.path = $("ms-origem").value.trim();
     params.format = $("ms-formato").value;
+    if (params.format === "csv") {
+      params.header = $("ms-cabecalho").checked;
+      if ($("ms-delim").value) params.delimiter = $("ms-delim").value;
+      params.encoding = $("ms-cdp").value;
+    }
   }
 
   const arquivo = (aba.info && aba.info.file) || aba.alias;
@@ -6141,10 +6195,25 @@ $("ms-cancelar").addEventListener("click", () => $("dlg-massa").close());
 $("ms-executar").addEventListener("click", msExecutar);
 $("ms-modo").addEventListener("change", msDesenhar);
 $("ms-formato").addEventListener("change", msDesenhar);
+$("ms-cabecalho").addEventListener("change", msDesenhar);
 $("ms-campo").addEventListener("change", msDesenhar);
 
 /* Só dígitos no "quantos", pela mesma razão do editor de estrutura: o campo
    numérico do navegador aceita `e`, `+` e `-`, que aqui não querem dizer nada. */
+/*
+ * O NÚMERO FICA SELECIONADO AO RECEBER O FOCO.
+ *
+ * Sem isto, clicar num campo que vale "1" deixa o cursor ao lado do 1: digitar
+ * "50" produz "501" ou "150", e a pessoa precisa apagar antes de escrever. Com
+ * a seleção, digitar SUBSTITUI -- é o que se espera, e a mesma decisão já
+ * tomada nas células numéricas do editor de estrutura.
+ *
+ * No quadro seguinte, e não dentro do `focus`: chamado direto, o navegador
+ * recolhe a seleção logo depois, ao terminar de processar o foco (e o `mouseup`
+ * do clique). Medido no editor de estrutura, mesmo sintoma.
+ */
+$("ms-n").addEventListener("focus", () => setTimeout(() => $("ms-n").select(), 0));
+
 $("ms-n").addEventListener("input", () => {
   const antes = $("ms-n").value;
   const so = antes.replace(/[^0-9]/g, "");

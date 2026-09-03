@@ -826,7 +826,6 @@
   UI_MASS_FORMAT: "Formato",
   UI_FMT_DBF: "DBF (otro archivo del mismo tipo)",
   UI_FMT_SDF: "Texto de ancho fijo (SDF)",
-  UI_FMT_DELIM: "Texto delimitado",
   UI_MASS_TEXT_NOTE:
     "Los archivos de texto los lee el motor de Harbour, que no informa progreso: la barra no avanza y no hay cómo interrumpir. En DBF hay progreso y cancelación.",
 
@@ -865,5 +864,33 @@
   UI_CURRENT_RECORD: "reg. {n} de {total}",
   UI_CURRENT_RECORD_HINT: "Registro actual — de aquí parten \"próximos n\" y \"hasta el final\".",
   UI_CURRENT_RECORD_AWAY: "Registro actual, fuera de la página visible. Haga clic para volver a él.",
+
+
+  // ------------------------------------- T13: importar de CSV y JSON
+  UI_FMT_CSV: "CSV / texto delimitado",
+  UI_FMT_JSON: "JSON (lista de objetos)",
+  UI_MASS_HAS_HEADER: "La primera línea es el encabezado con los nombres de las columnas",
+  UI_MASS_DELIM: "Separador",
+  UI_DELIM_AUTO: "Detectar solo",
+  UI_DELIM_SEMI: "Punto y coma  ;",
+  UI_DELIM_COMMA: "Coma  ,",
+  UI_DELIM_TAB: "Tabulación",
+
+  UI_MAP_BY_NAME_DBF: "Los campos se emparejan por NOMBRE. Lo que falte de un lado queda fuera o nace vacío.",
+  UI_MAP_BY_NAME_CSV: "Las columnas se emparejan por NOMBRE, usando el encabezado. Una columna sin campo del mismo nombre se ignora.",
+  UI_MAP_BY_NAME_JSON: "Las claves de cada objeto se emparejan por NOMBRE con los campos. Una clave sin campo correspondiente se ignora.",
+  UI_MAP_BY_POSITION: "Sin nombres para emparejar: la primera columna va al primer campo, y así sucesivamente.",
+
+  ERROR_CSV_UNCLOSED_QUOTE:
+    "'{file}' tiene un campo entre comillas que nunca se cerró - desde esa comilla hasta el final del archivo sería un solo campo. Revise las comillas.",
+  ERROR_SOURCE_EMPTY: "'{file}' no tiene nada que leer.",
+  ERROR_JSON_INVALID: "'{file}' no es un JSON válido.",
+  ERROR_JSON_NOT_ARRAY:
+    "'{file}' debe ser una lista de objetos - como la que genera el propio Exportar.",
+
+  UI_MASS_ENCODING: "Codificación del archivo",
+  UI_CDP_UTF8: "UTF-8 (la más común)",
+  UI_CDP_ANSI: "ANSI / Windows-1252",
+  UI_CDP_CP850: "CP850 (DOS)",
 
 };

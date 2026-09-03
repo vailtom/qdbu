@@ -39,6 +39,7 @@ src/util/log.prg
 src/util/job.prg
 src/util/backup.prg
 src/util/scope.prg
+src/util/csv.prg
 src/util/rebind.prg
 
 # api, um arquivo por dominio

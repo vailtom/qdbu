@@ -47,6 +47,16 @@ STATIC FUNCTION ParStr( hP, cChave )
    RETURN iif( HB_ISSTRING( hP[ cChave ] ), hP[ cChave ], "" )
 
 
+STATIC FUNCTION ParLog( hP, cChave, lPadrao )
+
+   IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave ) .OR. ;
+      ! HB_ISLOGICAL( hP[ cChave ] )
+      RETURN hb_defaultValue( lPadrao, .F. )
+   ENDIF
+
+   RETURN hP[ cChave ]
+
+
 STATIC FUNCTION ParHash( hP, cChave )
 
    IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave ) .OR. ;
@@ -280,7 +290,22 @@ FUNCTION Api_Mass_Appendfrom( hP )
       cFmt := "dbf"
    ENDIF
 
-   IF !( cFmt == "dbf" ) .AND. !( cFmt == "sdf" ) .AND. !( cFmt == "delim" )
+   /*
+    * `delim` SAIU, e nao por gosto.
+    *
+    * O RDD DELIM do Harbour trunca no `""` escapado, ignora o `;` como
+    * separador e engole o cabecalho como registro -- as tres medidas em
+    * 03/09/2026. Como o nosso `export.csv` grava com `;` por padrao, exportar e
+    * reimportar destruia o arquivo. O `csv` faz o mesmo trabalho certo, com o
+    * parser do ERP (util/csv.prg). Um pedido antigo com "delim" e aceito e
+    * tratado como "csv", para nao quebrar quem ja chamava assim.
+    */
+   IF cFmt == "delim"
+      cFmt := "csv"
+   ENDIF
+
+   IF !( cFmt == "dbf" ) .AND. !( cFmt == "sdf" ) .AND. ;
+      !( cFmt == "csv" ) .AND. !( cFmt == "json" )
       RETURN Err( "ERROR_FORMAT_UNKNOWN", "unknown source format", "format", ;
                   { "format" => cFmt } )
    ENDIF
@@ -313,18 +338,28 @@ FUNCTION Api_Mass_Appendfrom( hP )
                   { "file" => hb_FNameNameExt( hInfo[ "path" ] ) } )
    ENDIF
 
-   IF cFmt == "dbf"
+   DO CASE
+   CASE cFmt == "dbf"
       hEsc := EscopoPrepara( cH, ParHash( hP, "scope" ), @xErro )
       IF hEsc == NIL
          dbUnlock()
          RETURN xErro
       ENDIF
       xErro := AnexaDeDbf( cArq, hEsc, @nFeitos, @nVistos )
-   ELSE
+
+   CASE cFmt == "csv"
+      xErro := AnexaDeTabela( CsvComoTabela( cArq, hP, @xErro ), hP, ;
+                              @nFeitos, @nVistos, xErro )
+
+   CASE cFmt == "json"
+      xErro := AnexaDeTabela( JsonComoTabela( cArq, @xErro ), hP, ;
+                              @nFeitos, @nVistos, xErro )
+
+   OTHERWISE
       xErro := AnexaDeTexto( cArq, cFmt, ParHash( hP, "scope" ) )
       nFeitos := LastRec() - nAntes
       nVistos := nFeitos
-   ENDIF
+   ENDCASE
 
    dbCommit()
    dbUnlock()
@@ -498,3 +533,287 @@ STATIC FUNCTION AnexaDeTexto( cArq, cFmt, hEscopo )
    Mesmo criterio do `export.dbf` (api_export.prg:416). */
 STATIC FUNCTION MesmoArquivoNoDisco( c1, c2 )
    RETURN Upper( CaminhoOS( c1 ) ) == Upper( CaminhoOS( c2 ) )
+
+
+/*
+ * CSV -> tabela em memoria: { aCabecalho, aLinhas }.
+ *
+ * `aCabecalho` vazio significa "sem cabecalho": o mapeamento entao e por
+ * POSICAO, campo 1 do arquivo no campo 1 do DBF. Com cabecalho, o mapeamento e
+ * por NOME -- o mesmo criterio de identidade que a importacao de DBF e a
+ * alteracao de estrutura usam. Casar por posicao quando ha nome disponivel e a
+ * receita de por o codigo dentro do nome sem erro nenhum.
+ */
+STATIC FUNCTION CsvComoTabela( cArq, hP, xErro )
+
+   LOCAL aLinhas, aCab := {}
+   LOCAL cDelim := ParStr( hP, "delimiter" )
+   LOCAL lCab := ParLog( hP, "header", .T. )
+   LOCAL lAbertas := .F.
+
+   xErro := NIL
+
+   aLinhas := CsvLe( cArq, iif( Empty( cDelim ), NIL, Left( cDelim, 1 ) ), ;
+                     @lAbertas, ParStr( hP, "encoding" ) )
+
+   IF lAbertas
+      xErro := Err( "ERROR_CSV_UNCLOSED_QUOTE", "a quoted field was never closed", ;
+                    "path", { "file" => hb_FNameNameExt( cArq ) } )
+      RETURN NIL
+   ENDIF
+
+   IF Empty( aLinhas )
+      xErro := Err( "ERROR_SOURCE_EMPTY", "nothing to read", "path", ;
+                    { "file" => hb_FNameNameExt( cArq ) } )
+      RETURN NIL
+   ENDIF
+
+   IF lCab
+      aCab := aLinhas[ 1 ]
+      hb_ADel( aLinhas, 1, .T. )
+   ENDIF
+
+   RETURN { aCab, aLinhas }
+
+
+/*
+ * JSON -> tabela. Espera um ARRAY DE OBJETOS, que e o que o nosso export.json
+ * grava -- o par das duas pontas.
+ *
+ * `hb_jsonDecode` TEM UMA ARMADILHA: ele devolve quantos bytes consumiu e
+ * ignora o resto, sem reclamar. Um arquivo truncado pela metade produz um item
+ * indefinido ou uma lista curta, em silencio. O ERP contorna isso procurando
+ * texto cru no buffer antes de confiar no hash (NETATABC.prg:2402). Aqui a
+ * conferencia e do retorno e do tipo, que e mais direto e nao depende do
+ * conteudo.
+ */
+STATIC FUNCTION JsonComoTabela( cArq, xErro )
+
+   LOCAL cTexto := hb_MemoRead( cArq )
+   LOCAL xDados := NIL
+   LOCAL nLidos, aCab := {}, aLinhas := {}, aLinha, hReg, cChave, i
+
+   xErro := NIL
+
+   IF Empty( cTexto )
+      xErro := Err( "ERROR_SOURCE_EMPTY", "nothing to read", "path", ;
+                    { "file" => hb_FNameNameExt( cArq ) } )
+      RETURN NIL
+   ENDIF
+
+   nLidos := hb_jsonDecode( cTexto, @xDados )
+
+   IF nLidos == 0 .OR. xDados == NIL
+      xErro := Err( "ERROR_JSON_INVALID", "not valid JSON", "path", ;
+                    { "file" => hb_FNameNameExt( cArq ) } )
+      RETURN NIL
+   ENDIF
+
+   IF ! HB_ISARRAY( xDados )
+      xErro := Err( "ERROR_JSON_NOT_ARRAY", "expected an array of objects", "path", ;
+                    { "file" => hb_FNameNameExt( cArq ) } )
+      RETURN NIL
+   ENDIF
+
+   /*
+    * O CABECALHO E A UNIAO DAS CHAVES DE TODOS OS OBJETOS, e nao as do
+    * primeiro. JSON e esparso por natureza: um registro pode omitir a chave que
+    * outro traz, e olhar so o primeiro perderia colunas inteiras sem avisar.
+    */
+   FOR EACH hReg IN xDados
+      IF HB_ISHASH( hReg )
+         FOR i := 1 TO Len( hReg )
+            cChave := hb_HKeyAt( hReg, i )
+            IF HB_ISSTRING( cChave ) .AND. ;
+               AScan( aCab, {| c | Upper( c ) == Upper( cChave ) } ) == 0
+               AAdd( aCab, cChave )
+            ENDIF
+         NEXT
+      ENDIF
+   NEXT
+
+   IF Empty( aCab )
+      xErro := Err( "ERROR_JSON_NOT_ARRAY", "expected an array of objects", "path", ;
+                    { "file" => hb_FNameNameExt( cArq ) } )
+      RETURN NIL
+   ENDIF
+
+   /* Cada objeto vira uma linha na ordem do cabecalho; chave ausente vira
+      campo vazio, e nao um deslocamento das colunas seguintes. */
+   /* `AAdd()` devolve O ELEMENTO ADICIONADO, e nao o array -- entao
+      `aLinhas := AAdd( aLinhas, {} )` trocava `aLinhas` pelo {} recem-criado e
+      o `ATail` seguinte caia em NIL. Monta-se a linha inteira e so entao ela
+      entra na lista. */
+   FOR EACH hReg IN xDados
+      aLinha := {}
+      FOR i := 1 TO Len( aCab )
+         AAdd( aLinha, ;
+               iif( HB_ISHASH( hReg ) .AND. hb_HHasKey( hReg, aCab[ i ] ), ;
+                    ComoTexto( hReg[ aCab[ i ] ] ), "" ) )
+      NEXT
+      AAdd( aLinhas, aLinha )
+   NEXT
+
+   RETURN { aCab, aLinhas }
+
+
+/* Qualquer valor do JSON como texto -- a conversao para o tipo do campo e do
+   PoeValor, que ja sabe fazer isso e ja e usado pela alteracao de estrutura. */
+STATIC FUNCTION ComoTexto( x )
+
+   DO CASE
+   CASE x == NIL          ; RETURN ""
+   CASE HB_ISSTRING( x )  ; RETURN x
+   CASE HB_ISNUMERIC( x ) ; RETURN AllTrim( Str( x ) )
+   CASE HB_ISLOGICAL( x ) ; RETURN iif( x, "T", "F" )
+   CASE HB_ISDATE( x )    ; RETURN iif( Empty( x ), "", DToS( x ) )
+   ENDCASE
+
+   /* Objeto ou lista aninhada: volta como JSON. Melhor guardar o texto do que
+      descartar a coluna -- quem importou sabe o que era. */
+   RETURN hb_jsonEncode( x )
+
+
+/*
+ * Grava uma tabela em memoria no DBF aberto.
+ *
+ * Comum a CSV e JSON de proposito: os dois chegam aqui como
+ * { cabecalho, linhas de texto }, e o unico lugar que decide como um texto vira
+ * valor de campo e o `PoeValor` -- o mesmo da alteracao de estrutura. Duas
+ * copias dessa conversao seriam duas respostas diferentes para "o que fazer com
+ * um texto que nao e numero".
+ */
+STATIC FUNCTION AnexaDeTabela( aTab, hP, nFeitos, nVistos, xErro )
+
+   LOCAL aCab, aLinhas, aPara := {}, aLinha
+   LOCAL i, nPos, aEstru, hEsc, nTeto, cTipo
+
+   nFeitos := 0
+   nVistos := 0
+
+   IF aTab == NIL
+      RETURN xErro
+   ENDIF
+
+   aCab := aTab[ 1 ]
+   aLinhas := aTab[ 2 ]
+   aEstru := dbStruct()
+
+   /*
+    * O MAPA, resolvido uma vez.
+    *
+    * Com cabecalho: cada coluna do arquivo procura um campo de MESMO NOME no
+    * destino; a que nao acha e ignorada, e o campo do destino que ninguem
+    * alimenta fica vazio. Sem cabecalho: posicao por posicao, ate acabar o
+    * menor dos dois.
+    */
+   IF Empty( aCab )
+      FOR i := 1 TO Len( aEstru )
+         AAdd( aPara, i )
+      NEXT
+   ELSE
+      FOR i := 1 TO Len( aCab )
+         AAdd( aPara, FieldPos( AllTrim( aCab[ i ] ) ) )
+      NEXT
+   ENDIF
+
+   /* O escopo vale para a ORIGEM, como no caminho DBF: "proximos 10" sao as 10
+      primeiras linhas do arquivo, e nao 10 registros do destino. */
+   hEsc := ParHash( hP, "scope" )
+   nTeto := 0
+   IF HB_ISHASH( hEsc ) .AND. hb_HHasKey( hEsc, "mode" ) .AND. ;
+      HB_ISSTRING( hEsc[ "mode" ] ) .AND. Lower( hEsc[ "mode" ] ) == "next" .AND. ;
+      hb_HHasKey( hEsc, "n" ) .AND. HB_ISNUMERIC( hEsc[ "n" ] )
+      nTeto := Int( hEsc[ "n" ] )
+   ENDIF
+
+   Dbu_JobBegin( JobMsg( "UI_JOB_APPENDING", Alias() ), Len( aLinhas ) )
+
+   FOR EACH aLinha IN aLinhas
+
+      nVistos++
+
+      dbAppend()
+      IF NetErr()
+         Dbu_JobEnd()
+         RETURN Err( "ERROR_APPEND_FAILED", "could not add a record", "h" )
+      ENDIF
+
+      FOR i := 1 TO Len( aLinha )
+         nPos := iif( i <= Len( aPara ), aPara[ i ], 0 )
+         IF nPos > 0 .AND. nPos <= Len( aEstru )
+            cTipo := aEstru[ nPos ][ DBS_TYPE ]
+            PoeTexto( nPos, aLinha[ i ], cTipo )
+         ENDIF
+      NEXT
+
+      nFeitos++
+
+      IF nTeto > 0 .AND. nVistos >= nTeto
+         EXIT
+      ENDIF
+
+      IF nVistos % 500 == 0
+         Dbu_Progress( nVistos )
+         IF Dbu_Canceled()
+            Dbu_JobEnd()
+            RETURN Err( "WARN_CANCELED_BULK", "canceled by user", , ;
+                        { "n" => nFeitos } )
+         ENDIF
+      ENDIF
+   NEXT
+
+   Dbu_JobEnd()
+
+   RETURN NIL
+
+
+/* Texto -> campo, convertendo pelo tipo do destino. Reusa a mesma tabela de
+   conversao da alteracao de estrutura (api_struct.prg), para "ABC" num campo
+   numerico dar o mesmo resultado nos dois caminhos. */
+STATIC FUNCTION PoeTexto( nPos, cTexto, cTipo )
+
+   LOCAL xVal
+
+   DO CASE
+   CASE cTipo == "C" .OR. cTipo == "M"
+      xVal := cTexto
+
+   CASE cTipo == "N"
+      xVal := Val( StrTran( cTexto, ",", "." ) )
+
+   CASE cTipo == "D"
+      xVal := iif( Len( cTexto ) == 8 .AND. SoDigitos( cTexto ), ;
+                   SToD( cTexto ), CToD( cTexto ) )
+
+   CASE cTipo == "L"
+      xVal := Upper( Left( AllTrim( cTexto ), 1 ) ) $ "TSY1"
+
+   OTHERWISE
+      RETURN .F.
+   ENDCASE
+
+   BEGIN SEQUENCE WITH {| e | Break( e ) }
+      FieldPut( nPos, xVal )
+   RECOVER
+      RETURN .F.
+   END SEQUENCE
+
+   RETURN .T.
+
+
+STATIC FUNCTION SoDigitos( c )
+
+   LOCAL i
+
+   IF Empty( c )
+      RETURN .F.
+   ENDIF
+
+   FOR i := 1 TO Len( c )
+      IF ! ( SubStr( c, i, 1 ) $ "0123456789" )
+         RETURN .F.
+      ENDIF
+   NEXT
+
+   RETURN .T.

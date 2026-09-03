@@ -830,7 +830,6 @@
   UI_MASS_FORMAT: "Format",
   UI_FMT_DBF: "DBF (another file of the same kind)",
   UI_FMT_SDF: "Fixed-width text (SDF)",
-  UI_FMT_DELIM: "Delimited text",
   UI_MASS_TEXT_NOTE:
     "Text files are read by Harbour own engine, which reports no progress: the bar does not move and there is no way to stop. DBF has progress and cancelling.",
 
@@ -869,5 +868,33 @@
   UI_CURRENT_RECORD: "rec. {n} of {total}",
   UI_CURRENT_RECORD_HINT: "Current record — this is where \"next n\" and \"to the end\" start.",
   UI_CURRENT_RECORD_AWAY: "Current record, off the visible page. Click to go back to it.",
+
+
+  // ------------------------------------- T13: import from CSV and JSON
+  UI_FMT_CSV: "CSV / delimited text",
+  UI_FMT_JSON: "JSON (list of objects)",
+  UI_MASS_HAS_HEADER: "The first line is the header with the column names",
+  UI_MASS_DELIM: "Separator",
+  UI_DELIM_AUTO: "Detect it",
+  UI_DELIM_SEMI: "Semicolon  ;",
+  UI_DELIM_COMMA: "Comma  ,",
+  UI_DELIM_TAB: "Tab",
+
+  UI_MAP_BY_NAME_DBF: "Fields are matched by NAME. Whatever is missing on either side is left out or comes in empty.",
+  UI_MAP_BY_NAME_CSV: "Columns are matched by NAME, using the header. A column with no field of the same name is ignored.",
+  UI_MAP_BY_NAME_JSON: "Each object key is matched by NAME against the fields. A key with no matching field is ignored.",
+  UI_MAP_BY_POSITION: "No names to match: the first column goes into the first field, and so on.",
+
+  ERROR_CSV_UNCLOSED_QUOTE:
+    "'{file}' has a quoted field that was never closed - from that quote to the end of the file would become a single field. Check the quotes.",
+  ERROR_SOURCE_EMPTY: "'{file}' has nothing to read.",
+  ERROR_JSON_INVALID: "'{file}' is not valid JSON.",
+  ERROR_JSON_NOT_ARRAY:
+    "'{file}' must be a list of objects - like the one Export itself writes.",
+
+  UI_MASS_ENCODING: "File encoding",
+  UI_CDP_UTF8: "UTF-8 (most common)",
+  UI_CDP_ANSI: "ANSI / Windows-1252",
+  UI_CDP_CP850: "CP850 (DOS)",
 
 };

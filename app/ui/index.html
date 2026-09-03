@@ -515,6 +515,25 @@
       <label class="ms-linha"><span data-i18n="UI_MASS_FORMAT"></span>
         <select id="ms-formato"></select>
       </label>
+
+      <!-- Só para CSV: o cabeçalho é o que permite mapear por NOME, e o
+           separador é detectado sozinho mas pode ser forçado. -->
+      <div id="ms-csv" hidden>
+        <label class="ms-check">
+          <input type="checkbox" id="ms-cabecalho" checked>
+          <span data-i18n="UI_MASS_HAS_HEADER"></span>
+        </label>
+        <label class="ms-linha"><span data-i18n="UI_MASS_DELIM"></span>
+          <select id="ms-delim"></select>
+        </label>
+        <!-- A codificação do ARQUIVO. Sem ela, acento vira lixo em silêncio: o
+             DBF fala CP850 e o mundo manda UTF-8. -->
+        <label class="ms-linha"><span data-i18n="UI_MASS_ENCODING"></span>
+          <select id="ms-cdp"></select>
+        </label>
+      </div>
+
+      <p class="ms-mapa" id="ms-mapa" hidden></p>
       <p class="ms-nota" id="ms-nota-texto" hidden></p>
     </div>
 
