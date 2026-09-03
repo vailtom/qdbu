@@ -608,6 +608,29 @@ function desenharEditor() {
 }
 
 /* Mudou em relação ao que está no disco? */
+/*
+ * A ORDEM DOS CAMPOS MUDOU?
+ *
+ * COMPARA SEQUÊNCIAS, e não índices. Pôr o rascunho vivo lado a lado com
+ * `esOriginal` posição a posição dá certo enquanto ninguém remove nada: remover
+ * encurta a lista viva, todo mundo depois anda uma casa, e a comparação acusa
+ * "a ordem mudou" sobre uma alteração que não mexeu na ordem de nada.
+ *
+ * O certo é comparar as duas sequências de nomes ORIGINAIS dos sobreviventes: a
+ * ordem em que estão agora contra a ordem em que estavam.
+ *
+ * MORA AQUI, sozinha, porque duas telas dependem dela -- o bloco de impacto e o
+ * botão Aplicar. Enquanto cada uma tinha a sua conta, o impacto anunciava a
+ * reordenação e o botão continuava travado dizendo "nada foi alterado":
+ * arrastar campos de lugar era a única alteração que não dava para aplicar.
+ */
+function esOrdemMudou() {
+  if (!esRascunho || !esOriginal) return false;
+  const vivos = esRascunho.filter((c) => !c._removido && c._de).map((c) => c._de.name);
+  const antes = esOriginal.map((c) => c.name).filter((n) => vivos.indexOf(n) >= 0);
+  return vivos.join(" ") !== antes.join(" ");
+}
+
 function esMudou(c) {
   if (!c._de) return false;
   return ["name", "type", "len", "dec"].some((k) => String(c[k]) !== String(c._de[k]));
@@ -942,7 +965,8 @@ function esResumo() {
   const vivos = esRascunho.filter((c) => !c._removido);
   const achados = esListaErros();
   const bytes = esTamanhoRegistro(esRascunho);
-  const mudou = esRascunho.some((c) => c._removido || !c._de || esMudou(c));
+  const mudou =
+    esRascunho.some((c) => c._removido || !c._de || esMudou(c)) || esOrdemMudou();
 
   /*
    * A BARRA NÃO REPETE O ERRO.
@@ -5186,21 +5210,7 @@ function esImpacto() {
     }
   }
 
-  /*
-   * REORDENAR É COMPARAR SEQUÊNCIAS, e a versão anterior comparava índices.
-   *
-   * Ela punha o rascunho vivo lado a lado com `esOriginal` posição a posição --
-   * o que dá certo enquanto ninguém remove nada. Remover um campo encurta a
-   * lista viva, todo mundo depois dele anda uma casa, e a comparação acusava
-   * "a ordem mudou" sobre uma alteração que não mexeu na ordem de nada. Um
-   * aviso que aparece quando não devia ensina a ignorar os avisos.
-   *
-   * O certo é comparar as duas sequências de nomes ORIGINAIS dos sobreviventes:
-   * a ordem em que eles estão agora contra a ordem em que estavam.
-   */
-  const vivos = esRascunho.filter((c) => !c._removido && c._de).map((c) => c._de.name);
-  const antes = esOriginal.map((c) => c.name).filter((n) => vivos.indexOf(n) >= 0);
-  if (vivos.join(" ") !== antes.join(" ")) {
+  if (esOrdemMudou()) {
     itens.push({ grave: false, chave: "UI_IMPACT_REORDERED", p: {} });
   }
 
