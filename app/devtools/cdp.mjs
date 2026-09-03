@@ -154,14 +154,87 @@ async function main() {
           : "document.body.innerHTML"
       );
       break;
-    case "click":
-      out = await avaliar(
+    /*
+     * TECLA DE VERDADE, pelo `Input.dispatchKeyEvent`.
+     *
+     * `new KeyboardEvent("keydown", {key:"Tab"})` NAO move o foco: eventos
+     * sinteticos nao disparam o comportamento padrao do navegador. Um teste de
+     * tabulacao feito assim aprova qualquer coisa, porque o foco simplesmente
+     * nao anda. O `Input.*` do CDP entra antes do navegador e produz a tecla
+     * real -- e e a unica forma de conferir ordem de tabulacao.
+     */
+    case "key": {
+      const nome = args[0] || "Tab";
+      const mapa = {
+        Tab: { code: "Tab", key: "Tab", windowsVirtualKeyCode: 9 },
+        Enter: { code: "Enter", key: "Enter", windowsVirtualKeyCode: 13 },
+        Escape: { code: "Escape", key: "Escape", windowsVirtualKeyCode: 27 },
+        ArrowDown: { code: "ArrowDown", key: "ArrowDown", windowsVirtualKeyCode: 40 },
+        ArrowUp: { code: "ArrowUp", key: "ArrowUp", windowsVirtualKeyCode: 38 },
+      };
+      const t = mapa[nome];
+      if (!t) { out = "tecla desconhecida: " + nome + " (use " + Object.keys(mapa).join("|") + ")"; break; }
+      const mod = args[1] === "shift" ? 8 : 0;
+      await enviar(ws, "Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: mod, ...t });
+      await enviar(ws, "Input.dispatchKeyEvent", { type: "keyUp", modifiers: mod, ...t });
+      out = "tecla: " + (mod ? "Shift+" : "") + nome;
+      break;
+    }
+
+    /*
+     * TEXTO DIGITADO TECLA A TECLA, pelo `Input.insertText`.
+     *
+     * Diferente do `fill`, que escreve `.value` de uma vez: aqui o texto entra
+     * como se viesse do teclado, no elemento que ESTA COM O FOCO. E o unico
+     * jeito de exercitar o caminho que a pessoa percorre depois de o app mover
+     * o cursor sozinho.
+     */
+    case "type":
+      await enviar(ws, "Input.insertText", { text: args[0] ?? "" });
+      out = "digitado: " + (args[0] ?? "");
+      break;
+
+    /*
+     * CLIQUE DE MOUSE DE VERDADE, nas coordenadas do elemento.
+     *
+     * `HTMLElement.click()` dispara o EVENTO de clique e nada mais -- em
+     * particular, NAO da foco. Num botao isso passa despercebido, porque o
+     * manipulador roda igual; num <input> engana: o teste "clica" no campo, o
+     * foco continua onde estava, e qualquer conferencia de tabulacao a seguir
+     * mede outra coisa. O `Input.dispatchMouseEvent` entra antes do navegador e
+     * produz o clique real, com foco e tudo.
+     *
+     * Elemento sem caixa (escondido, ou fora da area visivel) nao tem
+     * coordenada: ai cai no `.click()`, dizendo que caiu.
+     */
+    case "click": {
+      const caixa = await avaliar(
         ws,
         `(() => { const e = document.querySelector(${j(args[0])});
-           if (!e) return "elemento nao encontrado: " + ${j(args[0])};
-           e.click(); return "clicado: " + (e.textContent||e.id||e.tagName).trim(); })()`
+           if (!e) return null;
+           e.scrollIntoView({block:"nearest"});
+           const r = e.getBoundingClientRect();
+           return { x: r.left + r.width/2, y: r.top + r.height/2,
+                    w: r.width, h: r.height,
+                    nome: (e.textContent||e.id||e.tagName).trim().slice(0,40) }; })()`
       );
+      if (!caixa) { out = "elemento nao encontrado: " + args[0]; break; }
+      if (caixa.w === 0 || caixa.h === 0) {
+        out = await avaliar(
+          ws,
+          `(() => { const e = document.querySelector(${j(args[0])});
+             e.click(); return "clicado (sem caixa, via .click()): " + ${j(args[0])}; })()`
+        );
+        break;
+      }
+      for (const type of ["mousePressed", "mouseReleased"]) {
+        await enviar(ws, "Input.dispatchMouseEvent", {
+          type, x: caixa.x, y: caixa.y, button: "left", clickCount: 1,
+        });
+      }
+      out = "clicado: " + caixa.nome;
       break;
+    }
     case "fill":
       /*
        * DISPARA `input` E `change`, nesta ordem -- e a ordem e o que o
@@ -190,7 +263,7 @@ async function main() {
       break;
     default:
       console.error(
-        "comandos: eval | evalfile | text | html | click | fill | shot | reload | logs"
+        "comandos: eval | evalfile | text | html | click | fill | key | type | shot | reload | logs"
       );
       process.exitCode = 2;
       return;

@@ -752,9 +752,10 @@ function esCelula(c, campo, tipo, ruim, classe, travado) {
     esMarcaDaLinha(c, i);
     esResumo();
   });
-  /* No `change` (ao sair do campo) a tabela se redesenha: é quando a validação
-     cruzada — nome duplicado com OUTRA linha — precisa aparecer nas duas. */
-  inp.addEventListener("change", () => desenharEditor());
+  /* No `change` (ao sair do campo) roda a validação CRUZADA -- nome duplicado
+     com OUTRA linha precisa aparecer nas duas. Sem reconstruir a tabela: ver
+     `esRevalidar()`, e o Tab que voltava para o topo. */
+  inp.addEventListener("change", () => esRevalidar());
   td.appendChild(inp);
   return td;
 }
@@ -784,7 +785,9 @@ function esCelulaTipo(c) {
     // `dec` só tem significado em N. Em C ele era parte da largura no Clipper,
     // mas aqui a largura vai inteira em `len` — ver esValidaCampo().
     if (c.type !== "N") c.dec = 0;
-    desenharEditor();
+    /* Sem reconstruir: quem acabou de escolher o tipo costuma seguir de Tab
+       para o tamanho, e recriar os campos aqui jogaria o foco para o topo. */
+    esRevalidar();
   });
   td.appendChild(sel);
   return td;
@@ -869,6 +872,56 @@ function esListaErros() {
 }
 
 /* Atualiza só a marca de estado da linha, sem recriar nada. */
+/*
+ * REVALIDA TUDO SEM RECONSTRUIR A TABELA.
+ *
+ * O `change` (sair do campo) precisa rodar a validação CRUZADA -- nome
+ * duplicado envolve DUAS linhas, e marcar só a que se está editando deixa a
+ * outra limpa. A primeira versão resolvia isso chamando `desenharEditor()`, que
+ * refaz a tabela inteira.
+ *
+ * E refazer a tabela DESTRÓI O FOCO. Tab dispara `blur` -> `change` -> os
+ * `<input>` são recriados, o elemento que o navegador ia focar em seguida deixa
+ * de existir, e a tabulação recomeça do topo da página. Foi o que o autor
+ * relatou: criar um campo, digitar o nome, dar Tab, e o cursor saltar para o
+ * começo da lista em vez de ir para a coluna do tipo.
+ *
+ * Aqui nada é criado nem removido: os mesmos elementos são atualizados no
+ * lugar. O foco e a ordem de tabulação sobrevivem porque o DOM não muda de
+ * forma. Só as OPERAÇÕES DE ESTRUTURA -- adicionar, inserir, remover, mover --
+ * continuam chamando `desenharEditor()`, e nelas a tabela muda mesmo.
+ */
+function esRevalidar() {
+  if (!esRascunho) return;
+
+  esRascunho.forEach((c, i) => {
+    const tr = $("ed-estrutura").querySelector('tbody tr[data-i="' + i + '"]');
+    if (!tr) return;
+
+    const erros = c._removido ? [] : esValidaCampo(c, esRascunho, i);
+    const inps = tr.querySelectorAll("input");
+    const marca = (inp, chave) => {
+      if (inp) inp.classList.toggle("ruim", erros.some((e) => e.includes(chave)));
+    };
+    marca(inps[0], "NAME");
+    marca(inps[1], "LEN");
+    marca(inps[2], "DEC");
+
+    /* O tipo pode ter mudado por outra célula (o combo ajusta `len` e `dec`
+       sozinho): os campos numéricos são reescritos a partir do modelo, e a
+       trava acompanha. Não se toca no campo que está sendo digitado. */
+    if (inps[1] && document.activeElement !== inps[1]) inps[1].value = c.len;
+    if (inps[2] && document.activeElement !== inps[2]) inps[2].value = c.dec;
+    if (inps[1]) inps[1].disabled = !!c._removido || "DLM".includes(c.type);
+    if (inps[2]) inps[2].disabled = !!c._removido || c.type !== "N";
+
+    tr.title = erros.length ? erros.map((e) => T(e)).join(" · ") : "";
+    esMarcaDaLinha(c, i);
+  });
+
+  esResumo();
+}
+
 function esMarcaDaLinha(c, i) {
   const tr = $("ed-estrutura").querySelector('tbody tr[data-i="' + i + '"]');
   if (!tr) return;
