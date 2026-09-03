@@ -137,14 +137,34 @@ FUNCTION Desligar( hEstado, lFecharIndices )
  * tudo voltou. Nunca levanta erro: a operacao ja aconteceu, e recusar-se a
  * religar deixaria o usuario pior do que religar pela metade.
  */
-FUNCTION Religar( hEstado )
+FUNCTION Religar( hEstado, lSemIndices )
 
    LOCAL aFalhas := {}
    LOCAL hIdx, nOrdem := 0, i
 
+   /*
+    * `lSemIndices` e o caminho da ALTERACAO DE ESTRUTURA.
+    *
+    * Ali o arquivo nao foi so reescrito: ele e outro. Um .NTX aponta para
+    * numeros de registro E guarda os valores da chave que existiam antes --
+    * encolher um campo, trocar seu tipo ou remove-lo torna esses valores
+    * mentira. E a mentira e silenciosa: como os RecNo() foram preservados, o
+    * indice continua ABRINDO e a leitura continua RESPONDENDO, so que na ordem
+    * errada, e um dbSeek acha o registro errado. Pior ainda quando a chave cita
+    * um campo que nao existe mais.
+    *
+    * Por isso aqui eles nao voltam. Quem chama recebe a lista e avisa a pessoa
+    * para reconstruir -- a tela de criar indice ja existe. Reconstruir sozinho
+    * seria tentador e errado: e uma tarefa de minutos num arquivo grande, e nem
+    * sempre possivel (chave sobre campo removido nao compila mais).
+    */
+   IF ! HB_ISLOGICAL( lSemIndices )
+      lSemIndices := .F.
+   ENDIF
+
    /* 1. Indices. Reabre pelo caminho; se o arquivo sumiu ou recusa, registra e
          segue -- o proximo pode funcionar. */
-   IF Len( hEstado[ "indexes" ] ) > 0 .AND. ordCount() == 0
+   IF ! lSemIndices .AND. Len( hEstado[ "indexes" ] ) > 0 .AND. ordCount() == 0
       FOR EACH hIdx IN hEstado[ "indexes" ]
          BEGIN SEQUENCE WITH {| e | Break( e ) }
             ordListAdd( hIdx[ "path" ] )
@@ -162,7 +182,7 @@ FUNCTION Religar( hEstado )
          voltou, o numero 3 passou a ser outro indice -- e trocar a ordem sem
          avisar e o tipo de erro que so aparece na tela como "os dados estao
          fora de ordem". */
-   IF hEstado[ "order" ] > 0
+   IF ! lSemIndices .AND. hEstado[ "order" ] > 0
       FOR i := 1 TO ordCount()
          IF Upper( AllTrim( NomeDaOrdemNo( i ) ) ) == ;
             Upper( AllTrim( NomeDaOrdemDoEstado( hEstado ) ) )
@@ -383,3 +403,54 @@ STATIC FUNCTION CaminhoDoBagReg( cBag, aReg )
    ENDIF
 
    RETURN hb_defaultValue( cBag, "" )
+
+
+/*
+ * Reabre a area depois de uma operacao exclusiva e religa o estado (R5/R6).
+ *
+ * MORA AQUI, e nao na tela que a usa, porque tres telas fazem exatamente esta
+ * mesma sequencia -- PACK/ZAP, alterar estrutura, e o que vier -- e uma copia
+ * de cada e uma chance de a copia divergir no dia em que a regra mudar. E a
+ * regra e delicada: quando NAO se consegue reabrir, o handle nao pode virar um
+ * erro passageiro; ele vira `detached`, um ESTADO, e a tela tem de oferecer
+ * reconectar. Ver R6 em docs/10-integridade.md.
+ *
+ * `xErroOriginal` volta intacto: quem chama ja tinha um erro para propagar e
+ * nao quer que a reabertura o engula. Se a reabertura TAMBEM falhar, o erro
+ * dela ganha -- perder o arquivo e mais grave que a causa que levou ate aqui.
+ */
+/*
+ * Devolve o arquivo ao modo de trabalho e religa o ambiente.
+ *
+ * CHAMADA EM TODO CAMINHO DE SAIDA, inclusive nos de erro. Desligar e nao
+ * religar deixaria a tela pior do que antes de tentar -- e e por isso que ela
+ * recebe o erro a propagar em vez de quem chama fazer as duas coisas: ter de
+ * lembrar de religar antes de cada RETURN e o tipo de coisa que se esquece.
+ *
+ * Se nem o modo anterior voltar, o handle vira `detached` (R6): a aba fica na
+ * tela, marcada, com o motivo, e a grade e descartada.
+ */
+FUNCTION ReabreArea( cH, cArq, cAlias, lModo, hEstado, xErroOriginal, lSemIndices )
+
+   LOCAL nWa
+
+   /* Se a area continua aberta (caminho de sucesso do PACK), fecha primeiro:
+      voltar ao compartilhado exige largar o exclusivo. */
+   IF ! Empty( Alias() )
+      dbCloseArea()
+   ENDIF
+
+   nWa := AbreNaArea( cArq, cAlias, lModo )
+
+   IF nWa == 0
+      SessDetach( cH, "ERROR_REOPEN_FAILED" )
+      RETURN Err( "ERROR_HANDLE_DETACHED", "could not reopen after the operation", "h", ;
+                  { "handle" => cH, ;
+                    "file"   => hb_FNameNameExt( cArq ), ;
+                    "why"    => "ERROR_REOPEN_FAILED" } )
+   ENDIF
+
+   SessReattach( cH, nWa, lModo )
+   Religar( hEstado, lSemIndices )
+
+   RETURN xErroOriginal

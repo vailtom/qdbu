@@ -142,7 +142,7 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
        * melhor recusar que operar com alguem lendo.
        */
       IF FRename( cArq, cBackup ) != 0
-         RETURN Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
+         RETURN ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
                         Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "rename failed", "h", ;
                              { "file" => hb_FNameNameExt( cArq ) } ) )
       ENDIF
@@ -160,12 +160,12 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
          /* Nao conseguiu criar o vazio: DESFAZ a renomeacao. Deixar o usuario
             sem o arquivo no lugar dele seria o pior desfecho possivel. */
          FRename( cBackup, cArq )
-         RETURN Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
+         RETURN ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
                         Err( "ERROR_ZAP_CREATE_FAILED", "could not create the empty file", ;
                              "h", { "file" => hb_FNameNameExt( cArq ) } ) )
       END SEQUENCE
 
-      xErro := Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+      xErro := ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
       IF xErro != NIL
          RETURN xErro
       ENDIF
@@ -183,7 +183,7 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
    nWa := AbreNaArea( cArq, cAlias, .T. )      /* EXCLUSIVO */
 
    IF nWa == 0
-      RETURN Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
+      RETURN ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
                      Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "another program is using it", ;
                           "h", { "file" => hb_FNameNameExt( cArq ) } ) )
    ENDIF
@@ -200,7 +200,7 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
       IF xErro != NIL
          /* Backup falhou: NAO opera. R4 -- backup antes, e se nao houve backup
             nao ha operacao. */
-         Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+         ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
          RETURN xErro
       ENDIF
    ENDIF
@@ -217,14 +217,14 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
       dbCommit()
    RECOVER
       Dbu_JobEnd()
-      Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+      ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
       RETURN Err( iif( cAcao == "pack", "ERROR_PACK_FAILED", "ERROR_ZAP_FAILED" ), ;
                   "operation failed", "h", { "file" => hb_FNameNameExt( cArq ) } )
    END SEQUENCE
 
    nDepois := LastRec()
 
-   xErro := Reabre( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+   xErro := ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
    IF xErro != NIL
       RETURN xErro
    ENDIF
@@ -241,38 +241,3 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
                 "removed"  => Max( 0, nAntes - nDepois ) } )
 
 
-/*
- * Devolve o arquivo ao modo de trabalho e religa o ambiente.
- *
- * CHAMADA EM TODO CAMINHO DE SAIDA, inclusive nos de erro. Desligar e nao
- * religar deixaria a tela pior do que antes de tentar -- e e por isso que ela
- * recebe o erro a propagar em vez de quem chama fazer as duas coisas: ter de
- * lembrar de religar antes de cada RETURN e o tipo de coisa que se esquece.
- *
- * Se nem o modo anterior voltar, o handle vira `detached` (R6): a aba fica na
- * tela, marcada, com o motivo, e a grade e descartada.
- */
-STATIC FUNCTION Reabre( cH, cArq, cAlias, lModo, hEstado, xErroOriginal )
-
-   LOCAL nWa
-
-   /* Se a area continua aberta (caminho de sucesso do PACK), fecha primeiro:
-      voltar ao compartilhado exige largar o exclusivo. */
-   IF ! Empty( Alias() )
-      dbCloseArea()
-   ENDIF
-
-   nWa := AbreNaArea( cArq, cAlias, lModo )
-
-   IF nWa == 0
-      SessDetach( cH, "ERROR_REOPEN_FAILED" )
-      RETURN Err( "ERROR_HANDLE_DETACHED", "could not reopen after the operation", "h", ;
-                  { "handle" => cH, ;
-                    "file"   => hb_FNameNameExt( cArq ), ;
-                    "why"    => "ERROR_REOPEN_FAILED" } )
-   ENDIF
-
-   SessReattach( cH, nWa, lModo )
-   Religar( hEstado )
-
-   RETURN xErroOriginal

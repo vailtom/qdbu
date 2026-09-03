@@ -573,8 +573,14 @@ function desenharEstrutura(a) {
 
     tr.appendChild(esCelulaNome(c, erros));
     tr.appendChild(esCelulaTipo(c));
-    tr.appendChild(esCelula(c, "len", "number", erros.some((e) => e.includes("LEN")), "num"));
-    tr.appendChild(esCelula(c, "dec", "number", erros.some((e) => e.includes("DEC")), "num"));
+    /* Tamanho e decimais que o TIPO já decide ficam desabilitados, e não só
+       ignorados: um campo editável cujo valor a validação depois descarta
+       convida a pessoa a digitar algo que some sem explicação. Data, lógico e
+       memo têm largura fixa; decimais só existem em numérico. */
+    tr.appendChild(esCelula(c, "len", "number", erros.some((e) => e.includes("LEN")),
+                            "num", "DLM".includes(c.type)));
+    tr.appendChild(esCelula(c, "dec", "number", erros.some((e) => e.includes("DEC")),
+                            "num", c.type !== "N"));
 
     if (erros.length) tr.title = erros.map((e) => T(e)).join(" · ");
     corpo.appendChild(tr);
@@ -610,7 +616,7 @@ function esCelulaNome(c, erros) {
   return td;
 }
 
-function esCelula(c, campo, tipo, ruim, classe) {
+function esCelula(c, campo, tipo, ruim, classe, travado) {
   const td = elemento("td", classe || "");
   const inp = document.createElement("input");
   /*
@@ -634,7 +640,7 @@ function esCelula(c, campo, tipo, ruim, classe) {
     inp.type = tipo;
   }
   inp.value = c[campo];
-  inp.disabled = !!c._removido;
+  inp.disabled = !!c._removido || !!travado;
   if (ruim) inp.className = "ruim";
 
   /*
@@ -800,8 +806,25 @@ function esListaErros() {
     });
   });
 
-  $("es-erros").hidden = achados.length === 0;
-  $("es-erros-titulo").textContent = T("UI_STRUCT_ERRORS", { n: achados.length }) + ":";
+  /*
+   * NENHUM CAMPO é um erro por si, e sem esta linha ele não aparecia em lugar
+   * nenhum: a lista de achados percorre os campos, e uma lista vazia não tem o
+   * que reprovar. O botão ficava liberado sobre uma estrutura impossível; a DLL
+   * recusava, mas só depois de o usuário confirmar duas perguntas e esperar.
+   */
+  const vazio = (esRascunho || []).every((c) => c._removido);
+
+  $("es-erros").hidden = achados.length === 0 && !vazio;
+  $("es-erros-titulo").textContent =
+    (vazio ? T("UI_STRUCT_EMPTY") : T("UI_STRUCT_ERRORS", { n: achados.length })) + ":";
+
+  /* Sem campo nenhum não há campo a citar: a linha é a instrução, sem o botão
+     de nome que as outras têm para levar o foco até a célula culpada. */
+  if (vazio) {
+    ul.appendChild(elemento("li", "", T("UI_STRUCT_EMPTY_HINT")));
+    achados.push({ i: 0, campo: "", erro: "ERROR_NO_FIELDS", texto: "" });
+    return achados;
+  }
 
   for (const a of achados) {
     const li = document.createElement("li");
@@ -5178,22 +5201,141 @@ $("es-down").addEventListener("click", () => esMove(1));
  * cliente ainda não existe. Dizer isso em voz alta é melhor que um botão que
  * não faz nada, e melhor que implementar antes de o desenho ser aprovado.
  */
+/*
+ * Aplicar a estrutura nova sobre um arquivo que JÁ TEM DADOS.
+ *
+ * É a operação mais perigosa da ferramenta inteira, e por isso ela pergunta
+ * duas vezes: primeiro mostra o que vai acontecer com os dados (o mesmo bloco
+ * de impacto que já está na tela, repetido aqui porque quem clica em "Aplicar"
+ * pode não ter rolado até ele), depois oferece o backup.
+ *
+ * O que sai daqui para a DLL é a lista de campos com `from` -- o nome ORIGINAL
+ * de cada um. É `from` que faz reordenar e renomear serem seguros: a DLL casa
+ * origem e destino por esse nome, nunca por posição.
+ */
+async function esAplicar() {
+  const aba = abas.find((a) => a.h === abaAtiva);
+  if (!aba || aba.detached || !esRascunho) return;
+
+  const arquivo = (aba.info && aba.info.file) || aba.alias;
+  const graves = esImpacto().filter((i) => i.grave);
+
+  const aviso = await Swal.fire(
+    swalBase({
+      icon: graves.length ? "warning" : "question",
+      title: T("UI_MODIFY_TITLE"),
+      html:
+        escapaHtml(T("UI_MODIFY_ASK", { file: arquivo, n: (aba.info && aba.info.records) || 0 })) +
+        (graves.length
+          ? '<ul class="sw-lista">' +
+            graves.map((i) => "<li>" + escapaHtml(T(i.chave, i.p)) + "</li>").join("") +
+            "</ul>"
+          : ""),
+      showCancelButton: true,
+      confirmButtonText: T("UI_GO_AHEAD"),
+      cancelButtonText: T("UI_CANCEL"),
+    })
+  );
+  if (!aviso.isConfirmed) return;
+
+  const comBackup = await perguntarBackup();
+  if (comBackup === null) return;
+
+  const campos = esRascunho
+    .filter((c) => !c._removido)
+    .map((c) => ({
+      name: c.name,
+      type: c.type,
+      len: c.len,
+      dec: c.dec,
+      // Campo novo não tem origem: nasce vazio em todos os registros.
+      from: c._de ? c._de.name : "",
+    }));
+
+  try {
+    const r = await comProgresso(
+      DBU.rpc("struct.modify", { h: abaAtiva, fields: campos, backup: comBackup })
+    );
+
+    esEntrarNoModo(false);
+    // A grade em cache é da estrutura velha -- as colunas mudaram de nome.
+    gradeDe.delete(abaAtiva);
+    colunasDe.delete(abaAtiva);
+    await repintarDoEstado();
+
+    await Swal.fire(
+      swalBase({
+        icon: r.conversions ? "warning" : "success",
+        title: T("UI_DONE"),
+        html: escapaHtml(
+          T("UI_MODIFY_OK", { file: r.file, n: r.after }) +
+            " " + T("UI_MODIFY_FIELDS", { n: r.fields }) +
+            (r.backup ? " " + T("UI_MODIFY_BACKUP", { file: r.backup }) : "") +
+            (r.conversions ? " " + T("UI_MODIFY_LOST", { n: r.conversions }) : "")
+        ) +
+          /* Os índices caíram, e dizer QUAIS é o que permite reconstruí-los.
+             Vai em bloco à parte porque é uma pendência de trabalho, não um
+             relato do que acabou de acontecer. */
+          ((r.indexes || []).length
+            ? '<ul class="sw-lista sw-pend"><li>' +
+              escapaHtml(T("WARN_INDEXES_DROPPED", { n: r.indexes.length })) +
+              "<br>" + escapaHtml(r.indexes.join(", ")) +
+              "</li></ul>"
+            : ""),
+        confirmButtonText: T("UI_OK"),
+        showCancelButton: false,
+      })
+    );
+  } catch (e) {
+    await repintarDoEstado(); // o handle pode ter virado `detached` (R6)
+    await Swal.fire(
+      swalBase({
+        icon: "error",
+        title: T("UI_ERROR"),
+        html: escapaHtml(msgErro(e)),
+        confirmButtonText: T("UI_OK"),
+        showCancelButton: false,
+      })
+    );
+  }
+}
+
+/*
+ * F5 COM RASCUNHO ABERTO PERGUNTA ANTES.
+ *
+ * Recarregar joga fora a estrutura montada, e F5 é tecla de dedo torto -- foi
+ * assim que se perdeu um rascunho durante a validação desta tela.
+ *
+ * A pergunta é um SweetAlert, e NÃO um `beforeunload`. O `beforeunload` do
+ * WebView2 abre um diálogo do próprio motor: some do DOM, não dá para validar
+ * por CDP, e é exatamente o tipo de janela que trava o app quando não há
+ * ninguém na frente da máquina para clicar. O diálogo da própria aplicação
+ * responde à mesma necessidade e continua sendo nosso.
+ */
+document.addEventListener("keydown", async (ev) => {
+  const recarregar =
+    ev.key === "F5" || ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "r");
+  if (!recarregar || !esEditando) return;
+  ev.preventDefault();
+  const r = await Swal.fire(
+    swalBase({
+      icon: "warning",
+      title: T("UI_RELOAD_TITLE"),
+      html: escapaHtml(T("UI_RELOAD_ASK")),
+      showCancelButton: true,
+      confirmButtonText: T("UI_RELOAD_DISCARD"),
+      cancelButtonText: T("UI_KEEP_EDITING"),
+    })
+  );
+  if (r.isConfirmed) location.reload();
+});
+
 $("es-aplicar").addEventListener("click", async () => {
-  /* Criar já funciona; alterar a estrutura de um arquivo existente ainda não.
-     Dizer isso em voz alta é melhor que um botão que não faz nada. */
   if (esNovo) {
     await abrirNovo();
     return;
   }
-  await Swal.fire(
-    swalBase({
-      icon: "info",
-      title: T("UI_NOT_YET_TITLE"),
-      html: escapaHtml(T("UI_NOT_YET")),
-      confirmButtonText: T("UI_OK"),
-      showCancelButton: false,
-    })
-  );
+  await esAplicar();
 });
 
 /* ------------------------------------------- T10: gravar o arquivo novo */

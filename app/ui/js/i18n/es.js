@@ -678,10 +678,6 @@
   ERROR_FIELD_LEN_LOGIC: "lógico siempre es 1",
   ERROR_FIELD_DEC: "demasiados decimales para esa longitud",
 
-  UI_NOT_YET_TITLE: "Todavía no",
-  UI_NOT_YET:
-    "La pantalla está lista para ser evaluada, pero la parte que reescribe el " +
-    "archivo aún no fue implementada. No se cambió nada.",
 
   UI_RESTORE_FIELD: "Traer '{field}' de vuelta",
   UI_IMPACT_UNDO: "Para traer '{field}' de vuelta, haga clic en el ↺ de su fila.",
@@ -719,12 +715,49 @@
 
   ERROR_CREATE_FAILED: "No se pudo crear '{file}'. {reason}",
   ERROR_FIELD_BAD: "El campo {n} vino mal formado.",
-  ERROR_NO_FIELDS: "Defina al menos un campo antes de crear el archivo.",
   ERROR_RECORD_TOO_BIG:
     "El registro quedaría con {bytes} bytes, y el formato DBF solo guarda " +
     "hasta {max}. Reduzca el tamaño de algún campo.",
 
   ERROR_FILE_IS_OPEN:
     "'{file}' está abierto en la pestaña {alias}. Cierre la pestaña antes de sustituirlo.",
+
+
+  // ------------------------------------------ T10: cambiar la estructura
+  UI_JOB_RESTRUCT: "Reescribiendo {file} con la estructura nueva…",
+  WARN_CANCELED_RESTRUCT:
+    "Cambio cancelado. El archivo original no fue tocado.",
+
+
+  UI_MODIFY_TITLE: "Cambiar la estructura",
+  UI_MODIFY_ASK: {
+    one: "'{file}' tiene {n} registro. Será reescrito con la estructura nueva.",
+    other: "'{file}' tiene {n} registros. Serán reescritos con la estructura nueva.",
+  },
+  UI_MODIFY_OK: {
+    one: "'{file}' ahora tiene {n} registro.",
+    other: "'{file}' ahora tiene {n} registros.",
+  },
+  UI_MODIFY_FIELDS: { one: "Tiene {n} campo.", other: "Tiene {n} campos." },
+  WARN_INDEXES_DROPPED: {
+    one: "{n} índice fue cerrado y debe reconstruirse:",
+    other: "{n} índices fueron cerrados y deben reconstruirse:",
+  },
+  UI_MODIFY_BACKUP: "Se guardó una copia en '{file}'.",
+  UI_MODIFY_LOST: {
+    one: "{n} valor no cupo en el tipo nuevo y quedó vacío.",
+    other: "{n} valores no cupieron en el tipo nuevo y quedaron vacíos.",
+  },
+
+  UI_STRUCT_EMPTY: "La estructura quedó sin campos",
+
+  UI_STRUCT_EMPTY_HINT: "Recupere un campo con ↺, o agregue uno nuevo.",
+
+  ERROR_NO_FIELDS: "Un archivo necesita al menos un campo.",
+
+  UI_RELOAD_TITLE: "¿Recargar la pantalla?",
+  UI_RELOAD_ASK: "La estructura que usted armó todavía no fue aplicada, y recargar descarta lo que está aquí.",
+  UI_RELOAD_DISCARD: "Descartar y recargar",
+  UI_KEEP_EDITING: "Seguir editando",
 
 };

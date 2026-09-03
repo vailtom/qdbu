@@ -682,10 +682,6 @@
   ERROR_FIELD_LEN_LOGIC: "logical is always 1",
   ERROR_FIELD_DEC: "too many decimals for this length",
 
-  UI_NOT_YET_TITLE: "Not yet",
-  UI_NOT_YET:
-    "The screen is ready to be reviewed, but the part that rewrites the file " +
-    "has not been implemented. Nothing was changed.",
 
   UI_RESTORE_FIELD: "Bring '{field}' back",
   UI_IMPACT_UNDO: "To bring '{field}' back, click the ↺ on its row.",
@@ -723,12 +719,49 @@
 
   ERROR_CREATE_FAILED: "Could not create '{file}'. {reason}",
   ERROR_FIELD_BAD: "Field {n} is malformed.",
-  ERROR_NO_FIELDS: "Define at least one field before creating the file.",
   ERROR_RECORD_TOO_BIG:
     "The record would be {bytes} bytes, and the DBF format only holds up to " +
     "{max}. Shrink one of the fields.",
 
   ERROR_FILE_IS_OPEN:
     "'{file}' is open in tab {alias}. Close the tab before replacing it.",
+
+
+  // ------------------------------------------ T10: change the structure
+  UI_JOB_RESTRUCT: "Rewriting {file} with the new structure…",
+  WARN_CANCELED_RESTRUCT:
+    "Change canceled. The original file was not touched.",
+
+
+  UI_MODIFY_TITLE: "Change the structure",
+  UI_MODIFY_ASK: {
+    one: "'{file}' has {n} record. It will be rewritten with the new structure.",
+    other: "'{file}' has {n} records. They will be rewritten with the new structure.",
+  },
+  UI_MODIFY_OK: {
+    one: "'{file}' now has {n} record.",
+    other: "'{file}' now has {n} records.",
+  },
+  UI_MODIFY_FIELDS: { one: "It has {n} field.", other: "It has {n} fields." },
+  WARN_INDEXES_DROPPED: {
+    one: "{n} index was closed and must be rebuilt:",
+    other: "{n} indexes were closed and must be rebuilt:",
+  },
+  UI_MODIFY_BACKUP: "A copy was kept in '{file}'.",
+  UI_MODIFY_LOST: {
+    one: "{n} value did not fit the new type and was left empty.",
+    other: "{n} values did not fit the new type and were left empty.",
+  },
+
+  UI_STRUCT_EMPTY: "The structure has no fields left",
+
+  UI_STRUCT_EMPTY_HINT: "Bring a field back with ↺, or add a new one.",
+
+  ERROR_NO_FIELDS: "A file needs at least one field.",
+
+  UI_RELOAD_TITLE: "Reload the screen?",
+  UI_RELOAD_ASK: "The structure you built has not been applied yet, and reloading discards what is here.",
+  UI_RELOAD_DISCARD: "Discard and reload",
+  UI_KEEP_EDITING: "Keep editing",
 
 };

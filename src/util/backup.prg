@@ -397,7 +397,7 @@ FUNCTION CopiaArquivo( cOrigem, cDestino, nBloco, bEvento, nCopiados, lExclusivo
  * Nao levanta erro: quem chama ja esta devolvendo uma recusa. Devolve .F. para
  * o chamador poder dizer o que ficou para tras.
  */
-STATIC FUNCTION Descarta( cArquivo )
+FUNCTION Descarta( cArquivo )
 
    IF ! hb_FileExists( cArquivo )
       RETURN .T.

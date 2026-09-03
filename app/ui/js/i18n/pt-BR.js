@@ -707,10 +707,6 @@
   ERROR_FIELD_LEN_LOGIC: "lógico tem sempre 1",
   ERROR_FIELD_DEC: "decimais demais para esse tamanho",
 
-  UI_NOT_YET_TITLE: "Ainda não",
-  UI_NOT_YET:
-    "A tela está pronta para ser avaliada, mas a parte que reescreve o " +
-    "arquivo ainda não foi implementada. Nada foi alterado.",
 
   UI_RESTORE_FIELD: "Trazer '{field}' de volta",
   UI_IMPACT_UNDO: "Para trazer '{field}' de volta, clique no ↺ na linha dele.",
@@ -748,12 +744,49 @@
 
   ERROR_CREATE_FAILED: "Não foi possível criar '{file}'. {reason}",
   ERROR_FIELD_BAD: "O campo {n} veio malformado.",
-  ERROR_NO_FIELDS: "Defina ao menos um campo antes de criar o arquivo.",
   ERROR_RECORD_TOO_BIG:
     "O registro ficaria com {bytes} bytes, e o formato DBF só guarda até " +
     "{max}. Reduza o tamanho de algum campo.",
 
   ERROR_FILE_IS_OPEN:
     "'{file}' está aberto na aba {alias}. Feche a aba antes de substituir.",
+
+
+  // ------------------------------------------ T10: alterar estrutura
+  UI_JOB_RESTRUCT: "Reescrevendo {file} com a estrutura nova…",
+  WARN_CANCELED_RESTRUCT:
+    "Alteração cancelada. O arquivo original não foi tocado.",
+
+
+  UI_MODIFY_TITLE: "Alterar a estrutura",
+  UI_MODIFY_ASK: {
+    one: "'{file}' tem {n} registro. Ele será reescrito com a estrutura nova.",
+    other: "'{file}' tem {n} registros. Eles serão reescritos com a estrutura nova.",
+  },
+  UI_MODIFY_OK: {
+    one: "'{file}' agora tem {n} registro.",
+    other: "'{file}' agora tem {n} registros.",
+  },
+  UI_MODIFY_FIELDS: { one: "São {n} campo.", other: "São {n} campos." },
+  WARN_INDEXES_DROPPED: {
+    one: "{n} índice foi fechado e precisa ser reconstruído:",
+    other: "{n} índices foram fechados e precisam ser reconstruídos:",
+  },
+  UI_MODIFY_BACKUP: "Cópia guardada em '{file}'.",
+  UI_MODIFY_LOST: {
+    one: "{n} valor não coube no tipo novo e ficou vazio.",
+    other: "{n} valores não couberam no tipo novo e ficaram vazios.",
+  },
+
+  UI_STRUCT_EMPTY: "A estrutura ficou sem campos",
+
+  UI_STRUCT_EMPTY_HINT: "Traga um campo de volta com o ↺, ou adicione um novo.",
+
+  ERROR_NO_FIELDS: "Um arquivo precisa de pelo menos um campo.",
+
+  UI_RELOAD_TITLE: "Recarregar a tela?",
+  UI_RELOAD_ASK: "A estrutura que você montou ainda não foi aplicada, e recarregar descarta o que está aqui.",
+  UI_RELOAD_DISCARD: "Descartar e recarregar",
+  UI_KEEP_EDITING: "Continuar editando",
 
 };
