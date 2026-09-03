@@ -5444,12 +5444,28 @@ async function esAplicar() {
       from: c._de ? c._de.name : "",
     }));
 
+  /*
+   * A MODAL FECHA ANTES DE A OPERAÇÃO COMEÇAR, e não depois.
+   *
+   * A barra de progresso -- com o botão Parar -- vive fora do diálogo. Um
+   * `<dialog>` modal deixa INERTE tudo o que está fora dele, então, com a modal
+   * aberta, reescrever 1,2 milhão de registros seria uma espera sem como
+   * interromper: a barra aparece, o botão é pintado, e o clique não chega.
+   * Medido: `elementFromPoint` no centro do Parar devolvia o próprio DIALOG.
+   *
+   * Se a operação falhar, a modal volta com o rascunho intacto -- perder uma
+   * estrutura de vinte campos porque o arquivo estava travado seria punir a
+   * pessoa por um problema que não é dela.
+   */
+  const guarda = { rascunho: esRascunho, original: esOriginal,
+                   alvo: esAlvo, novo: esNovo, sel: esSel };
+  esFechar();
+
   try {
     const r = await comProgresso(
       DBU.rpc("struct.modify", { h: alvo, fields: campos, backup: comBackup })
     );
 
-    esFechar();
     // A grade em cache é da estrutura velha -- as colunas mudaram de nome.
     gradeDe.delete(alvo);
     colunasDe.delete(alvo);
@@ -5480,6 +5496,19 @@ async function esAplicar() {
     );
   } catch (e) {
     await repintarDoEstado(); // o handle pode ter virado `detached` (R6)
+
+    /* Devolve o rascunho e reabre -- mas só se o arquivo ainda está lá. Num
+       handle perdido (R6) não há sobre o que editar, e a modal reaberta
+       prometeria um Aplicar que vai recusar. */
+    const aindaVale = abas.some((a) => a.h === guarda.alvo && !a.detached);
+    if (guarda.alvo === null || aindaVale) {
+      esAlvo = guarda.alvo; esOriginal = guarda.original;
+      esRascunho = guarda.rascunho; esNovo = guarda.novo; esSel = guarda.sel;
+      esEditando = true;
+      desenharEditor();
+      if (!$("dlg-estrutura").open) $("dlg-estrutura").showModal();
+    }
+
     await Swal.fire(
       swalBase({
         icon: "error",
@@ -5715,6 +5744,62 @@ $("nv-procurar").addEventListener("click", async () => {
  * (com cópia, sem cópia, desistir). Com `confirm()` viravam duas caixas
  * empilhadas, e a segunda parece que o app está insistindo.
  */
+/*
+ * O ALVO DO SWEETALERT SEGUE O <dialog> MODAL ABERTO.
+ *
+ * `<dialog>.showModal()` põe o elemento na TOP LAYER do navegador, e tudo o que
+ * está fora dela fica INERTE: continua sendo pintado, mas não recebe clique. O
+ * SweetAlert se anexa ao `<body>` por padrão, ou seja, fora da top layer.
+ *
+ * O resultado é a tela "travada": a pergunta aparece, o fundo escurece, e o
+ * clique no botão nunca chega -- ele é interceptado pelo conteúdo do diálogo,
+ * que está por cima. Medido com `elementFromPoint` no centro do botão de
+ * confirmar: devolvia o `<select>` da tabela de estrutura.
+ *
+ * Isto NÃO apareceu nos testes porque `.click()` programático não passa pela
+ * camada de composição -- ele chama o manipulador direto. Só um clique de mouse
+ * de verdade (`Input.dispatchMouseEvent`) expõe a falha.
+ *
+ * Apontar o `target` para o diálogo aberto põe o SweetAlert DENTRO da mesma
+ * top layer, e o clique volta a chegar. Vale para qualquer diálogo modal que
+ * venha a existir, e não só para o editor de estrutura.
+ */
+/*
+ * A PILHA DE MODAIS, na ordem em que foram abertos.
+ *
+ * A top layer empilha na ordem das chamadas de `showModal()`, e não existe API
+ * para perguntar quem está no topo. Varrer `dialog[open]` devolve a ordem do
+ * DOCUMENTO, que é outra coisa: com o "Salvar como" aberto por cima do editor
+ * de estrutura, a varredura entregaria o editor -- e o SweetAlert iria parar
+ * debaixo do diálogo que está na frente, invisível e sem receber clique.
+ *
+ * O `showModal`/`close` são interceptados aqui para manter a ordem certa. Vale
+ * para qualquer diálogo do app, inclusive os que ainda não existem.
+ */
+const pilhaModais = [];
+(() => {
+  const abrir = HTMLDialogElement.prototype.showModal;
+  const fechar = HTMLDialogElement.prototype.close;
+  HTMLDialogElement.prototype.showModal = function () {
+    abrir.call(this);
+    const i = pilhaModais.indexOf(this);
+    if (i >= 0) pilhaModais.splice(i, 1);
+    pilhaModais.push(this);
+  };
+  HTMLDialogElement.prototype.close = function (v) {
+    const i = pilhaModais.indexOf(this);
+    if (i >= 0) pilhaModais.splice(i, 1);
+    fechar.call(this, v);
+  };
+})();
+
+function swalAlvo() {
+  for (let i = pilhaModais.length - 1; i >= 0; i--) {
+    if (pilhaModais[i].isConnected && pilhaModais[i].open) return pilhaModais[i];
+  }
+  return undefined; // undefined = o padrão do SweetAlert (o <body>)
+}
+
 function swalBase(extra) {
   return Object.assign(
     {
@@ -5723,6 +5808,7 @@ function swalBase(extra) {
       reverseButtons: true,
       focusCancel: true,
       heightAuto: false, // senão o SweetAlert mexe no <body> e a grade pula
+      target: swalAlvo(),
     },
     extra || {}
   );

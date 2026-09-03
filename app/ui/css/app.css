@@ -1672,3 +1672,10 @@ body.arrastando-aba .aba { cursor: grabbing; }
   display: inline-block; width: 100%; margin: 0; vertical-align: middle;
 }
 #dlg-estrutura .estrutura td.nome-com-aviso input { width: calc(100% - 22px); }
+
+/* SweetAlert ancorado num <dialog> (ver `swalAlvo()`): o container vira
+   `position:absolute` dentro do alvo, então precisa cobrir o diálogo inteiro
+   para o fundo escurecido não sair pela metade. */
+dialog > .swal2-container {
+  position: absolute; inset: 0; width: auto; height: auto;
+}
