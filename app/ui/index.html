@@ -244,6 +244,13 @@
             <span data-i18n="UI_ROWS_PER_PAGE"></span>
           </label>
 
+          <!-- O REGISTRO ATUAL. O DBU original mostrava isto no `statline`
+               (DBUEDIT.PRG:566) e nos tinhamos perdido: havia o total e o
+               intervalo da pagina, mas nada dizia ONDE o cursor esta -- e
+               "proximos n" e "do atual ate o fim" partem justamente dele.
+               A barra ambar na grade so ajuda com a linha a vista; rolando
+               para longe, o numero aqui e a unica resposta. -->
+          <span class="atual" id="pg-atual" hidden></span>
           <span class="posicao" id="pg-posicao">—</span>
           <span class="refresh" id="pg-refresh" data-i18n-title="UI_LAST_READ"></span>
           <button type="button" id="pg-recarregar" data-i18n-title="UI_RELOAD">⟳</button>

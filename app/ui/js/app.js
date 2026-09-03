@@ -1570,12 +1570,56 @@ async function porCursorEm(h, recno) {
     const n = Number((tr.querySelector("td.recno") || {}).textContent);
     tr.classList.toggle("cursor", n === recno);
   }
+  atualizarRegistroAtual();
   try {
     await DBU.rpc("data.goto", { h, recno });
   } catch (e) {
     /* A marca é da tela; se a DLL recusar, quem opera avisa. */
   }
 }
+
+/*
+ * Escreve o registro atual na barra e diz se ele esta a vista.
+ *
+ * "Fora da pagina" nao e detalhe: e a diferenca entre "o cursor sumiu" e "o
+ * cursor esta noutro lugar do arquivo". Sem isso, rolar a grade parece ter
+ * perdido a escolha.
+ */
+function atualizarRegistroAtual() {
+  const el = $("pg-atual");
+  const n = cursorDe.get(abaAtiva);
+
+  if (n == null) {
+    el.hidden = true;
+    return;
+  }
+
+  /*
+   * `Recno()` SOBRE `Lastrec()`, exatamente como o original (DBUEDIT.PRG:600).
+   *
+   * O total é o FÍSICO e não muda com filtro nem com índice: são dois fatos
+   * que não dependem do recorte -- o registro tem este número, o arquivo tem
+   * este tamanho. Quantos passam pelo filtro é assunto do texto ao lado.
+   */
+  const p = gradeDe.get(abaAtiva);
+  const naTela = !!$("grade").querySelector("tbody tr.cursor");
+  el.hidden = false;
+  el.textContent = T("UI_CURRENT_RECORD", {
+    n: n.toLocaleString(window.I.idioma()),
+    total: p ? p.records.toLocaleString(window.I.idioma()) : "?",
+  });
+  el.classList.toggle("fora", !naTela);
+  el.title = naTela ? T("UI_CURRENT_RECORD_HINT") : T("UI_CURRENT_RECORD_AWAY");
+}
+
+/* Clicar no numero leva de volta ao registro -- e o caminho de volta quando se
+   rolou para longe e se perdeu a linha de vista. */
+$("pg-atual").addEventListener("click", async () => {
+  const n = cursorDe.get(abaAtiva);
+  if (n == null) return;
+  await carregarPagina(abaAtiva, n, 0);
+  await porCursorEm(abaAtiva, n);
+});
 
 /** Uma celula, formatada por tipo. */
 function celula(v, col) {
@@ -1647,19 +1691,53 @@ function atualizarBarraGrade(p) {
     return;
   }
 
-  // Com filtro ativo, p.records e o total FISICO do arquivo -- dizer "de 75"
-  // sobre uma grade que so tem 73 linhas navegaveis leva a conclusao errada. Se
-  // a contagem foi pedida, usa-se ela; senao diz-se "de ?", que e honesto.
+  /*
+   * O INTERVALO DESCREVE A PÁGINA, e não uma posição -- e a diferença derrubou
+   * uma leitura inteira.
+   *
+   * `first`/`last` são o RecNo da primeira e da última linha à vista
+   * (api_data.prg:86-87), não o quantos-ésimo elas são. Em ordem física os dois
+   * sentidos coincidem e ninguém percebe. Sob ÍNDICE, divergem: num arquivo
+   * cujo campo-chave dividia os registros em "ANTES" (recnos 66.501+) e
+   * "DEPOIS" (1 a 66.500), a PRIMEIRA página do arquivo indexado mostrava
+   * "66.501–66.550 de 1.196.032" -- que se lê como "estou a 5,5% do arquivo"
+   * quando se está no TOPO. Pior: com empates fora de ordem física, `first`
+   * pode ser MAIOR que `last`, e o intervalo sai invertido.
+   *
+   * O DBU original não tinha esse problema porque nunca mostrou intervalo: o
+   * `browse` do Clipper é um cursor rolante, sem página, e a linha de status
+   * dizia UM registro -- `Recno()/Lastrec()` (DBUEDIT.PRG:600). Identidade
+   * sobre tamanho, que não tem como ser lido como posição.
+   *
+   * Aqui as duas informações ficam separadas: a identidade vai para `pg-atual`
+   * (o Recno()/Lastrec() do original) e este texto passa a se anunciar como o
+   * que sempre foi -- o que está NESTA PÁGINA.
+   */
   const aba = abas.find((a) => a.h === abaAtiva);
   const filtrado = !!(aba && aba.info && aba.info.filter);
   const cont = contagemDe.get(abaAtiva);
-  const total = filtrado
-    ? T("UI_FILTERED_SUFFIX", { n: cont == null ? T("UI_UNKNOWN_COUNT") : cont })
-    : nf(p.records);
 
   pos.textContent = p.rows.length
-    ? T("UI_PAGE_RANGE", { first: p.first, last: p.last, total: total })
-    : T("UI_PAGE_RANGE_EMPTY", { total: total });
+    ? T("UI_PAGE_RANGE", { first: nf(p.first), last: nf(p.last) })
+    : T("UI_PAGE_RANGE_EMPTY");
+
+  /* Quantos passam pelo filtro é OUTRO fato, e não o tamanho do arquivo. Só
+     aparece quando há filtro -- e "?" enquanto ninguém pediu a contagem, que é
+     honesto: contar 400 mil linhas é uma tarefa, não um detalhe de rodapé. */
+  if (filtrado) {
+    pos.textContent +=
+      " · " + T("UI_FILTERED_SUFFIX", { n: cont == null ? T("UI_UNKNOWN_COUNT") : nf(cont) });
+  }
+
+  /*
+   * O REGISTRO ATUAL, em numero.
+   *
+   * A marca na grade e um indicativo VISUAL e so funciona com a linha a vista.
+   * Num arquivo de 400 mil registros, rolar duas telas para baixo esconde o
+   * cursor e a pessoa fica sem saber de onde um "proximos 100" vai partir. O
+   * numero aqui responde sempre, e e clicavel: leva de volta para a linha.
+   */
+  atualizarRegistroAtual();
 
   // `Last Refresh`: a grade e um retrato, e outro processo pode ter escrito no
   // arquivo desde entao. Sem a hora nao da para saber se o que esta na tela e

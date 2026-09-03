@@ -438,8 +438,8 @@
   UI_SEARCHING: "recorriendo…",
   UI_CREATING: "creando…",
 
-  UI_PAGE_RANGE: "{first}–{last} de {total}",
-  UI_PAGE_RANGE_EMPTY: "0 de {total}",
+  UI_PAGE_RANGE: "en esta página: {first}–{last}",
+  UI_PAGE_RANGE_EMPTY: "ningún registro a la vista",
   UI_FILTERED_SUFFIX: "{n} filtrados",
   UI_UNKNOWN_COUNT: "?",
   UI_GOTO_RECORD: "registro {n}",
@@ -861,5 +861,9 @@
 
   UI_MASS_FROM_RECORD: "a partir del registro {n}",
   UI_MASS_FROM_NONE: "Ningún registro elegido — haga clic en una fila de la grilla.",
+
+  UI_CURRENT_RECORD: "reg. {n} de {total}",
+  UI_CURRENT_RECORD_HINT: "Registro actual — de aquí parten \"próximos n\" y \"hasta el final\".",
+  UI_CURRENT_RECORD_AWAY: "Registro actual, fuera de la página visible. Haga clic para volver a él.",
 
 };

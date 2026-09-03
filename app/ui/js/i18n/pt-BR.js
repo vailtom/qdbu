@@ -465,8 +465,8 @@
   UI_CREATING: "criando…",
 
   // grade e barra
-  UI_PAGE_RANGE: "{first}–{last} de {total}",
-  UI_PAGE_RANGE_EMPTY: "0 de {total}",
+  UI_PAGE_RANGE: "nesta página: {first}–{last}",
+  UI_PAGE_RANGE_EMPTY: "nenhum registro à vista",
   UI_FILTERED_SUFFIX: "{n} filtrados",
   UI_UNKNOWN_COUNT: "?",
   UI_GOTO_RECORD: "registro {n}",
@@ -891,5 +891,9 @@
 
   UI_MASS_FROM_RECORD: "a partir do registro {n}",
   UI_MASS_FROM_NONE: "Nenhum registro escolhido — clique numa linha da grade.",
+
+  UI_CURRENT_RECORD: "reg. {n} de {total}",
+  UI_CURRENT_RECORD_HINT: "Registro atual — é daqui que partem \"próximos n\" e \"até o fim\".",
+  UI_CURRENT_RECORD_AWAY: "Registro atual, fora da página à vista. Clique para voltar até ele.",
 
 };

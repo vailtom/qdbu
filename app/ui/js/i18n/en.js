@@ -442,8 +442,8 @@
   UI_SEARCHING: "scanning…",
   UI_CREATING: "creating…",
 
-  UI_PAGE_RANGE: "{first}–{last} of {total}",
-  UI_PAGE_RANGE_EMPTY: "0 of {total}",
+  UI_PAGE_RANGE: "on this page: {first}–{last}",
+  UI_PAGE_RANGE_EMPTY: "no records in view",
   UI_FILTERED_SUFFIX: "{n} filtered",
   UI_UNKNOWN_COUNT: "?",
   UI_GOTO_RECORD: "record {n}",
@@ -865,5 +865,9 @@
 
   UI_MASS_FROM_RECORD: "starting at record {n}",
   UI_MASS_FROM_NONE: "No record chosen — click a row in the grid.",
+
+  UI_CURRENT_RECORD: "rec. {n} of {total}",
+  UI_CURRENT_RECORD_HINT: "Current record — this is where \"next n\" and \"to the end\" start.",
+  UI_CURRENT_RECORD_AWAY: "Current record, off the visible page. Click to go back to it.",
 
 };
