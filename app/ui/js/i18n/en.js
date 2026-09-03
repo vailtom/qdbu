@@ -803,4 +803,65 @@
   UI_DISCARD_TITLE: "Discard the changes?",
   UI_DISCARD_ASK: "The structure you built has not been applied yet and will be lost.",
 
+
+  // =================================================== T13: mass operations
+  UI_MASS: "In bulk",
+  UI_MASS_TITLE: "Replace, delete, recall, or append records from another file",
+  UI_MASS_ON: "In bulk · {file}",
+
+  UI_MASS_REPLACE: "Replace",
+  UI_MASS_DELETE: "Delete",
+  UI_MASS_RECALL: "Recall",
+  UI_MASS_APPEND: "Append from",
+
+  UI_MASS_EXPLAIN_REPLACE:
+    "Writes the result of the expression into the chosen field, on every record in the scope.",
+  UI_MASS_EXPLAIN_DELETE:
+    "Marks the records in the scope as deleted. They stay in the file and come back with Recall; what removes them for good is Pack.",
+  UI_MASS_EXPLAIN_RECALL:
+    "Takes the deleted mark off the records in the scope.",
+  UI_MASS_EXPLAIN_APPENDFROM:
+    "Adds the source file records to the end of this one. Fields are matched by NAME; whatever is missing on either side is left out or comes in empty.",
+
+  UI_MASS_FIELD: "Field",
+  UI_MASS_WITH: "Replace {field} with",
+  UI_MASS_WITH_HINT: "expression — e.g. CLI_LIMC * 1.1",
+  UI_MASS_SOURCE: "Source file",
+  UI_MASS_PICK_SOURCE: "Choose the source file",
+  UI_MASS_FORMAT: "Format",
+  UI_FMT_DBF: "DBF (another file of the same kind)",
+  UI_FMT_SDF: "Fixed-width text (SDF)",
+  UI_FMT_DELIM: "Delimited text",
+  UI_MASS_TEXT_NOTE:
+    "Text files are read by Harbour own engine, which reports no progress: the bar does not move and there is no way to stop. DBF has progress and cancelling.",
+
+  UI_MASS_SCOPE: "Scope",
+  UI_MASS_RECORDS: "Records",
+  UI_SCOPE_ALL_REC: "All",
+  UI_SCOPE_NEXT: "Next…",
+  UI_SCOPE_NEXT_N: { one: "next {n} record", other: "next {n} records" },
+  UI_SCOPE_REST: "From the current record to the end",
+  UI_MASS_FOR_HINT: "only records where… (optional)",
+  UI_MASS_WHILE_HINT: "while… — stops at the first that does not match (optional)",
+
+  UI_MASS_RULE_WHILE:
+    "WHILE takes precedence over FOR: WHILE STOPS at the first record that does not match; FOR merely SKIPS it and carries on to the end.",
+  UI_MASS_RULE_TOP:
+    "All starts from the top. Next and to-the-end start at the record the cursor is on right now.",
+  UI_MASS_RULE_FILTER:
+    "The active filter COUNTS here: the operation only reaches what it lets through ({expr}).",
+  UI_MASS_RULE_NOFILTER:
+    "No filter is active — the operation reaches the whole file within the scope.",
+
+  UI_MASS_CONFIRM_REPLACE: "The field {field} will be rewritten in {file}. This cannot be undone.",
+  UI_MASS_CONFIRM_DELETE: "Records will be marked as deleted in {file}.",
+  UI_MASS_CONFIRM_RECALL: "The deleted mark will be taken off in {file}.",
+  UI_MASS_CONFIRM_APPENDFROM: "Records from {source} will be added to {file}.",
+  UI_MASS_CONFIRM_SCOPE: "Scope: {scope}.",
+
+  UI_MASS_DONE_REPLACE: { one: "{n} record changed, out of {seen} examined.", other: "{n} records changed, out of {seen} examined." },
+  UI_MASS_DONE_DELETE: { one: "{n} record marked, out of {seen} examined.", other: "{n} records marked, out of {seen} examined." },
+  UI_MASS_DONE_RECALL: { one: "{n} record recalled, out of {seen} examined.", other: "{n} records recalled, out of {seen} examined." },
+  UI_MASS_DONE_APPEND: { one: "{n} record came from {file}. The file now has {total}.", other: "{n} records came from {file}. The file now has {total}." },
+
 };

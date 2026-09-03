@@ -58,6 +58,10 @@ const IMPLICITAS = [
   /^ERROR_PARAM_OUT_OF_RANGE_/,
   /^ERROR_PARAM_TOO_(SMALL|BIG)_/,
   /^ERROR_UNSPECIFIED$/, //        default do proprio motor
+  // T13: a tela de massa monta a chave a partir da operacao escolhida --
+  // `"UI_MASS_EXPLAIN_" + op`, `"UI_MASS_CONFIRM_" + op` e
+  // `"UI_MASS_DONE_" + r.action`, com op em REPLACE|DELETE|RECALL|APPENDFROM.
+  /^UI_MASS_(EXPLAIN|CONFIRM|DONE)_[A-Z]+$/,
 ];
 
 const fontes = [];

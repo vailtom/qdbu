@@ -828,4 +828,65 @@
   UI_DISCARD_TITLE: "Descartar as alterações?",
   UI_DISCARD_ASK: "A estrutura que você montou ainda não foi aplicada e será perdida.",
 
+
+  // =================================================== T13: operações em massa
+  UI_MASS: "Em massa",
+  UI_MASS_TITLE: "Repaçar, deletar, recuperar ou incluir registros de outro arquivo",
+  UI_MASS_ON: "Em massa · {file}",
+
+  UI_MASS_REPLACE: "Repaçar",
+  UI_MASS_DELETE: "Deletar",
+  UI_MASS_RECALL: "Recuperar",
+  UI_MASS_APPEND: "Incluir de",
+
+  UI_MASS_EXPLAIN_REPLACE:
+    "Grava o resultado da expressão no campo escolhido, em cada registro do escopo.",
+  UI_MASS_EXPLAIN_DELETE:
+    "Marca os registros do escopo como deletados. Eles continuam no arquivo e voltam com Recuperar; quem os apaga de vez é o Compactar.",
+  UI_MASS_EXPLAIN_RECALL:
+    "Tira a marca de deletado dos registros do escopo.",
+  UI_MASS_EXPLAIN_APPENDFROM:
+    "Acrescenta ao fim deste arquivo os registros do arquivo de origem. Os campos são casados por NOME; o que não existir dos dois lados fica de fora ou nasce vazio.",
+
+  UI_MASS_FIELD: "Campo",
+  UI_MASS_WITH: "Repaçar {field} com",
+  UI_MASS_WITH_HINT: "expressão — ex.: CLI_LIMC * 1.1",
+  UI_MASS_SOURCE: "Arquivo de origem",
+  UI_MASS_PICK_SOURCE: "Escolher o arquivo de origem",
+  UI_MASS_FORMAT: "Formato",
+  UI_FMT_DBF: "DBF (outro arquivo do mesmo tipo)",
+  UI_FMT_SDF: "Texto de largura fixa (SDF)",
+  UI_FMT_DELIM: "Texto delimitado",
+  UI_MASS_TEXT_NOTE:
+    "Arquivos de texto são lidos pelo motor do Harbour, que não informa progresso: a barra não anda e não há como interromper. Em DBF há progresso e cancelamento.",
+
+  UI_MASS_SCOPE: "Escopo",
+  UI_MASS_RECORDS: "Registros",
+  UI_SCOPE_ALL_REC: "Tudo",
+  UI_SCOPE_NEXT: "Próximos…",
+  UI_SCOPE_NEXT_N: { one: "próximo {n} registro", other: "próximos {n} registros" },
+  UI_SCOPE_REST: "Do registro atual até o fim",
+  UI_MASS_FOR_HINT: "só os registros em que… (opcional)",
+  UI_MASS_WHILE_HINT: "enquanto… — para no primeiro que não casar (opcional)",
+
+  UI_MASS_RULE_WHILE:
+    "WHILE tem precedência sobre FOR: o WHILE PARA no primeiro registro que não casa; o FOR apenas PULA e segue até o fim.",
+  UI_MASS_RULE_TOP:
+    "Tudo começa do topo. Próximos e até-o-fim começam no registro onde o cursor está agora.",
+  UI_MASS_RULE_FILTER:
+    "O filtro ativo VALE aqui: a operação só alcança o que ele deixa passar ({expr}).",
+  UI_MASS_RULE_NOFILTER:
+    "Não há filtro ativo — a operação alcança o arquivo inteiro dentro do escopo.",
+
+  UI_MASS_CONFIRM_REPLACE: "O campo {field} vai ser reescrito em {file}. Não há como desfazer.",
+  UI_MASS_CONFIRM_DELETE: "Os registros vão ser marcados como deletados em {file}.",
+  UI_MASS_CONFIRM_RECALL: "A marca de deletado vai ser retirada em {file}.",
+  UI_MASS_CONFIRM_APPENDFROM: "Os registros de {source} vão ser acrescentados a {file}.",
+  UI_MASS_CONFIRM_SCOPE: "Escopo: {scope}.",
+
+  UI_MASS_DONE_REPLACE: { one: "{n} registro alterado, de {seen} examinados.", other: "{n} registros alterados, de {seen} examinados." },
+  UI_MASS_DONE_DELETE: { one: "{n} registro marcado, de {seen} examinados.", other: "{n} registros marcados, de {seen} examinados." },
+  UI_MASS_DONE_RECALL: { one: "{n} registro recuperado, de {seen} examinados.", other: "{n} registros recuperados, de {seen} examinados." },
+  UI_MASS_DONE_APPEND: { one: "{n} registro veio de {file}. O arquivo tem agora {total}.", other: "{n} registros vieram de {file}. O arquivo tem agora {total}." },
+
 };

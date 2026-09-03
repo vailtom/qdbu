@@ -77,6 +77,14 @@
              de risco: ficam na mesma barra porque é onde se age sobre o
              arquivo, mas não podem parecer irmãs de "Colunas" e "Filtro". -->
         <span class="visoes-sep"></span>
+        <!-- UMA entrada para as quatro operacoes em massa, e nao quatro botoes.
+             Repacar, deletar, recuperar e incluir-de compartilham o escopo
+             inteiro (FOR/WHILE/quantos) -- sao a mesma tela com um miolo
+             diferente. Quatro botoes aqui lotariam a barra e ainda esconderiam
+             que o escopo e o mesmo. O DBU original tambem as reunia, no menu
+             Utils. -->
+        <button type="button" id="pg-massa" class="ferramenta risco"
+                data-i18n-title="UI_MASS_TITLE" data-i18n="UI_MASS"></button>
         <button type="button" id="pg-pack" class="ferramenta risco"
                 data-i18n-title="UI_PACK_TITLE" data-i18n="UI_PACK"></button>
         <button type="button" id="pg-zap" class="ferramenta risco"
@@ -457,6 +465,87 @@
     </div>
   </div>
 </div>
+
+<!-- T13: as operacoes em massa.
+
+     O ESCOPO E O MESMO PARA AS QUATRO, e por isso elas moram juntas. O que
+     muda e o miolo: repacar precisa de campo e expressao, incluir-de precisa de
+     arquivo e formato, deletar e recuperar nao precisam de nada.
+
+     As tres regras do escopo estao escritas na tela, e nao so no codigo:
+     WHILE tem precedencia sobre FOR, "tudo" comeca do topo, e "proximos"/"resto"
+     comecam no registro corrente. Sao regras do xBase que ninguem adivinha, e
+     errar qualquer uma delas altera os registros errados. -->
+<dialog id="dlg-massa">
+  <form method="dialog" id="form-massa">
+    <h2 id="ms-titulo"></h2>
+
+    <div class="ms-abas" id="ms-abas" role="tablist"></div>
+
+    <p class="explica" id="ms-explica"></p>
+
+    <!-- REPACAR: um campo por vez, como o original. Duas expressoes na mesma
+         passada teriam de decidir se a segunda enxerga o que a primeira acabou
+         de gravar, e qualquer resposta surpreende metade das pessoas. -->
+    <div id="ms-replace" hidden>
+      <label class="ms-linha"><span data-i18n="UI_MASS_FIELD"></span>
+        <select id="ms-campo"></select>
+      </label>
+      <label class="ms-linha"><span id="ms-with-rotulo"></span>
+        <input id="ms-with" autocomplete="off" spellcheck="false"
+               data-i18n-placeholder="UI_MASS_WITH_HINT">
+      </label>
+    </div>
+
+    <!-- INCLUIR DE -->
+    <div id="ms-append" hidden>
+      <label class="ms-linha"><span data-i18n="UI_MASS_SOURCE"></span>
+        <span class="nv-arq">
+          <input id="ms-origem" autocomplete="off" spellcheck="false">
+          <button type="button" id="ms-procurar" data-i18n-title="UI_MASS_PICK_SOURCE">⌕</button>
+        </span>
+      </label>
+      <label class="ms-linha"><span data-i18n="UI_MASS_FORMAT"></span>
+        <select id="ms-formato"></select>
+      </label>
+      <p class="ms-nota" id="ms-nota-texto" hidden></p>
+    </div>
+
+    <!-- O ESCOPO, comum as quatro -->
+    <fieldset class="ms-escopo">
+      <legend data-i18n="UI_MASS_SCOPE"></legend>
+
+      <label class="ms-linha"><span data-i18n="UI_MASS_RECORDS"></span>
+        <span class="ms-quantos">
+          <select id="ms-modo"></select>
+          <input id="ms-n" inputmode="numeric" autocomplete="off" value="100" hidden>
+        </span>
+      </label>
+
+      <label class="ms-linha"><span>FOR</span>
+        <input id="ms-for" autocomplete="off" spellcheck="false"
+               data-i18n-placeholder="UI_MASS_FOR_HINT">
+      </label>
+      <label class="ms-linha"><span>WHILE</span>
+        <input id="ms-while" autocomplete="off" spellcheck="false"
+               data-i18n-placeholder="UI_MASS_WHILE_HINT">
+      </label>
+
+      <ul class="ms-regras">
+        <li data-i18n="UI_MASS_RULE_WHILE"></li>
+        <li data-i18n="UI_MASS_RULE_TOP"></li>
+        <li id="ms-regra-recorte"></li>
+      </ul>
+    </fieldset>
+
+    <p class="ff-msg" id="ms-msg"></p>
+
+    <div class="acoes">
+      <button type="button" id="ms-cancelar" data-i18n="UI_CANCEL"></button>
+      <button type="button" id="ms-executar" class="primario"></button>
+    </div>
+  </form>
+</dialog>
 
 <!-- T10: o editor de estrutura.
 

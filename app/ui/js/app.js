@@ -5718,6 +5718,260 @@ $("nv-procurar").addEventListener("click", async () => {
   }
 });
 
+/* ============================================================ T13: em massa */
+
+/*
+ * AS QUATRO OPERAÇÕES SÃO UMA TELA SÓ.
+ *
+ * Elas dividem o escopo inteiro -- FOR, WHILE e quantos registros --, que é a
+ * parte difícil e a parte onde se erra. O que muda é o miolo: repaçar precisa
+ * de campo e expressão, incluir-de precisa de arquivo e formato, deletar e
+ * recuperar não precisam de nada.
+ *
+ * `msAlvo` guarda o handle de quem abriu, pela mesma razão do editor de
+ * estrutura: a modal fica por cima, mas nada impede que a aba de trás mude, e
+ * ler `abaAtiva` na hora de executar mandaria a operação para o arquivo errado.
+ */
+const MS_OPS = ["replace", "delete", "recall", "appendfrom"];
+let msOp = "replace";
+let msAlvo = null;
+
+function msRotulo(op) {
+  return T({ replace: "UI_MASS_REPLACE", delete: "UI_MASS_DELETE",
+             recall: "UI_MASS_RECALL", appendfrom: "UI_MASS_APPEND" }[op]);
+}
+
+function msMsg(txt, classe) {
+  const el = $("ms-msg");
+  el.textContent = txt || "";
+  el.className = "ff-msg" + (txt && classe ? " " + classe : "");
+}
+
+async function msAbrir() {
+  const aba = abas.find((a) => a.h === abaAtiva);
+  if (!aba || aba.detached) return;
+
+  msAlvo = aba.h;
+  msOp = "replace";
+  msMsg("");
+  $("ms-titulo").textContent = T("UI_MASS_ON", {
+    file: (aba.info && aba.info.file) || aba.alias,
+  });
+
+  /* A lista de campos vem da estrutura já carregada; se ela ainda não veio, vem
+     agora -- repaçar sem saber os campos não é uma tela, é um formulário em
+     branco. */
+  await garantirEstrutura(aba);
+  const sel = $("ms-campo");
+  sel.textContent = "";
+  for (const c of aba.fields || []) {
+    sel.appendChild(new Option(c.name + "  (" + window.I.tipo(c.type) + ")", c.name));
+  }
+
+  const fmt = $("ms-formato");
+  fmt.textContent = "";
+  for (const par of [["dbf", "UI_FMT_DBF"], ["sdf", "UI_FMT_SDF"], ["delim", "UI_FMT_DELIM"]]) {
+    fmt.appendChild(new Option(T(par[1]), par[0]));
+  }
+
+  const modo = $("ms-modo");
+  modo.textContent = "";
+  for (const par of [["all", "UI_SCOPE_ALL_REC"], ["next", "UI_SCOPE_NEXT"],
+                     ["rest", "UI_SCOPE_REST"]]) {
+    modo.appendChild(new Option(T(par[1]), par[0]));
+  }
+
+  $("ms-with").value = "";
+  $("ms-origem").value = pastaDe(aba.caminho || "");
+  $("ms-for").value = "";
+  $("ms-while").value = "";
+  $("ms-n").value = "100";
+
+  msDesenhar();
+  $("dlg-massa").showModal();
+}
+
+/* Só a pasta do caminho, para o campo de origem já começar no lugar certo. */
+function pastaDe(caminho) {
+  const i = Math.max(caminho.lastIndexOf("/"), caminho.lastIndexOf("\\"));
+  return i >= 0 ? caminho.slice(0, i + 1) : "";
+}
+
+/* Redesenha o que depende da operação escolhida e do modo de escopo. */
+function msDesenhar() {
+  const tiras = $("ms-abas");
+  tiras.textContent = "";
+  for (const op of MS_OPS) {
+    const b = elemento("button", "ms-aba" + (op === msOp ? " ativa" : ""), msRotulo(op));
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.dataset.op = op;
+    b.addEventListener("click", () => { msOp = op; msMsg(""); msDesenhar(); });
+    tiras.appendChild(b);
+  }
+
+  $("ms-replace").hidden = msOp !== "replace";
+  $("ms-append").hidden = msOp !== "appendfrom";
+  $("ms-explica").textContent = T("UI_MASS_EXPLAIN_" + msOp.toUpperCase());
+  $("ms-with-rotulo").textContent = T("UI_MASS_WITH", { field: $("ms-campo").value || "" });
+  $("ms-executar").textContent = msRotulo(msOp);
+
+  /* "Quantos" só existe em PRÓXIMOS n. Um campo numérico aceso ao lado de
+     "Tudo" convida a digitar um número que será ignorado. */
+  $("ms-n").hidden = $("ms-modo").value !== "next";
+
+  /*
+   * O AVISO DO RECORTE é a regra que mais surpreende.
+   *
+   * Diferente de alterar estrutura -- que vale para o ARQUIVO e por isso
+   * neutraliza filtro e índice --, aqui a operação vale para O QUE ESTÁ NA
+   * TELA. O DBU original trata isso como recurso, não descuido. Mas quem tem um
+   * filtro ligado e manda "deletar tudo" precisa ver, antes, que "tudo" quer
+   * dizer "tudo o que o filtro deixa passar".
+   */
+  const aba = abas.find((a) => a.h === msAlvo);
+  const filtro = (aba && aba.info && aba.info.filter) || "";
+  const li = $("ms-regra-recorte");
+  li.textContent = filtro ? T("UI_MASS_RULE_FILTER", { expr: filtro }) : T("UI_MASS_RULE_NOFILTER");
+  li.className = filtro ? "ms-atencao" : "";
+
+  /* Texto de largura fixa e delimitado não passam pelo laço próprio: quem lê é
+     o motor do Harbour, que não tem como informar progresso. Dizer antes é
+     melhor que uma barra que não anda. */
+  const texto = msOp === "appendfrom" && $("ms-formato").value !== "dbf";
+  $("ms-nota-texto").hidden = !texto;
+  if (texto) $("ms-nota-texto").textContent = T("UI_MASS_TEXT_NOTE");
+}
+
+function msEscopo() {
+  const e = { mode: $("ms-modo").value };
+  if (e.mode === "next") e.n = Number($("ms-n").value || 0);
+  const f = $("ms-for").value.trim();
+  const w = $("ms-while").value.trim();
+  if (f) e.for = f;
+  if (w) e.while = w;
+  return e;
+}
+
+/*
+ * Executa. Uma confirmação, e só uma.
+ *
+ * O DBU original não confirmava NADA em repaçar, deletar e recuperar -- só o
+ * botão " Ok " do diálogo, e o comando saía (DBUCOPY.PRG:930-988, 1064-1122).
+ * Aqui há um aviso, porque um DELETE em 400 mil registros sem pergunta é o tipo
+ * de coisa que se faz uma vez na vida. Mas só um: o autor decidiu não oferecer
+ * cópia nestas quatro.
+ */
+async function msExecutar() {
+  const aba = abas.find((a) => a.h === msAlvo);
+  if (!aba || aba.detached) return;
+
+  const escopo = msEscopo();
+  const params = { h: msAlvo, scope: escopo };
+  if (msOp === "replace") {
+    params.field = $("ms-campo").value;
+    params.with = $("ms-with").value.trim();
+  } else if (msOp === "appendfrom") {
+    params.path = $("ms-origem").value.trim();
+    params.format = $("ms-formato").value;
+  }
+
+  const arquivo = (aba.info && aba.info.file) || aba.alias;
+  const aviso = await Swal.fire(
+    swalBase({
+      icon: "warning",
+      title: msRotulo(msOp),
+      html: escapaHtml(
+        T("UI_MASS_CONFIRM_" + msOp.toUpperCase(), {
+          file: arquivo,
+          field: params.field || "",
+          source: params.path ? params.path.replace(/^.*[\\/]/, "") : "",
+        }) + " " + T("UI_MASS_CONFIRM_SCOPE", { scope: msTextoDoEscopo(escopo) })
+      ),
+      showCancelButton: true,
+      confirmButtonText: T("UI_GO_AHEAD"),
+      cancelButtonText: T("UI_CANCEL"),
+    })
+  );
+  if (!aviso.isConfirmed) return;
+
+  /* Fecha ANTES de operar: a barra de progresso vive fora do diálogo, e um
+     <dialog> modal deixa inerte tudo o que está fora dele -- o botão Parar
+     ficaria inalcançável. Mesma lição da T10. */
+  $("dlg-massa").close();
+
+  try {
+    const r = await comProgresso(DBU.rpc("mass." + msOp, params));
+    gradeDe.delete(msAlvo);
+    await repintarDoEstado();
+    await Swal.fire(
+      swalBase({
+        icon: "success",
+        title: T("UI_DONE"),
+        html: escapaHtml(msTextoDoResultado(r)),
+        confirmButtonText: T("UI_OK"),
+        showCancelButton: false,
+      })
+    );
+  } catch (e) {
+    await repintarDoEstado();
+    /* Reabre com tudo preenchido: quem escreveu uma expressão de trinta
+       caracteres e errou um parêntese quer corrigir, não redigitar. */
+    if (abas.some((a) => a.h === msAlvo && !a.detached)) {
+      if (!$("dlg-massa").open) $("dlg-massa").showModal();
+      msMsg(msgErro(e), sevErro(e));
+    } else {
+      await Swal.fire(
+        swalBase({ icon: "error", title: T("UI_ERROR"), html: escapaHtml(msgErro(e)),
+                   confirmButtonText: T("UI_OK"), showCancelButton: false })
+      );
+    }
+  }
+}
+
+function msTextoDoEscopo(e) {
+  const chave = { all: "UI_SCOPE_ALL_REC", next: "UI_SCOPE_NEXT_N", rest: "UI_SCOPE_REST" }[e.mode];
+  const partes = [T(chave, { n: e.n || 0 })];
+  if (e.while) partes.push("WHILE " + e.while);
+  if (e.for) partes.push("FOR " + e.for);
+  return partes.join(" · ");
+}
+
+function msTextoDoResultado(r) {
+  if (r.action === "appendfrom") {
+    return T("UI_MASS_DONE_APPEND", { n: r.changed, file: r.file, total: r.records });
+  }
+  return T("UI_MASS_DONE_" + r.action.toUpperCase(), { n: r.changed, seen: r.seen });
+}
+
+$("pg-massa").addEventListener("click", msAbrir);
+$("ms-cancelar").addEventListener("click", () => $("dlg-massa").close());
+$("ms-executar").addEventListener("click", msExecutar);
+$("ms-modo").addEventListener("change", msDesenhar);
+$("ms-formato").addEventListener("change", msDesenhar);
+$("ms-campo").addEventListener("change", msDesenhar);
+
+/* Só dígitos no "quantos", pela mesma razão do editor de estrutura: o campo
+   numérico do navegador aceita `e`, `+` e `-`, que aqui não querem dizer nada. */
+$("ms-n").addEventListener("input", () => {
+  const antes = $("ms-n").value;
+  const so = antes.replace(/[^0-9]/g, "");
+  if (so !== antes) $("ms-n").value = so;
+});
+
+$("ms-procurar").addEventListener("click", async () => {
+  const inv = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+  if (!inv) { msMsg(T("ERROR_DIALOG_UNAVAILABLE"), "aviso"); return; }
+  try {
+    const escolhido = await inv("plugin:dialog|open", {
+      options: { title: T("UI_MASS_PICK_SOURCE"), multiple: false, directory: false },
+    });
+    if (escolhido) $("ms-origem").value = escolhido;
+  } catch (e) {
+    msMsg(T("ERROR_DIALOG_FAILED", { detail: e.message || e }), "erro");
+  }
+});
+
 // ------------------------------------------------------- T14: PACK e ZAP
 
 /*

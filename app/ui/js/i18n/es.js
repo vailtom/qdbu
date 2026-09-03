@@ -799,4 +799,65 @@
   UI_DISCARD_TITLE: "¿Descartar los cambios?",
   UI_DISCARD_ASK: "La estructura que usted armó todavía no fue aplicada y se perderá.",
 
+
+  // =================================================== T13: operaciones masivas
+  UI_MASS: "En masa",
+  UI_MASS_TITLE: "Reemplazar, borrar, recuperar o agregar registros de otro archivo",
+  UI_MASS_ON: "En masa · {file}",
+
+  UI_MASS_REPLACE: "Reemplazar",
+  UI_MASS_DELETE: "Borrar",
+  UI_MASS_RECALL: "Recuperar",
+  UI_MASS_APPEND: "Agregar de",
+
+  UI_MASS_EXPLAIN_REPLACE:
+    "Graba el resultado de la expresión en el campo elegido, en cada registro del alcance.",
+  UI_MASS_EXPLAIN_DELETE:
+    "Marca como borrados los registros del alcance. Siguen en el archivo y vuelven con Recuperar; los elimina de verdad el Compactar.",
+  UI_MASS_EXPLAIN_RECALL:
+    "Quita la marca de borrado de los registros del alcance.",
+  UI_MASS_EXPLAIN_APPENDFROM:
+    "Agrega al final de este archivo los registros del archivo de origen. Los campos se emparejan por NOMBRE; lo que falte de un lado queda fuera o nace vacío.",
+
+  UI_MASS_FIELD: "Campo",
+  UI_MASS_WITH: "Reemplazar {field} con",
+  UI_MASS_WITH_HINT: "expresión — ej.: CLI_LIMC * 1.1",
+  UI_MASS_SOURCE: "Archivo de origen",
+  UI_MASS_PICK_SOURCE: "Elegir el archivo de origen",
+  UI_MASS_FORMAT: "Formato",
+  UI_FMT_DBF: "DBF (otro archivo del mismo tipo)",
+  UI_FMT_SDF: "Texto de ancho fijo (SDF)",
+  UI_FMT_DELIM: "Texto delimitado",
+  UI_MASS_TEXT_NOTE:
+    "Los archivos de texto los lee el motor de Harbour, que no informa progreso: la barra no avanza y no hay cómo interrumpir. En DBF hay progreso y cancelación.",
+
+  UI_MASS_SCOPE: "Alcance",
+  UI_MASS_RECORDS: "Registros",
+  UI_SCOPE_ALL_REC: "Todo",
+  UI_SCOPE_NEXT: "Próximos…",
+  UI_SCOPE_NEXT_N: { one: "próximo {n} registro", other: "próximos {n} registros" },
+  UI_SCOPE_REST: "Del registro actual hasta el final",
+  UI_MASS_FOR_HINT: "solo los registros donde… (opcional)",
+  UI_MASS_WHILE_HINT: "mientras… — se detiene en el primero que no coincida (opcional)",
+
+  UI_MASS_RULE_WHILE:
+    "WHILE tiene precedencia sobre FOR: el WHILE SE DETIENE en el primer registro que no coincide; el FOR solo lo SALTA y sigue hasta el final.",
+  UI_MASS_RULE_TOP:
+    "Todo empieza desde arriba. Próximos y hasta-el-final empiezan en el registro donde está el cursor ahora.",
+  UI_MASS_RULE_FILTER:
+    "El filtro activo CUENTA aquí: la operación solo alcanza lo que él deja pasar ({expr}).",
+  UI_MASS_RULE_NOFILTER:
+    "No hay filtro activo — la operación alcanza el archivo entero dentro del alcance.",
+
+  UI_MASS_CONFIRM_REPLACE: "El campo {field} será reescrito en {file}. No hay cómo deshacer.",
+  UI_MASS_CONFIRM_DELETE: "Los registros serán marcados como borrados en {file}.",
+  UI_MASS_CONFIRM_RECALL: "La marca de borrado será quitada en {file}.",
+  UI_MASS_CONFIRM_APPENDFROM: "Los registros de {source} serán agregados a {file}.",
+  UI_MASS_CONFIRM_SCOPE: "Alcance: {scope}.",
+
+  UI_MASS_DONE_REPLACE: { one: "{n} registro modificado, de {seen} examinados.", other: "{n} registros modificados, de {seen} examinados." },
+  UI_MASS_DONE_DELETE: { one: "{n} registro marcado, de {seen} examinados.", other: "{n} registros marcados, de {seen} examinados." },
+  UI_MASS_DONE_RECALL: { one: "{n} registro recuperado, de {seen} examinados.", other: "{n} registros recuperados, de {seen} examinados." },
+  UI_MASS_DONE_APPEND: { one: "{n} registro vino de {file}. El archivo tiene ahora {total}.", other: "{n} registros vinieron de {file}. El archivo tiene ahora {total}." },
+
 };

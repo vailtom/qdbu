@@ -1679,3 +1679,72 @@ body.arrastando-aba .aba { cursor: grabbing; }
 dialog > .swal2-container {
   position: absolute; inset: 0; width: auto; height: auto;
 }
+
+/* ------------------------------------------------ T13: operações em massa */
+
+#dlg-massa { width: min(680px, 94vw); max-width: none; }
+
+/* As quatro operações como tiras, e não como um <select>: são quatro, cabem na
+   linha, e ver as outras três é o que ensina que existem. Num combo, "Recuperar"
+   só é descoberto por quem já sabe que procura. */
+.ms-abas { display: flex; gap: 4px; margin: 4px 0 10px; flex-wrap: wrap; }
+.ms-aba {
+  flex: 1 1 0; min-width: 110px; padding: 7px 10px;
+  background: var(--bg3); border: 1px solid var(--line); border-radius: 6px;
+  color: var(--dim); cursor: pointer; font-size: 12.5px;
+}
+.ms-aba:hover { border-color: var(--line2); color: var(--fg); }
+.ms-aba.ativa {
+  background: var(--bg4); border-color: var(--amber); color: var(--fg); font-weight: 600;
+}
+
+.ms-linha { display: block; margin-bottom: 10px; }
+.ms-linha > span:first-child {
+  display: block; font-size: 12px; color: var(--dim); margin-bottom: 4px;
+}
+.ms-quantos { display: flex; gap: 6px; align-items: center; }
+.ms-quantos select { flex: 1 1 auto; min-width: 0; }
+/* O "quantos" é estreito de propósito: oito dígitos é o teto do original, e um
+   campo largo ao lado do combo pareceria outro seletor. */
+.ms-quantos input { flex: 0 0 96px; text-align: right; }
+
+.ms-escopo {
+  border: 1px solid var(--line); border-radius: 6px;
+  padding: 10px 12px 4px; margin: 12px 0 6px;
+}
+.ms-escopo legend { font-size: 11px; color: var(--dim); padding: 0 6px; letter-spacing: .04em; }
+
+/* As três regras do escopo ficam na TELA, não só no código: WHILE vence FOR,
+   "tudo" começa do topo, e o filtro ativo continua valendo. São regras do xBase
+   que ninguém adivinha, e errar qualquer uma altera os registros errados. */
+.ms-regras {
+  margin: 4px 0 8px; padding-left: 18px;
+  font-size: 11.5px; color: var(--dim2); line-height: 1.55;
+}
+.ms-regras li.ms-atencao { color: var(--aviso); }
+
+.ms-nota {
+  margin: 0 0 10px; padding: 7px 10px; border-radius: 5px;
+  background: var(--bg3); border-left: 3px solid var(--aviso);
+  font-size: 11.5px; color: var(--dim); line-height: 1.5;
+}
+
+/*
+ * `dialog input` já tinha estilo; `dialog select` não tinha, e cada combo dentro
+ * de um diálogo saía com a aparência nativa do sistema -- caixa clara, fonte de
+ * sistema -- no meio de uma tela escura. Aparecia em qualquer diálogo com combo;
+ * ficou visível na tela de massa, que tem três.
+ *
+ * `.estrutura select` continua com o estilo próprio dela: a especificidade
+ * (classe + tipo) vence esta regra (tipo + tipo), independentemente da ordem.
+ */
+dialog select {
+  display: block; width: 100%; margin-top: 4px; padding: 7px 9px;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 5px;
+  font-family: var(--mono); font-size: 12.5px;
+}
+dialog select:focus { outline: none; border-color: var(--amber); }
+/* Dentro das linhas da tela de massa o combo não é um campo de formulário
+   solto: ele divide a linha com o "quantos", então não pode ser block. */
+.ms-quantos select { display: inline-block; margin-top: 0; }

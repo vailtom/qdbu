@@ -38,6 +38,7 @@ src/util/conv.prg
 src/util/log.prg
 src/util/job.prg
 src/util/backup.prg
+src/util/scope.prg
 src/util/rebind.prg
 
 # api, um arquivo por dominio
@@ -54,3 +55,4 @@ src/api_log.prg
 src/api_backup.prg
 src/api_bulk.prg
 src/api_struct.prg
+src/api_mass.prg
