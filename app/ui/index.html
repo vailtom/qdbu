@@ -723,6 +723,20 @@
       </span>
     </label>
 
+    <!-- COMPACTAR: um .zip no lugar do conjunto de cópias.
+
+         A diferença não é só o tamanho -- é QUANTOS arquivos saem. O backup
+         comum deixa um .dbf (e o .dbt, quando há memo) ao lado; o compactado
+         deixa UM arquivo, que é o que se manda por e-mail ou se guarda num
+         pendrive sem risco de separar o par. -->
+    <label class="pv-zip" id="pv-zip-box">
+      <input type="checkbox" id="pv-zip">
+      <span>
+        <b data-i18n="UI_BACKUP_ZIP"></b>
+        <small data-i18n="UI_BACKUP_ZIP_HINT"></small>
+      </span>
+    </label>
+
     <ul class="pv-checks" id="pv-checks"></ul>
 
     <details class="pv-conjunto" id="pv-conjunto-box">

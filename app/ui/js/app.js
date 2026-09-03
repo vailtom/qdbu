@@ -4940,7 +4940,29 @@ function detalheDoCheck(c) {
  * mais — interessa o que existe agora, com o nome pelo qual se procura.
  */
 function mostrarBackupFeito(r) {
-  msgPrevoo(T("UI_BACKUP_DONE", { dir: paraExibir(r.dir) }), "ok");
+  /*
+   * COMPACTADO DIZ O QUANTO ENCOLHEU, e por qual via saiu.
+   *
+   * "Cópia feita" não responde o que a pessoa quer saber depois de marcar
+   * compactar: quanto ficou, e se o original precisou ser copiado antes. O
+   * `mode` vem da DLL dizendo qual caminho foi possível -- `zip-direct` quando
+   * deu para ler o original, `zip-copy` quando o arquivo estava exclusivo e a
+   * cópia por registro foi necessária.
+   */
+  if (String(r.mode || "").startsWith("zip")) {
+    const pct = r.source > 0 ? Math.round((1 - r.bytes / r.source) * 100) : 0;
+    msgPrevoo(
+      T("UI_BACKUP_DONE_ZIP", {
+        dir: paraExibir(r.dir),
+        from: window.I.tamanho(r.source),
+        to: window.I.tamanho(r.bytes),
+        pct: pct,
+      }) + " " + T(r.mode === "zip-direct" ? "UI_ZIP_DIRECT" : "UI_ZIP_COPY"),
+      "ok"
+    );
+  } else {
+    msgPrevoo(T("UI_BACKUP_DONE", { dir: paraExibir(r.dir) }), "ok");
+  }
 
   const corpo = $("pv-conjunto");
   corpo.textContent = "";
@@ -5079,6 +5101,7 @@ $("pv-rodar").addEventListener("click", async () => {
         path: prevooOperacao ? "" : $("pv-destino").value.trim(),
         forOperation: prevooOperacao,
         confirmLarge: $("pv-confirma").checked,
+        compress: $("pv-zip").checked,
       })
     );
     mostrarBackupFeito(r);

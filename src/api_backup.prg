@@ -332,9 +332,10 @@ FUNCTION Api_Backup_Run( hP )
    LOCAL cAlvo    := ParStr( hP, "path" )
    LOCAL lOp      := ParLog( hP, "forOperation", .T. )
    LOCAL lConfGde := ParLog( hP, "confirmLarge", .F. )
+   LOCAL lZip     := ParLog( hP, "compress", .F. )
    LOCAL xErro, hRel, cSelo, aFeitos := {}, hArq, cDestino, nTotal, nFeito := 0
    LOCAL hCopia, aCopias := {}, nEste := 0
-   LOCAL lAberto
+   LOCAL lAberto, cZip, cModoZip := ""
 
    IF ( xErro := SessSelect( cH ) ) != NIL
       RETURN xErro
@@ -368,7 +369,48 @@ FUNCTION Api_Backup_Run( hP )
    /* SessSelect() ja rodou e nos deixou na area deste handle. */
    lAberto := ! Empty( Alias() )
 
-   Dbu_JobBegin( JobMsg( "UI_JOB_BACKUP", hRel[ "file" ] ), nTotal )
+   Dbu_JobBegin( JobMsg( iif( lZip, "UI_JOB_ZIP", "UI_JOB_BACKUP" ), ;
+                         hRel[ "file" ] ), nTotal )
+
+   /*
+    * COMPACTADO: um .zip no lugar do conjunto de copias.
+    *
+    * A diferenca com a copia normal nao e so o tamanho -- e QUANTOS ARQUIVOS
+    * saem. O backup comum gera um .dbf (e o .dbt quando ha memo) ao lado; o
+    * compactado gera UM arquivo so, que e o que se manda por e-mail ou guarda
+    * num pendrive sem medo de separar o par.
+    *
+    * A via -- zipar o original direto ou copiar antes -- e escolhida DENTRO do
+    * ZipDoArquivo, tentando: ele nao pergunta o modo do arquivo, ele tenta abrir
+    * e ve o que o SO responde. `cModo` volta dizendo qual foi, e a tela mostra.
+    */
+   IF lZip
+      cZip := hb_FNameExtSet( hRel[ "target" ], ".zip" )
+
+      xErro := ZipDoArquivo( SessHandle( cH )[ "path" ], ;
+                             cZip, hRel[ "file" ], ;
+                             {| n, t | HB_SYMBOL_UNUSED( t ), Dbu_Progress( n ) }, ;
+                             @cModoZip )
+      Dbu_JobEnd()
+
+      IF xErro != NIL
+         RETURN xErro
+      ENDIF
+
+      RETURN Ok( { ;
+         "file"    => hRel[ "file" ], ;
+         "stamp"   => cSelo, ;
+         "dir"     => hRel[ "dir" ], ;
+         "bytes"   => Max( 0, hb_FSize( cZip ) ), ;
+         "source"  => nTotal, ;
+         "mode"    => "zip-" + cModoZip, ;
+         "files"   => { { "source" => hRel[ "file" ], ;
+                          "backup" => hb_FNameNameExt( cZip ), ;
+                          "bytes"  => Max( 0, hb_FSize( cZip ) ), ;
+                          "role"   => "zip" } }, ;
+         "indexes" => hRel[ "indexes" ], ;
+         "checks"  => hRel[ "checks" ] } )
+   ENDIF
 
    /*
     * DUAS VIAS, e a escolha e pelo estado do arquivo -- nao por preferencia.

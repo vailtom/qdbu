@@ -897,4 +897,14 @@
   UI_CDP_ANSI: "ANSI / Windows-1252",
   UI_CDP_CP850: "CP850 (DOS)",
 
+  UI_BACKUP_ZIP: "Compress into a .zip",
+  UI_BACKUP_ZIP_HINT: "A single file, instead of the .dbf (and the .dbt, when there is a memo).",
+  UI_BACKUP_DONE_ZIP: "Compressed into {dir} - from {from} to {to}, {pct}% smaller.",
+  UI_ZIP_DIRECT: "Read straight from the original, with no intermediate copy.",
+  UI_ZIP_COPY: "The file was held exclusively, so it was copied record by record before compressing.",
+  UI_JOB_ZIP: "Compressing {file}...",
+  ERROR_ZIP_CREATE_FAILED: "'{file}' could not be created.",
+  ERROR_ZIP_FAILED: "'{file}' could not be written: {reason}",
+  UI_ROLE_ZIP: "compressed",
+
 };

@@ -14,6 +14,7 @@ hbct.hbc
 # XLSX real (OOXML/ZIP), nao SpreadsheetML: numero sai numero e data sai data.
 # As tres .lib sao x86, entao linkam direto -- ver lib/harbour-xlsxwriter/README.md.
 lib/harbour-xlsxwriter/hbxlsxwriter.hbc
+hbmzip.hbc
 -w3
 -dflag=/DEF:src/bridge/dbudll.def
 
@@ -40,6 +41,7 @@ src/util/job.prg
 src/util/backup.prg
 src/util/scope.prg
 src/util/csv.prg
+src/util/zip.prg
 src/util/rebind.prg
 
 # api, um arquivo por dominio
