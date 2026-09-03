@@ -38,6 +38,26 @@ FUNCTION DllDispatch( cFunc, cArg )
          xRet := Despacha( cArg )          /* envelope */
       ELSEIF Empty( cFunc )
          xRet := "ERR:funcao nao informada"
+      /*
+       * SO FUNCAO `API_`, e a checagem de prefixo vem ANTES da de existencia.
+       *
+       * `__dynsIsFun()` responde por QUALQUER simbolo linkado na DLL -- o
+       * runtime inteiro do Harbour, nao so o nosso. Sem o prefixo, uma string
+       * digitada num campo de texto alcanca `OS()`, `VERSION()` e, o que
+       * importa, `__QUIT()`: o processo morre sem erro, sem log e sem o "ERR:"
+       * que o contrato promete. Medido em 03/09/2026 -- `OS()` devolveu
+       * "Windows 8 6.2.9200" por esta via.
+       *
+       * A via do envelope ja era segura: `NomeDaFuncao()` monta "API_" + metodo
+       * e nao ha como escapar disso. O buraco era so aqui, na chamada crua que
+       * existe por compatibilidade com o cliente C -- e o cliente C so chama
+       * `Api_*` mesmo.
+       *
+       * Herdado do dll-harbour, o projeto-ponte de onde este nasceu. Apontado
+       * por revisao de codigo naquele repositorio; conferido e corrigido aqui.
+       */
+      ELSEIF ! ( Left( Upper( cFunc ), 4 ) == "API_" )
+         xRet := "ERR:so funcoes Api_* podem ser chamadas (" + cFunc + ")"
       ELSEIF ! __dynsIsFun( Upper( cFunc ) )
          xRet := "ERR:funcao '" + cFunc + "' nao existe na DLL"
       ELSE

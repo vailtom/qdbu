@@ -1,4 +1,12 @@
 @echo off
+rem `setlocal` NAO E DETALHE: sem ele, o que este script exporta VAZA
+rem para o cmd de quem chamou -- e o debug.bat exporta
+rem WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9333. Rodar
+rem debug.bat e depois run.bat na MESMA janela abriria CDP num lancamento que
+rem deveria estar sem ele, e em qualquer outro programa WebView2 iniciado dali.
+rem O make.bat tem a variante lenta do mesmo problema: cada chamada empilha
+rem C:\hbmsvcin no PATH, que cresce sem limite na sessao.
+setlocal
 rem Dev com recarga de frontend SEM recompilar o Rust.
 rem
 rem generate_context!() embute app\ui\ no binario em tempo de compilacao. Aqui o

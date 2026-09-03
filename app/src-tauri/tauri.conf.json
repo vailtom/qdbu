@@ -27,6 +27,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "resources": [
+      "../../bin/dbudll.dll"
+    ],
     "icon": [
       "icons/icon.ico"
     ]
