@@ -5108,6 +5108,11 @@ function esImpacto() {
       continue;
     }
     if (!c._de) {
+      /* Campo ainda sem nome não vira linha de impacto: sairia como "'' é
+         criado, vazio em todos os registros". A faixa de erro logo acima já
+         diz que falta o nome, e dizer duas vezes -- uma delas com aspas vazias
+         -- só suja a lista que a pessoa precisa ler antes de aplicar. */
+      if (!String(c.name || "").trim()) continue;
       itens.push({ grave: false, chave: "UI_IMPACT_ADDED", p: { field: c.name } });
       continue;
     }
@@ -5246,11 +5251,30 @@ function esNovoCampo() {
   return { name: "", type: "C", len: 10, dec: 0, _id: "n" + ++esSeq, _de: null };
 }
 
+/*
+ * O CURSOR VAI PARA O NOME DA LINHA `i`.
+ *
+ * Um campo novo nasce sem nome, e sem nome ele é o único erro que trava o
+ * Aplicar. Deixar o cursor fora dele obriga a mirar o mouse numa célula de
+ * tabela antes de poder digitar aquilo que a tela está esperando -- e a linha
+ * acabou de ser criada justamente para receber um nome.
+ *
+ * `desenharEditor()` é síncrono e recria os `<input>`, então o foco só pode ser
+ * pedido DEPOIS dele: focar o elemento antigo não faz nada, porque ele já saiu
+ * do documento.
+ */
+function esFocarNome(i) {
+  const tr = $("ed-estrutura").querySelector('tbody tr[data-i="' + i + '"]');
+  const inp = tr && tr.querySelector("input");
+  if (inp) inp.focus();
+}
+
 $("es-add").addEventListener("click", () => {
   if (!esRascunho) return;
   esRascunho.push(esNovoCampo());
   esSel = esRascunho.length - 1;
   desenharEditor();
+  esFocarNome(esSel);
 });
 
 /* Inserir ACIMA do selecionado. A posição do campo importa no DBF — é a ordem
@@ -5260,7 +5284,9 @@ $("es-ins").addEventListener("click", () => {
   if (!esRascunho) return;
   const i = esSel >= 0 ? esSel : esRascunho.length;
   esRascunho.splice(i, 0, esNovoCampo());
+  esSel = i;
   desenharEditor();
+  esFocarNome(esSel);
 });
 
 /*
