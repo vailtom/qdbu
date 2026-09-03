@@ -228,3 +228,62 @@ FUNCTION Ok( xData )
 /* .T. when the value is a response already built by Err()/Ok(). */
 FUNCTION IsResponse( x )
    RETURN HB_ISHASH( x ) .AND. hb_HHasKey( x, "ok" )
+
+
+/*
+ * O TEXTO COMPLETO DE UM ERRO DO HARBOUR -- e este e o PADRAO DO PROJETO.
+ *
+ * Toda mensagem que chega a uma pessoa mostra a informacao INTEIRA. Nunca a
+ * descricao generica sozinha.
+ *
+ * O erro do Harbour vem em tres partes, e so a primeira e obvia:
+ *
+ *   description  o que aconteceu       "Variable does not exist"
+ *   operation    SOBRE O QUE           "W"        <- o que faltava
+ *   args         com quais valores     (quando ha)
+ *
+ * Guardar so `description` produz frases que descrevem uma categoria e nao um
+ * fato: "Variable does not exist" nao diz QUAL variavel, e quem le fica sem o
+ * unico dado que resolveria o problema. Foi assim que um `W` digitado por
+ * engano num campo WHILE virou uma recusa que a pessoa nao tinha como
+ * diagnosticar.
+ *
+ * O `api_index.prg` ja tratava disso ha tempos, e o comentario de la e a regra
+ * em uma linha: "Dizer `Variable does not exist [LOG_NOW]` nao ajuda ninguem".
+ * Certo -- mas nao dizer o `[LOG_NOW]` ajuda menos ainda. A funcao vive aqui,
+ * uma so, para que o proximo tratador de erro nasca completo sem que ninguem
+ * precise lembrar disso.
+ */
+FUNCTION ErroTexto( oErr, cPadrao )
+
+   LOCAL cDesc, cOper, cTexto
+
+   IF ! HB_ISOBJECT( oErr )
+      RETURN hb_defaultValue( cPadrao, "" )
+   ENDIF
+
+   cDesc := iif( HB_ISSTRING( oErr:description ), AllTrim( oErr:description ), "" )
+   cOper := iif( HB_ISSTRING( oErr:operation ), AllTrim( oErr:operation ), "" )
+
+   cTexto := iif( Empty( cDesc ), hb_defaultValue( cPadrao, "" ), cDesc )
+
+   /* O `operation` so entra se ainda nao estiver dito. O Harbour as vezes ja o
+      inclui na descricao, e repetir viraria "Argument error: + : +". */
+   IF ! Empty( cOper ) .AND. ! ( Upper( cOper ) $ Upper( cTexto ) )
+      cTexto := iif( Empty( cTexto ), cOper, cTexto + ": " + cOper )
+   ENDIF
+
+   RETURN cTexto
+
+
+/*
+ * O nome do simbolo que o erro cita, sozinho -- para quem precisa dele como
+ * DADO e nao como frase (interpolar em "o campo {field} nao existe").
+ */
+FUNCTION ErroSimbolo( oErr )
+
+   IF ! HB_ISOBJECT( oErr ) .OR. ! HB_ISSTRING( oErr:operation )
+      RETURN ""
+   ENDIF
+
+   RETURN AllTrim( oErr:operation )

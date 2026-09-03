@@ -140,7 +140,7 @@ FUNCTION Desligar( hEstado, lFecharIndices )
 FUNCTION Religar( hEstado, lSemIndices )
 
    LOCAL aFalhas := {}
-   LOCAL hIdx, nOrdem := 0, i
+   LOCAL hIdx, nOrdem := 0, i, oErr
 
    /*
     * `lSemIndices` e o caminho da ALTERACAO DE ESTRUTURA.
@@ -168,12 +168,13 @@ FUNCTION Religar( hEstado, lSemIndices )
       FOR EACH hIdx IN hEstado[ "indexes" ]
          BEGIN SEQUENCE WITH {| e | Break( e ) }
             ordListAdd( hIdx[ "path" ] )
-         RECOVER
+         RECOVER USING oErr
             AAdd( aFalhas, { ;
                "item"   => "index", ;
                "code"   => "ERROR_REBIND_INDEX_FAILED", ;
-               "params" => { "file" => hb_FNameNameExt( hIdx[ "path" ] ), ;
-                             "key"  => hIdx[ "key" ] } } )
+               "params" => { "file"   => hb_FNameNameExt( hIdx[ "path" ] ), ;
+                             "key"    => hIdx[ "key" ], ;
+                             "reason" => ErroTexto( oErr ) } } )
          END SEQUENCE
       NEXT
    ENDIF
@@ -205,11 +206,12 @@ FUNCTION Religar( hEstado, lSemIndices )
    IF ! Empty( hEstado[ "filter" ] )
       BEGIN SEQUENCE WITH {| e | Break( e ) }
          dbSetFilter( hb_macroBlock( hEstado[ "filter" ] ), hEstado[ "filter" ] )
-      RECOVER
+      RECOVER USING oErr
          AAdd( aFalhas, { ;
             "item"   => "filter", ;
             "code"   => "ERROR_REBIND_FILTER_FAILED", ;
-            "params" => { "expr" => hEstado[ "filter" ] } } )
+            "params" => { "expr"   => hEstado[ "filter" ], ;
+                          "reason" => ErroTexto( oErr ) } } )
       END SEQUENCE
    ENDIF
 

@@ -75,9 +75,7 @@ FUNCTION ExprCompila( cH, cExpr, cErro )
    BEGIN SEQUENCE WITH {| e | Break( e ) }
       bBloco := hb_macroBlock( cExpr )
    RECOVER USING oErr
-      cErro := "nao compila: " + ;
-               iif( HB_ISOBJECT( oErr ) .AND. HB_ISSTRING( oErr:description ), ;
-                    oErr:description, "erro de sintaxe" )
+      cErro := ErroTexto( oErr, "erro de sintaxe" )
       RETURN NIL
    END SEQUENCE
 
@@ -107,8 +105,10 @@ FUNCTION ExprAvalia( bBloco, lFalhou, cErro )
       xRet := Eval( bBloco )
    RECOVER USING oErr
       lFalhou := .T.
-      cErro := iif( HB_ISOBJECT( oErr ) .AND. HB_ISSTRING( oErr:description ), ;
-                    oErr:description, "erro ao avaliar" )
+      /* COMPLETO: description + operation. Sem o `operation`, um `W` digitado
+         por engano vira "Variable does not exist" e a pessoa nao descobre que o
+         culpado e o `W`. Ver ErroTexto() em util/err.prg -- padrao do projeto. */
+      cErro := ErroTexto( oErr, "erro ao avaliar" )
       RETURN NIL
    END SEQUENCE
 

@@ -573,11 +573,11 @@
 
   // ------------------------------- religar estado depois de operação exclusiva
   ERROR_REBIND_INDEX_FAILED:
-    "O índice '{file}' não voltou a abrir. Chave: {key}",
+    "O índice '{file}' não voltou a abrir: {reason}. Chave: {key}",
   ERROR_REBIND_ORDER_LOST:
     "A ordem '{name}' não existe mais; a listagem voltou à ordem natural.",
   ERROR_REBIND_FILTER_FAILED:
-    "O filtro não foi reaplicado — {expr}",
+    "O filtro não foi reaplicado: {reason} — {expr}",
   ERROR_OPERATION_FAILED:
     "A operação sobre '{file}' falhou. O arquivo não foi alterado.",
   WARN_REBIND_RECORD_GONE:
@@ -658,10 +658,10 @@
   UI_NOTHING_TO_PACK: "'{file}' não tem registros marcados; nada foi alterado.",
 
   ERROR_ZAP_CREATE_FAILED:
-    "Não foi possível criar o arquivo vazio de '{file}'. O original foi " +
-    "restaurado e nada se perdeu.",
-  ERROR_ZAP_FAILED: "O ZAP de '{file}' falhou. O arquivo não foi alterado.",
-  ERROR_PACK_FAILED: "A compactação de '{file}' falhou. O arquivo não foi alterado.",
+    "Não foi possível criar o arquivo vazio de '{file}': {reason}. O original " +
+    "foi restaurado e nada se perdeu.",
+  ERROR_ZAP_FAILED: "O ZAP de '{file}' falhou: {reason}. O arquivo não foi alterado.",
+  ERROR_PACK_FAILED: "A compactação de '{file}' falhou: {reason}. O arquivo não foi alterado.",
 
   UI_DONE: "Pronto",
   UI_ERROR: "Não deu",
@@ -816,11 +816,11 @@
 
   ERROR_NO_SOURCE: "Escolha o arquivo de origem.",
   ERROR_SOURCE_NOT_FOUND: "'{file}' não foi encontrado.",
-  ERROR_CANNOT_OPEN_SOURCE: "Não foi possível abrir '{file}'.",
+  ERROR_CANNOT_OPEN_SOURCE: "Não foi possível abrir '{file}': {reason}",
   ERROR_FORMAT_UNKNOWN: "Formato de origem '{format}' não existe.",
   ERROR_FORMAT_UNAVAILABLE: "Esta versão não lê arquivos {format}.",
   ERROR_APPEND_FAILED: "Não foi possível acrescentar o registro.",
-  ERROR_APPEND_TEXT_FAILED: "'{file}' não pôde ser lido como {format}.",
+  ERROR_APPEND_TEXT_FAILED: "'{file}' não pôde ser lido como {format}: {reason}",
   ERROR_CANNOT_LOCK_FILE:
     "'{file}' está sendo usado por outra pessoa. Operações em massa exigem o arquivo só para você.",
 
@@ -888,5 +888,8 @@
   UI_MASS_DONE_DELETE: { one: "{n} registro marcado, de {seen} examinados.", other: "{n} registros marcados, de {seen} examinados." },
   UI_MASS_DONE_RECALL: { one: "{n} registro recuperado, de {seen} examinados.", other: "{n} registros recuperados, de {seen} examinados." },
   UI_MASS_DONE_APPEND: { one: "{n} registro veio de {file}. O arquivo tem agora {total}.", other: "{n} registros vieram de {file}. O arquivo tem agora {total}." },
+
+  UI_MASS_FROM_RECORD: "a partir do registro {n}",
+  UI_MASS_FROM_NONE: "Nenhum registro escolhido — clique numa linha da grade.",
 
 };

@@ -1423,6 +1423,21 @@ let visaoAtiva = "dados";
 /** Estado da grade por handle: sobrevive a troca de aba. */
 const gradeDe = new Map(); // h -> {rows, cols, first, last, records, bof, eof, readAt}
 
+/*
+ * O REGISTRO CORRENTE, POR ABA -- e a UI é dona dele, não a DLL.
+ *
+ * Parece redondo guardar aqui o que a work area já sabe, e não é: `data.page`
+ * MOVE o ponteiro ao paginar (medido na T10, quando ele foi usado como sonda e
+ * mediu o próprio instrumento). Então o "registro corrente" da DLL muda só de
+ * rolar a grade, sem ninguém pedir -- e um `PRÓXIMOS 100` disparado depois de
+ * rolar operaria a partir de um lugar que a pessoa não escolheu.
+ *
+ * Com o cursor aqui, ele só muda quando alguém DIZ que mudou: clicando numa
+ * linha ou pelo "ir p/ registro". Antes de operar, `data.goto` põe a work area
+ * onde a tela está mostrando. Rolar não altera mais nada.
+ */
+const cursorDe = new Map(); // h -> recno escolhido pela pessoa
+
 function paginaDaAba(h) {
   return gradeDe.get(h) || null;
 }
@@ -1518,6 +1533,11 @@ function desenharGrade() {
     // o DBU original usava um "*" facil de nao ver.
     if (linha.deleted) tr.className = "deletado";
 
+    /* A LINHA DO CURSOR FICA MARCADA. Sem isto, "próximos n" e "do atual até o
+       fim" partem de um registro que a pessoa não vê -- ela escolhe um escopo
+       relativo a um ponto invisível. */
+    if (linha.recno === cursorDe.get(abaAtiva)) tr.classList.add("cursor");
+
     const tdn = elemento("td", "recno", String(linha.recno));
     if (linha.deleted) tdn.title = T("UI_DELETED_RECORD");
     tr.appendChild(tdn);
@@ -1526,7 +1546,35 @@ function desenharGrade() {
     corpo.appendChild(tr);
   }
 
+  /* Nenhum cursor ainda: adota o primeiro registro à vista. Deixar sem marca
+     nenhuma faria a pessoa escolher "do atual até o fim" sem um "atual". */
+  if (!cursorDe.has(abaAtiva) && p.rows.length) {
+    cursorDe.set(abaAtiva, p.rows[0].recno);
+    const primeira = corpo.querySelector("tr");
+    if (primeira) primeira.classList.add("cursor");
+  }
+
   atualizarBarraGrade(p);
+}
+
+/*
+ * Põe o cursor num registro: marca a linha e leva a work area junto.
+ *
+ * O `data.goto` acontece AQUI, e não na hora de operar, para que o estado da
+ * DLL e o da tela nunca divirjam -- e porque `data.seek`/`data.locate` também
+ * mexem no ponteiro, e a marca precisa acompanhá-los.
+ */
+async function porCursorEm(h, recno) {
+  cursorDe.set(h, recno);
+  for (const tr of $("grade").querySelectorAll("tbody tr")) {
+    const n = Number((tr.querySelector("td.recno") || {}).textContent);
+    tr.classList.toggle("cursor", n === recno);
+  }
+  try {
+    await DBU.rpc("data.goto", { h, recno });
+  } catch (e) {
+    /* A marca é da tela; se a DLL recusar, quem opera avisa. */
+  }
 }
 
 /** Uma celula, formatada por tipo. */
@@ -1690,6 +1738,8 @@ $("pg-ir").addEventListener("keydown", async (ev) => {
   try {
     await DBU.rpc("data.goto", { h: abaAtiva, recno: n });
     await carregarPagina(abaAtiva, n, 0);
+    /* Depois da pintura, senão a marca some junto com as linhas antigas. */
+    await porCursorEm(abaAtiva, n);
     hint(T("UI_GOTO_RECORD", { n: n }));
   } catch (e) {
     hint(msgErro(e));
@@ -2203,6 +2253,21 @@ $("pg-ordem").addEventListener("change", (ev) => trocarOrdem(ev.target.value));
  * mentiria em silencio.
  */
 $("grade").addEventListener("click", async (ev) => {
+  /*
+   * CLICAR NUMA LINHA ESCOLHE O REGISTRO.
+   *
+   * Antes, clique em linha de dados não fazia nada -- só o cabeçalho respondia,
+   * para trocar a ordem. A única forma de mover o ponteiro era digitar o número
+   * no "ir p/ registro" do rodapé, o que torna "próximos n" impraticável: não
+   * dá para apontar e dizer "é daqui para baixo".
+   */
+  const linha = ev.target.closest("tbody tr");
+  if (linha && abaAtiva) {
+    const n = Number((linha.querySelector("td.recno") || {}).textContent);
+    if (n) await porCursorEm(abaAtiva, n);
+    return;
+  }
+
   const th = ev.target.closest("thead th");
   if (!th || th.classList.contains("recno") || !abaAtiva) return;
 
@@ -5831,6 +5896,23 @@ function msDesenhar() {
   $("ms-n").hidden = $("ms-modo").value !== "next";
 
   /*
+   * DE ONDE VAI PARTIR, dito com todas as letras.
+   *
+   * "Próximos 100" e "do atual até o fim" são escopos RELATIVOS, e sem dizer
+   * relativos a quê são um convite a alterar a parte errada do arquivo. O
+   * número aqui é o mesmo que está marcado na grade atrás da modal.
+   */
+  const relativo = $("ms-modo").value !== "all";
+  const onde = cursorDe.get(msAlvo);
+  $("ms-partida").hidden = !relativo;
+  if (relativo) {
+    $("ms-partida").textContent = onde
+      ? T("UI_MASS_FROM_RECORD", { n: onde })
+      : T("UI_MASS_FROM_NONE");
+    $("ms-partida").className = "ms-partida" + (onde ? "" : " ms-atencao");
+  }
+
+  /*
    * O AVISO DO RECORTE é a regra que mais surpreende.
    *
    * Diferente de alterar estrutura -- que vale para o ARQUIVO e por isso
@@ -5877,6 +5959,23 @@ async function msExecutar() {
   if (!aba || aba.detached) return;
 
   const escopo = msEscopo();
+
+  /*
+   * A WORK AREA VAI PARA ONDE A TELA MOSTRA, e vai AGORA.
+   *
+   * Entre abrir a modal e clicar em executar, qualquer `data.page` -- uma
+   * rolagem, um refresh -- terá movido o ponteiro da DLL. Reafirmá-lo aqui é o
+   * que faz "próximos n" começar no registro marcado, e não onde a paginação
+   * por acaso parou.
+   */
+  if (escopo.mode !== "all" && cursorDe.has(msAlvo)) {
+    try {
+      await DBU.rpc("data.goto", { h: msAlvo, recno: cursorDe.get(msAlvo) });
+    } catch (e) {
+      /* Recno fora de faixa: a própria operação recusa com o motivo. */
+    }
+  }
+
   const params = { h: msAlvo, scope: escopo };
   if (msOp === "replace") {
     params.field = $("ms-campo").value;
@@ -5942,6 +6041,11 @@ async function msExecutar() {
 function msTextoDoEscopo(e) {
   const chave = { all: "UI_SCOPE_ALL_REC", next: "UI_SCOPE_NEXT_N", rest: "UI_SCOPE_REST" }[e.mode];
   const partes = [T(chave, { n: e.n || 0 })];
+  /* O ponto de partida entra na frase da confirmação: é a última chance de
+     notar que "próximos 100" começa no registro errado. */
+  if (e.mode !== "all" && cursorDe.has(msAlvo)) {
+    partes.push(T("UI_MASS_FROM_RECORD", { n: cursorDe.get(msAlvo) }));
+  }
   if (e.while) partes.push("WHILE " + e.while);
   if (e.for) partes.push("FOR " + e.for);
   return partes.join(" · ");

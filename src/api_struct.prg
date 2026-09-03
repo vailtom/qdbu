@@ -529,8 +529,7 @@ STATIC FUNCTION TransformaPara( cTmp, aEstru, aDe, nFalhas )
    RECOVER USING oErr
       RETURN Err( "ERROR_CREATE_FAILED", "could not create the temporary file", "path", ;
                   { "file"   => hb_FNameNameExt( cTmp ), ;
-                    "reason" => iif( HB_ISOBJECT( oErr ) .AND. ;
-                                     HB_ISSTRING( oErr:description ), oErr:description, "" ) } )
+                    "reason" => ErroTexto( oErr ) } )
    END SEQUENCE
 
    /*
@@ -548,9 +547,12 @@ STATIC FUNCTION TransformaPara( cTmp, aEstru, aDe, nFalhas )
 
    BEGIN SEQUENCE WITH {| e | Break( e ) }
       dbUseArea( .T., , cTmp, cAliasTmp, .F., .F. )
-   RECOVER
+   RECOVER USING oErr
+      /* `reason` estava "" POR ESCRITO: o campo existia para o motivo e ia
+         vazio, entao a tela dizia que nao abriu sem dizer por que. */
       RETURN Err( "ERROR_CREATE_FAILED", "temporary file could not be opened", "path", ;
-                  { "file" => hb_FNameNameExt( cTmp ), "reason" => "" } )
+                  { "file" => hb_FNameNameExt( cTmp ), ;
+                    "reason" => ErroTexto( oErr ) } )
    END SEQUENCE
 
    nDestino := Select()

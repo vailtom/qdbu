@@ -550,11 +550,11 @@
 
   // ------------------------------- rebinding state after an exclusive operation
   ERROR_REBIND_INDEX_FAILED:
-    "Index '{file}' failed to reopen. Key: {key}",
+    "Index '{file}' did not open again: {reason}. Key: {key}",
   ERROR_REBIND_ORDER_LOST:
     "Order '{name}' no longer exists; the listing fell back to natural order.",
   ERROR_REBIND_FILTER_FAILED:
-    "The filter was not reapplied — {expr}",
+    "The filter was not reapplied: {reason} - {expr}",
   ERROR_OPERATION_FAILED:
     "The operation on '{file}' failed. The file was not altered.",
   WARN_REBIND_RECORD_GONE:
@@ -633,10 +633,9 @@
   UI_NOTHING_TO_PACK: "'{file}' has no records marked; nothing was changed.",
 
   ERROR_ZAP_CREATE_FAILED:
-    "Could not create the empty file for '{file}'. The original was restored " +
-    "and nothing was lost.",
-  ERROR_ZAP_FAILED: "The ZAP on '{file}' failed. The file was not changed.",
-  ERROR_PACK_FAILED: "Packing '{file}' failed. The file was not changed.",
+    "The empty file for '{file}' could not be created: {reason}. The original was put back and nothing was lost.",
+  ERROR_ZAP_FAILED: "The ZAP on '{file}' failed: {reason}. The file was not changed.",
+  ERROR_PACK_FAILED: "Packing '{file}' failed: {reason}. The file was not changed.",
 
   UI_DONE: "Done",
   UI_ERROR: "Did not work",
@@ -791,11 +790,11 @@
 
   ERROR_NO_SOURCE: "Pick the source file.",
   ERROR_SOURCE_NOT_FOUND: "'{file}' was not found.",
-  ERROR_CANNOT_OPEN_SOURCE: "'{file}' could not be opened.",
+  ERROR_CANNOT_OPEN_SOURCE: "'{file}' could not be opened: {reason}",
   ERROR_FORMAT_UNKNOWN: "There is no '{format}' source format.",
   ERROR_FORMAT_UNAVAILABLE: "This build does not read {format} files.",
   ERROR_APPEND_FAILED: "The record could not be added.",
-  ERROR_APPEND_TEXT_FAILED: "'{file}' could not be read as {format}.",
+  ERROR_APPEND_TEXT_FAILED: "'{file}' could not be read as {format}: {reason}",
   ERROR_CANNOT_LOCK_FILE:
     "'{file}' is being used by someone else. Mass operations need the file to yourself.",
 
@@ -863,5 +862,8 @@
   UI_MASS_DONE_DELETE: { one: "{n} record marked, out of {seen} examined.", other: "{n} records marked, out of {seen} examined." },
   UI_MASS_DONE_RECALL: { one: "{n} record recalled, out of {seen} examined.", other: "{n} records recalled, out of {seen} examined." },
   UI_MASS_DONE_APPEND: { one: "{n} record came from {file}. The file now has {total}.", other: "{n} records came from {file}. The file now has {total}." },
+
+  UI_MASS_FROM_RECORD: "starting at record {n}",
+  UI_MASS_FROM_NONE: "No record chosen — click a row in the grid.",
 
 };

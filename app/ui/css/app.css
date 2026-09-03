@@ -1748,3 +1748,20 @@ dialog select:focus { outline: none; border-color: var(--amber); }
 /* Dentro das linhas da tela de massa o combo não é um campo de formulário
    solto: ele divide a linha com o "quantos", então não pode ser block. */
 .ms-quantos select { display: inline-block; margin-top: 0; }
+
+/*
+ * A LINHA DO CURSOR na grade.
+ *
+ * Barra à esquerda em vez de fundo forte: a linha do cursor coexiste com a de
+ * registro deletado (tachada) e com a zebra, e trocar o fundo brigaria com as
+ * duas. A barra marca sem competir.
+ */
+#grade tbody tr.cursor > td:first-child { box-shadow: inset 3px 0 0 var(--amber); }
+#grade tbody tr.cursor > td { background: color-mix(in srgb, var(--amber) 7%, transparent); }
+#grade tbody tr { cursor: pointer; }
+
+/* De onde a operação em massa vai partir. */
+.ms-partida {
+  margin: -4px 0 10px; font-size: 11.5px; color: var(--dim);
+}
+.ms-partida.ms-atencao { color: var(--aviso); }

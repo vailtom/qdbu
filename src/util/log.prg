@@ -64,15 +64,24 @@
  * dado SAI da maquina. E exatamente o que trilha de auditoria existe para
  * responder.
  *
- * A LISTA CRESCE COM T10/T13/T14 -- struct.modify, bulk.replace, bulk.delete,
- * bulk.recall, bulk.appendfrom, bulk.pack, bulk.zap. Elas ainda nao existem;
- * quando existirem, entram aqui NO MESMO COMMIT em que nascem, com o escopo nos
- * parametros. Ver docs/10-integridade.md.
+ * A LISTA CRESCEU COM T10/T13/T14, como este comentario mandava -- com atraso:
+ * as sete nasceram nas telas e nenhuma entrou aqui no commit em que nasceram.
+ * Corrigido em 03/09/2026, a pedido do autor. Se uma operacao ALTERA o arquivo,
+ * ela e log; nao ha excecao a lembrar.
+ *
+ * UMA LINHA POR OPERACAO, e nao por registro. Um REPLACE em 400 mil registros e
+ * UM evento -- "repacei o campo X com a expressao Y no escopo Z, mexeu em N".
+ * Registrar cada registro produziria um arquivo maior que o DBF e enterraria a
+ * unica linha que interessa.
  */
 STATIC FUNCTION MetodosRegistrados()
    RETURN { ;
       "index.create", ;
-      "export.csv", "export.json", "export.xlsx", "export.dbf" }
+      "export.csv", "export.json", "export.xlsx", "export.dbf", ;
+      "backup.run", ;
+      "struct.create", "struct.modify", ;
+      "bulk.pack", "bulk.zap", ;
+      "mass.replace", "mass.delete", "mass.recall", "mass.appendfrom" }
 
 /* <raiz>/.dbu/log */
 FUNCTION DirLog()
@@ -101,7 +110,7 @@ FUNCTION ArquivoLog( dDia )
  * lado ja nao exponha. O que NAO entra sao os dados dos registros, que nunca
  * passam por aqui.
  */
-FUNCTION LogOp( cMetodo, hParams, lOk, cCodigo, nMs, cArquivo, hErroParams )
+FUNCTION LogOp( cMetodo, hParams, lOk, cCodigo, nMs, cArquivo, hErroParams, hResultado )
 
    LOCAL hLinha, cTexto, nHandle, oErr
 
@@ -150,6 +159,23 @@ FUNCTION LogOp( cMetodo, hParams, lOk, cCodigo, nMs, cArquivo, hErroParams )
 
       IF HB_ISHASH( hParams ) .AND. Len( hParams ) > 0
          hLinha[ "p" ] := hParams
+      ENDIF
+
+      /*
+       * O DESFECHO, e nao so o pedido.
+       *
+       * O pedido diz `backup: true`; so o RESULTADO diz EM QUAL ARQUIVO a copia
+       * ficou -- e e essa a pergunta que se faz ao log meses depois ("compactou
+       * a tabela e fez backup? em que arquivo?"). O mesmo vale para as contas:
+       * `changed`, `seen`, `before`/`after`. Sem isto o log conta a INTENCAO e
+       * cala sobre o efeito.
+       *
+       * So dos metodos registrados, que ja e a lista curta, e os resultados
+       * deles sao resumos de meia duzia de chaves -- nenhum carrega dado de
+       * registro.
+       */
+      IF HB_ISHASH( hResultado ) .AND. Len( hResultado ) > 0
+         hLinha[ "r" ] := hResultado
       ENDIF
 
       /* Convertido para UTF-8 aqui: o arquivo e lido por gente e por editor de

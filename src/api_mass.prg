@@ -353,7 +353,7 @@ FUNCTION Api_Mass_Appendfrom( hP )
 STATIC FUNCTION AnexaDeDbf( cArq, hEsc, nFeitos, nVistos )
 
    LOCAL nDestino := Select()
-   LOCAL nOrigem, aPara := {}, aEstru, i, xErro
+   LOCAL nOrigem, aPara := {}, aEstru, i, xErro, oErr
    /* ALIAS SEM `$`. Custou uma sessao na T10 e a pedra e a mesma: `$` nao e
       caractere valido de alias, e o `dbUseArea` falha com um erro que fala do
       ARQUIVO, nao do alias. O sufixo numerico cobre o caso de ja haver um
@@ -366,7 +366,7 @@ STATIC FUNCTION AnexaDeDbf( cArq, hEsc, nFeitos, nVistos )
 
    BEGIN SEQUENCE WITH {| e | Break( e ) }
       dbUseArea( .T., , cArq, cAlias, .T., .T. )       /* compartilhado, so leitura */
-   RECOVER
+   RECOVER USING oErr
       /*
        * VOLTA PARA A AREA DE DESTINO ANTES DE DESISTIR.
        *
@@ -378,7 +378,8 @@ STATIC FUNCTION AnexaDeDbf( cArq, hEsc, nFeitos, nVistos )
        */
       dbSelectArea( nDestino )
       RETURN Err( "ERROR_CANNOT_OPEN_SOURCE", "could not open the source", "path", ;
-                  { "file" => hb_FNameNameExt( cArq ) } )
+                  { "file" => hb_FNameNameExt( cArq ), ;
+                    "reason" => ErroTexto( oErr ) } )
    END SEQUENCE
 
    nOrigem := Select()
@@ -453,6 +454,7 @@ STATIC FUNCTION AnexaDeTexto( cArq, cFmt, hEscopo )
    LOCAL nNext := NIL, lRest
    LOCAL cModo := "all"
    LOCAL nDestino := Select()
+   LOCAL oErr
 
    /* O RDD tem de estar REGISTRADO, e a conferencia e barata. Sem ela, um
       Harbour compilado sem os RDDs de texto responderia com um erro de work
@@ -475,13 +477,14 @@ STATIC FUNCTION AnexaDeTexto( cArq, cFmt, hEscopo )
 
    BEGIN SEQUENCE WITH {| e | Break( e ) }
       __dbApp( cArq, NIL, NIL, NIL, nNext, NIL, lRest, cRdd )
-   RECOVER
+   RECOVER USING oErr
       /* Mesma armadilha do caminho DBF: o motor abre area para ler o texto e,
          quando falha, deixa a selecao no lugar errado. Sem este `dbSelectArea`
          a recusa vira "Workarea not in use" no `dbCommit()` de quem chamou. */
       dbSelectArea( nDestino )
       RETURN Err( "ERROR_APPEND_TEXT_FAILED", "the text file could not be read", "path", ;
-                  { "file" => hb_FNameNameExt( cArq ), "format" => cFmt } )
+                  { "file" => hb_FNameNameExt( cArq ), "format" => cFmt, ;
+                    "reason" => ErroTexto( oErr ) } )
    END SEQUENCE
 
    /* E tambem no caminho de SUCESSO: `__dbApp` nao promete devolver a selecao. */

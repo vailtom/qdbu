@@ -102,7 +102,7 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
    LOCAL xErro, hInfo, hEstado, aEstru
    LOCAL lModoOrig
    LOCAL cArq, cAlias, cMemo, nWa
-   LOCAL cSelo, cBackup, nAntes, nDepois, cExtMemo
+   LOCAL cSelo, cBackup, nAntes, nDepois, cExtMemo, oErr
    LOCAL aFalhas := {}
 
    IF ( xErro := SessSelect( cH ) ) != NIL
@@ -170,13 +170,14 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
 
       BEGIN SEQUENCE WITH {| e | Break( e ) }
          dbCreate( cArq, aEstru )
-      RECOVER
+      RECOVER USING oErr
          /* Nao conseguiu criar o vazio: DESFAZ a renomeacao. Deixar o usuario
             sem o arquivo no lugar dele seria o pior desfecho possivel. */
          FRename( cBackup, cArq )
          RETURN ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, ;
                         Err( "ERROR_ZAP_CREATE_FAILED", "could not create the empty file", ;
-                             "h", { "file" => hb_FNameNameExt( cArq ) } ) )
+                             "h", { "file" => hb_FNameNameExt( cArq ), ;
+                                    "reason" => ErroTexto( oErr ) } ) )
       END SEQUENCE
 
       xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL )
@@ -229,11 +230,13 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
          __dbZap()
       ENDIF
       dbCommit()
-   RECOVER
+   RECOVER USING oErr
       Dbu_JobEnd()
       ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL )
       RETURN Err( iif( cAcao == "pack", "ERROR_PACK_FAILED", "ERROR_ZAP_FAILED" ), ;
-                  "operation failed", "h", { "file" => hb_FNameNameExt( cArq ) } )
+                  "operation failed", "h", ;
+                  { "file"   => hb_FNameNameExt( cArq ), ;
+                    "reason" => ErroTexto( oErr ) } )
    END SEQUENCE
 
    nDepois := LastRec()

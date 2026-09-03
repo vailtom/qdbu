@@ -546,11 +546,11 @@
 
   // ---------------------- restablecer el estado tras una operación exclusiva
   ERROR_REBIND_INDEX_FAILED:
-    "El índice '{file}' no volvió a abrirse. Clave: {key}",
+    "El índice '{file}' no volvió a abrir: {reason}. Clave: {key}",
   ERROR_REBIND_ORDER_LOST:
     "El orden '{name}' ya no existe; el listado volvió al orden natural.",
   ERROR_REBIND_FILTER_FAILED:
-    "El filtro no se volvió a aplicar — {expr}",
+    "El filtro no fue reaplicado: {reason} - {expr}",
   ERROR_OPERATION_FAILED:
     "La operación sobre '{file}' falló. El archivo no fue alterado.",
   WARN_REBIND_RECORD_GONE:
@@ -629,10 +629,9 @@
   UI_NOTHING_TO_PACK: "'{file}' no tiene registros marcados; no se cambió nada.",
 
   ERROR_ZAP_CREATE_FAILED:
-    "No se pudo crear el archivo vacío de '{file}'. El original fue " +
-    "restaurado y no se perdió nada.",
-  ERROR_ZAP_FAILED: "El ZAP de '{file}' falló. El archivo no fue alterado.",
-  ERROR_PACK_FAILED: "La compactación de '{file}' falló. El archivo no fue alterado.",
+    "No se pudo crear el archivo vacío de '{file}': {reason}. El original fue restaurado y nada se perdió.",
+  ERROR_ZAP_FAILED: "El ZAP de '{file}' falló: {reason}. El archivo no fue alterado.",
+  ERROR_PACK_FAILED: "La compactación de '{file}' falló: {reason}. El archivo no fue alterado.",
 
   UI_DONE: "Listo",
   UI_ERROR: "No salió",
@@ -787,11 +786,11 @@
 
   ERROR_NO_SOURCE: "Elija el archivo de origen.",
   ERROR_SOURCE_NOT_FOUND: "No se encontró '{file}'.",
-  ERROR_CANNOT_OPEN_SOURCE: "No se pudo abrir '{file}'.",
+  ERROR_CANNOT_OPEN_SOURCE: "No se pudo abrir '{file}': {reason}",
   ERROR_FORMAT_UNKNOWN: "El formato de origen '{format}' no existe.",
   ERROR_FORMAT_UNAVAILABLE: "Esta versión no lee archivos {format}.",
   ERROR_APPEND_FAILED: "No se pudo agregar el registro.",
-  ERROR_APPEND_TEXT_FAILED: "'{file}' no pudo leerse como {format}.",
+  ERROR_APPEND_TEXT_FAILED: "'{file}' no pudo leerse como {format}: {reason}",
   ERROR_CANNOT_LOCK_FILE:
     "'{file}' está siendo usado por otra persona. Las operaciones masivas necesitan el archivo solo para usted.",
 
@@ -859,5 +858,8 @@
   UI_MASS_DONE_DELETE: { one: "{n} registro marcado, de {seen} examinados.", other: "{n} registros marcados, de {seen} examinados." },
   UI_MASS_DONE_RECALL: { one: "{n} registro recuperado, de {seen} examinados.", other: "{n} registros recuperados, de {seen} examinados." },
   UI_MASS_DONE_APPEND: { one: "{n} registro vino de {file}. El archivo tiene ahora {total}.", other: "{n} registros vinieron de {file}. El archivo tiene ahora {total}." },
+
+  UI_MASS_FROM_RECORD: "a partir del registro {n}",
+  UI_MASS_FROM_NONE: "Ningún registro elegido — haga clic en una fila de la grilla.",
 
 };

@@ -140,7 +140,9 @@ STATIC FUNCTION Despacha( cJson )
           iif( xResp[ "ok" ], "", xResp[ "error" ][ "code" ] ), ;
           hb_MilliSeconds() - nInicio, ;
           ArquivoDoPedido( hParams ), ;
-          iif( xResp[ "ok" ], NIL, xResp[ "error" ][ "params" ] ) )
+          iif( xResp[ "ok" ], NIL, xResp[ "error" ][ "params" ] ), ;
+          iif( xResp[ "ok" ] .AND. hb_HHasKey( xResp, "result" ) .AND. ;
+               HB_ISHASH( xResp[ "result" ] ), xResp[ "result" ], NIL ) )
 
    RETURN Envelope( cId, xResp )
 
