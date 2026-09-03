@@ -163,12 +163,28 @@ async function main() {
       );
       break;
     case "fill":
+      /*
+       * DISPARA `input` E `change`, nesta ordem -- e a ordem e o que o
+       * navegador faz.
+       *
+       * So `input` mente sobre selects: um <select> nao emite `input` quando a
+       * pessoa escolhe uma opcao com o mouse, ele emite `change`. Enquanto isto
+       * mandava so `input`, trocar o tipo de um campo pelo combo mudava o valor
+       * no DOM e NAO rodava o manipulador do app -- o teste lia o valor novo e
+       * dava tudo por certo, com o modelo intacto. Um teste que so escreve no
+       * DOM aprova codigo quebrado.
+       *
+       * Em campos de texto os dois eventos tambem sao o comportamento real:
+       * `input` a cada tecla, `change` ao sair do campo.
+       */
       out = await avaliar(
         ws,
         `(() => { const e = document.querySelector(${j(args[0])});
            if (!e) return "elemento nao encontrado: " + ${j(args[0])};
+           e.focus();
            e.value = ${j(args[1] ?? "")};
            e.dispatchEvent(new Event("input", {bubbles:true}));
+           e.dispatchEvent(new Event("change", {bubbles:true}));
            return "preenchido"; })()`
       );
       break;

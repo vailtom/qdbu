@@ -754,7 +754,7 @@ function esCelula(c, campo, tipo, ruim, classe, travado) {
   });
   /* No `change` (ao sair do campo) a tabela se redesenha: é quando a validação
      cruzada — nome duplicado com OUTRA linha — precisa aparecer nas duas. */
-  inp.addEventListener("change", () => desenharConteudo());
+  inp.addEventListener("change", () => desenharEditor());
   td.appendChild(inp);
   return td;
 }
@@ -784,7 +784,7 @@ function esCelulaTipo(c) {
     // `dec` só tem significado em N. Em C ele era parte da largura no Clipper,
     // mas aqui a largura vai inteira em `len` — ver esValidaCampo().
     if (c.type !== "N") c.dec = 0;
-    desenharConteudo();
+    desenharEditor();
   });
   td.appendChild(sel);
   return td;
@@ -5250,7 +5250,7 @@ $("es-add").addEventListener("click", () => {
   if (!esRascunho) return;
   esRascunho.push(esNovoCampo());
   esSel = esRascunho.length - 1;
-  desenharConteudo();
+  desenharEditor();
 });
 
 /* Inserir ACIMA do selecionado. A posição do campo importa no DBF — é a ordem
@@ -5260,7 +5260,7 @@ $("es-ins").addEventListener("click", () => {
   if (!esRascunho) return;
   const i = esSel >= 0 ? esSel : esRascunho.length;
   esRascunho.splice(i, 0, esNovoCampo());
-  desenharConteudo();
+  desenharEditor();
 });
 
 /*
@@ -5280,7 +5280,7 @@ $("es-del").addEventListener("click", () => {
   } else {
     c._removido = !c._removido;
   }
-  desenharConteudo();
+  desenharEditor();
 });
 
 const esMove = (d) => {
@@ -5291,7 +5291,7 @@ const esMove = (d) => {
   esRascunho[esSel] = esRascunho[j];
   esRascunho[j] = t;
   esSel = j;
-  desenharConteudo();
+  desenharEditor();
 };
 
 $("es-up").addEventListener("click", () => esMove(-1));
