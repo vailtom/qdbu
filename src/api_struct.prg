@@ -365,7 +365,7 @@ FUNCTION Api_Struct_Modify( hP )
    LOCAL xErro, hInfo, hEstado, aEstru, aDe
    LOCAL cArq, cAlias, cTmp, cBackup, cSelo, cExtMemo
    LOCAL nWa, nAntes, nDepois, nFalhas := 0
-   LOCAL aIndices
+   LOCAL aIndices, lModoOrig
 
    IF ( xErro := SessSelect( cH ) ) != NIL
       RETURN xErro
@@ -382,6 +382,18 @@ FUNCTION Api_Struct_Modify( hP )
    ENDIF
 
    hInfo    := SessHandle( cH )
+   /*
+    * O MODO ORIGINAL E COPIADO PARA UM LOCAL, e isto nao e preciosismo.
+    *
+    * `hInfo` e uma REFERENCIA VIVA para o hash da sessao, e o
+    * `SessReattach( cH, nWa, .T. )` la embaixo grava `.T.` em
+    * `hInfo[ "exclusive" ]` -- e o registro de que a area esta exclusiva
+    * AGORA. A partir dali, todo `hInfo[ "exclusive" ]` devolve `.T.`, e a
+    * reabertura no fim devolveria o arquivo EXCLUSIVO mesmo para quem o tinha
+    * aberto compartilhado. O sintoma e mudo: a operacao termina bem, e o
+    * arquivo fica travado para todo mundo ate a aba ser fechada.
+    */
+   lModoOrig := hInfo[ "exclusive" ]
    cArq     := hInfo[ "path" ]
    cAlias   := hInfo[ "alias" ]
    nAntes   := LastRec()
@@ -418,7 +430,7 @@ FUNCTION Api_Struct_Modify( hP )
 
    nWa := AbreNaArea( cArq, cAlias, .T. )      /* EXCLUSIVO */
    IF nWa == 0
-      RETURN ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
+      RETURN ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, ;
                           Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "another program is using it", ;
                                "h", { "file" => hb_FNameNameExt( cArq ) } ), .T. )
    ENDIF
@@ -431,7 +443,7 @@ FUNCTION Api_Struct_Modify( hP )
       xErro := CopiaPorRegistro( cBackup, {| n, t | HB_SYMBOL_UNUSED( t ), Dbu_Progress( n ) } )
       Dbu_JobEnd()
       IF xErro != NIL
-         ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL, .T. )
+         ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .T. )
          RETURN xErro
       ENDIF
    ENDIF
@@ -447,7 +459,7 @@ FUNCTION Api_Struct_Modify( hP )
    IF xErro != NIL
       Descarta( cTmp )
       Descarta( hb_FNameExtSet( cTmp, cExtMemo ) )
-      ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL, .T. )
+      ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .T. )
       RETURN xErro
    ENDIF
 
@@ -457,7 +469,7 @@ FUNCTION Api_Struct_Modify( hP )
    IF ( xErro := TrocaNomes( cArq, cTmp, cBackup, cExtMemo, lBackup ) ) != NIL
       Descarta( cTmp )
       Descarta( hb_FNameExtSet( cTmp, cExtMemo ) )
-      ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL, .T. )
+      ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .T. )
       RETURN xErro
    ENDIF
 
@@ -465,7 +477,7 @@ FUNCTION Api_Struct_Modify( hP )
       a tela mostra uma lista de indices abertos que nao existe mais. */
    hInfo[ "indexes" ] := {}
 
-   xErro := ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL, .T. )
+   xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .T. )
    IF xErro != NIL
       RETURN xErro
    ENDIF

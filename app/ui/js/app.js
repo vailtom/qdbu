@@ -958,22 +958,29 @@ function moverAba(h, hAlvo) {
 
 /** Garante que a aba ativa tem a estrutura carregada. */
 /*
- * Carrega a estrutura da aba, uma vez so.
+ * Carrega a estrutura da aba, e a recarrega quando o arquivo muda.
  *
  * Sob demanda de proposito: restaurar dez arquivos custaria dez file.open MAIS
  * dez file.info, tudo serializado na thread unica da VM, com a janela parada
  * antes de mostrar qualquer coisa. Assim se paga so pelo que se olha.
  *
- * O cache NAO invalida hoje, e esta certo enquanto nada altera estrutura de DBF.
- * Quando o T10 (editor de estrutura) chegar, isto vira bug: o usuario insere um
- * campo e continua vendo a lista antiga. A peca ja existe -- DBU.rev() traz o
- * contador da DLL, que sobe a cada mutacao -- e a condicao passa a ser
- * `aba.fields && aba.fieldsRev === DBU.rev()`. Anotado no T10 do plano.
+ * O CACHE INVALIDA POR `rev`, e sem isso o T10 vira bug de cara: alterar a
+ * estrutura reescrevia o arquivo, mas a aba Estrutura continuava listando os
+ * campos velhos, e "Editar estrutura" abria o editor sobre a lista antiga --
+ * ou seja, a alteracao seguinte seria montada em cima de uma foto vencida.
+ *
+ * `rev` e um contador que a DLL sobe a CADA mutacao, entao esta condicao cobre
+ * de graca tudo o que ainda vai escrever: alterar estrutura, PACK, ZAP e as
+ * operacoes em massa. O preco de um `rev` diferente e um `file.info` -- barato,
+ * e so acontece quando algo realmente mudou.
  */
 async function garantirEstrutura(aba) {
-  if (!aba || aba.fields) return;
+  if (!aba) return;
+  if (aba.fields && aba.fieldsRev === DBU.rev()) return;
   try {
+    const rev = DBU.rev();
     aba.fields = (await DBU.rpc("file.info", { h: aba.h })).fields;
+    aba.fieldsRev = rev;
     desenharConteudo();
   } catch (e) {
     /* aba pode ter sido fechada nesse meio tempo */
@@ -1041,7 +1048,10 @@ async function repintarDoEstado() {
   conexoes = st.connections;
 
   // Preserva a estrutura ja carregada por arquivo; o resto vem do estado vivo.
+  // O CARIMBO VIAJA JUNTO: guardar `fields` sem `fieldsRev` faria a foto velha
+  // passar por atual, que e exatamente o bug que o `rev` veio resolver.
   const antes = new Map(abas.map((a) => [a.h, a.fields]));
+  const antesRev = new Map(abas.map((a) => [a.h, a.fieldsRev]));
   abas = st.files.map((f) => ({
     h: f.h,
     alias: f.alias,
@@ -1053,6 +1063,7 @@ async function repintarDoEstado() {
     detached: !!f.detached,
     detachedWhy: f.detachedWhy || "",
     fields: antes.get(f.h) || null,
+    fieldsRev: antesRev.get(f.h),
   }));
 
   /*
@@ -5062,7 +5073,21 @@ function esImpacto() {
 
 /* ---------------------------------------------------- T10: os botões */
 
-$("es-editar").addEventListener("click", () => esEntrarNoModo(true));
+/*
+ * O EDITOR SO ABRE SOBRE UMA ESTRUTURA FRESCA.
+ *
+ * `garantirEstrutura` e assincrona, e o desenho da aba a dispara sem esperar --
+ * o que basta para MOSTRAR a lista, porque ela se redesenha quando a resposta
+ * chega. Nao basta para EDITAR: `esEntrarNoModo` fotografa `aba.fields` na
+ * hora e essa foto vira o `_de` de cada campo, ou seja, a base de comparacao
+ * da proxima alteracao. Abrir o editor sobre uma foto vencida faria a alteracao
+ * seguinte ser montada contra um arquivo que ja nao existe.
+ */
+$("es-editar").addEventListener("click", async () => {
+  const aba = abas.find((a) => a.h === abaAtiva);
+  await garantirEstrutura(aba);
+  esEntrarNoModo(true);
+});
 
 $("es-descartar").addEventListener("click", async () => {
   const mudou = esRascunho && esRascunho.some((c) => c._removido || !c._de || esMudou(c));

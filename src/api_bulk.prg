@@ -100,6 +100,7 @@ FUNCTION Api_Bulk_Pack( hP )
 STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
 
    LOCAL xErro, hInfo, hEstado, aEstru
+   LOCAL lModoOrig
    LOCAL cArq, cAlias, cMemo, nWa
    LOCAL cSelo, cBackup, nAntes, nDepois, cExtMemo
    LOCAL aFalhas := {}
@@ -109,6 +110,19 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
    ENDIF
 
    hInfo  := SessHandle( cH )
+
+   /*
+    * O MODO ORIGINAL E COPIADO PARA UM LOCAL, e isto nao e preciosismo.
+    *
+    * `hInfo` e uma REFERENCIA VIVA para o hash da sessao, e o
+    * `SessReattach( cH, nWa, .T. )` la embaixo grava `.T.` em
+    * `hInfo[ "exclusive" ]` -- e o registro de que a area esta exclusiva
+    * AGORA. A partir dali, todo `hInfo[ "exclusive" ]` devolve `.T.`, e a
+    * reabertura no fim devolveria o arquivo EXCLUSIVO mesmo para quem o tinha
+    * aberto compartilhado. O sintoma e mudo: a operacao termina bem, e o
+    * arquivo fica travado para todo mundo ate a aba ser fechada.
+    */
+   lModoOrig := hInfo[ "exclusive" ]
    cArq   := hInfo[ "path" ]
    cAlias := hInfo[ "alias" ]
    nAntes := LastRec()
@@ -142,7 +156,7 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
        * melhor recusar que operar com alguem lendo.
        */
       IF FRename( cArq, cBackup ) != 0
-         RETURN ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
+         RETURN ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, ;
                         Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "rename failed", "h", ;
                              { "file" => hb_FNameNameExt( cArq ) } ) )
       ENDIF
@@ -160,12 +174,12 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
          /* Nao conseguiu criar o vazio: DESFAZ a renomeacao. Deixar o usuario
             sem o arquivo no lugar dele seria o pior desfecho possivel. */
          FRename( cBackup, cArq )
-         RETURN ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
+         RETURN ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, ;
                         Err( "ERROR_ZAP_CREATE_FAILED", "could not create the empty file", ;
                              "h", { "file" => hb_FNameNameExt( cArq ) } ) )
       END SEQUENCE
 
-      xErro := ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+      xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL )
       IF xErro != NIL
          RETURN xErro
       ENDIF
@@ -183,7 +197,7 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
    nWa := AbreNaArea( cArq, cAlias, .T. )      /* EXCLUSIVO */
 
    IF nWa == 0
-      RETURN ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, ;
+      RETURN ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, ;
                      Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "another program is using it", ;
                           "h", { "file" => hb_FNameNameExt( cArq ) } ) )
    ENDIF
@@ -200,7 +214,7 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
       IF xErro != NIL
          /* Backup falhou: NAO opera. R4 -- backup antes, e se nao houve backup
             nao ha operacao. */
-         ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+         ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL )
          RETURN xErro
       ENDIF
    ENDIF
@@ -217,14 +231,14 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
       dbCommit()
    RECOVER
       Dbu_JobEnd()
-      ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+      ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL )
       RETURN Err( iif( cAcao == "pack", "ERROR_PACK_FAILED", "ERROR_ZAP_FAILED" ), ;
                   "operation failed", "h", { "file" => hb_FNameNameExt( cArq ) } )
    END SEQUENCE
 
    nDepois := LastRec()
 
-   xErro := ReabreArea( cH, cArq, cAlias, hInfo[ "exclusive" ], hEstado, NIL )
+   xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL )
    IF xErro != NIL
       RETURN xErro
    ENDIF
