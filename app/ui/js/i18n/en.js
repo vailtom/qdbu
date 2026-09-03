@@ -764,4 +764,43 @@
   UI_RELOAD_DISCARD: "Discard and reload",
   UI_KEEP_EDITING: "Keep editing",
 
+
+  // ============================================ T13: mass operations
+  UI_JOB_REPLACE: "Replacing in {file}…",
+  UI_JOB_DELETING: "Marking records in {file}…",
+  UI_JOB_RECALLING: "Recalling records in {file}…",
+  UI_JOB_APPENDING: "Appending records to {file}…",
+
+  WARN_CANCELED_BULK: {
+    one: "Stopped. {n} record had already been changed and stayed that way — canceling stops the operation, it does not undo what it wrote.",
+    other: "Stopped. {n} records had already been changed and stayed that way — canceling stops the operation, it does not undo what it wrote.",
+  },
+
+  ERROR_SCOPE_MODE: "There is no '{mode}' scope.",
+  ERROR_SCOPE_COUNT: "Say how many records.",
+  ERROR_FOR_INVALID: "The FOR could not be understood: {detail}",
+  ERROR_FOR_NOT_LOGICAL: "The FOR must come out true or false; this one comes out {type}.",
+  ERROR_WHILE_INVALID: "The WHILE could not be understood: {detail}",
+  ERROR_WHILE_NOT_LOGICAL: "The WHILE must come out true or false; this one comes out {type}.",
+
+  ERROR_NO_FIELD_PICKED: "Pick the field to replace.",
+  ERROR_NO_VALUE: "Say what to replace it with.",
+  ERROR_WITH_INVALID: "The expression could not be understood: {detail}",
+  ERROR_TYPE_MISMATCH:
+    "'{field}' is {fieldType} and the expression comes out {exprType} — the two types must match.",
+
+  ERROR_NO_SOURCE: "Pick the source file.",
+  ERROR_SOURCE_NOT_FOUND: "'{file}' was not found.",
+  ERROR_CANNOT_OPEN_SOURCE: "'{file}' could not be opened.",
+  ERROR_FORMAT_UNKNOWN: "There is no '{format}' source format.",
+  ERROR_FORMAT_UNAVAILABLE: "This build does not read {format} files.",
+  ERROR_APPEND_FAILED: "The record could not be added.",
+  ERROR_APPEND_TEXT_FAILED: "'{file}' could not be read as {format}.",
+  ERROR_CANNOT_LOCK_FILE:
+    "'{file}' is being used by someone else. Mass operations need the file to yourself.",
+
+  UI_EDIT_STRUCTURE_OF: "Structure of {file}",
+  UI_DISCARD_TITLE: "Discard the changes?",
+  UI_DISCARD_ASK: "The structure you built has not been applied yet and will be lost.",
+
 };

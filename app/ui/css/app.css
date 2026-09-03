@@ -1636,3 +1636,39 @@ body.arrastando-aba .aba { cursor: grabbing; }
 .estrutura input:disabled {
   background: transparent; border-color: transparent; color: var(--dim2); cursor: default;
 }
+
+/* ------------------------------------- T10: o editor de estrutura, em modal */
+
+/* LARGA E ALTA, porque a tarefa é uma tabela de muitas linhas. Um DBF real tem
+   dezenas de campos; uma caixinha de 560px transformaria a edição em rolagem. */
+#dlg-estrutura { width: min(920px, 94vw); max-width: none; }
+#dlg-estrutura .es-barra { margin: 4px 0 10px; }
+
+/* A TABELA ROLA, o diálogo não. Sem o teto, 122 campos empurram os botões
+   Aplicar/Descartar para fora da tela e a modal fica sem saída visível. */
+#dlg-estrutura .ed-tabela { max-height: min(52vh, 520px); overflow: auto; }
+#dlg-estrutura .es-erros,
+#dlg-estrutura .es-impacto { margin-top: 10px; }
+#dlg-estrutura .acoes { margin-top: 14px; }
+
+/* Na aba, a listagem é só leitura: sem cursor de mão nem realce de linha, que
+   prometeriam uma edição que ali não acontece. */
+#visao-estrutura .estrutura tbody tr { cursor: default; }
+
+/*
+ * O MESMO TROPEÇO DO #dlg-export, agora na tabela do editor.
+ *
+ * `dialog input { display:block; width:100%; margin-top:4px }` foi escrito para
+ * campos de formulário, um por linha. Numa CÉLULA DE TABELA ele é errado três
+ * vezes: o `display:block` põe o ⚠ do campo removido numa segunda linha (e o
+ * `white-space:nowrap` não impede nada, porque ele governa quebra de TEXTO, não
+ * de blocos), a linha fica 51px contra 33px das outras, e o `margin-top`
+ * desalinha o conteúdo do resto da grade.
+ *
+ * Medido, não deduzido: `getComputedStyle` do input dizia `display:block`, e o
+ * topo do ícone estava 22px abaixo do topo do campo.
+ */
+#dlg-estrutura .estrutura input {
+  display: inline-block; width: 100%; margin: 0; vertical-align: middle;
+}
+#dlg-estrutura .estrutura td.nome-com-aviso input { width: calc(100% - 22px); }

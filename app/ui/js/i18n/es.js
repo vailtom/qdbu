@@ -760,4 +760,43 @@
   UI_RELOAD_DISCARD: "Descartar y recargar",
   UI_KEEP_EDITING: "Seguir editando",
 
+
+  // ============================================ T13: operaciones masivas
+  UI_JOB_REPLACE: "Reemplazando en {file}…",
+  UI_JOB_DELETING: "Marcando registros en {file}…",
+  UI_JOB_RECALLING: "Recuperando registros en {file}…",
+  UI_JOB_APPENDING: "Agregando registros a {file}…",
+
+  WARN_CANCELED_BULK: {
+    one: "Interrumpido. {n} registro ya había sido modificado y así quedó — cancelar detiene la operación, no deshace lo que ya grabó.",
+    other: "Interrumpido. {n} registros ya habían sido modificados y así quedaron — cancelar detiene la operación, no deshace lo que ya grabó.",
+  },
+
+  ERROR_SCOPE_MODE: "El alcance '{mode}' no existe.",
+  ERROR_SCOPE_COUNT: "Indique cuántos registros.",
+  ERROR_FOR_INVALID: "El FOR no pudo entenderse: {detail}",
+  ERROR_FOR_NOT_LOGICAL: "El FOR debe dar verdadero o falso; este da {type}.",
+  ERROR_WHILE_INVALID: "El WHILE no pudo entenderse: {detail}",
+  ERROR_WHILE_NOT_LOGICAL: "El WHILE debe dar verdadero o falso; este da {type}.",
+
+  ERROR_NO_FIELD_PICKED: "Elija el campo a reemplazar.",
+  ERROR_NO_VALUE: "Indique con qué reemplazar.",
+  ERROR_WITH_INVALID: "La expresión no pudo entenderse: {detail}",
+  ERROR_TYPE_MISMATCH:
+    "'{field}' es {fieldType} y la expresión da {exprType} — los dos tipos deben coincidir.",
+
+  ERROR_NO_SOURCE: "Elija el archivo de origen.",
+  ERROR_SOURCE_NOT_FOUND: "No se encontró '{file}'.",
+  ERROR_CANNOT_OPEN_SOURCE: "No se pudo abrir '{file}'.",
+  ERROR_FORMAT_UNKNOWN: "El formato de origen '{format}' no existe.",
+  ERROR_FORMAT_UNAVAILABLE: "Esta versión no lee archivos {format}.",
+  ERROR_APPEND_FAILED: "No se pudo agregar el registro.",
+  ERROR_APPEND_TEXT_FAILED: "'{file}' no pudo leerse como {format}.",
+  ERROR_CANNOT_LOCK_FILE:
+    "'{file}' está siendo usado por otra persona. Las operaciones masivas necesitan el archivo solo para usted.",
+
+  UI_EDIT_STRUCTURE_OF: "Estructura de {file}",
+  UI_DISCARD_TITLE: "¿Descartar los cambios?",
+  UI_DISCARD_ASK: "La estructura que usted armó todavía no fue aplicada y se perderá.",
+
 };

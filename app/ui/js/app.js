@@ -512,33 +512,51 @@ function desenharConteudo() {
  * mesma de propósito — trocar de modo não pode reorganizar a tela, senão a
  * pessoa perde de vista onde estava.
  */
+/*
+ * A ABA "ESTRUTURA": listagem SOMENTE LEITURA.
+ *
+ * Não há rascunho aqui, e é isso que a torna incapaz de mostrar o arquivo
+ * errado. O editor vive na modal `#dlg-estrutura`.
+ */
 function desenharEstrutura(a) {
   const corpo = $("estrutura").querySelector("tbody");
   corpo.textContent = "";
 
-  const emEdicao = esEditando && esRascunho;
-  const lista = emEdicao ? esRascunho : (a.fields || []);
+  const lista = a.fields || [];
+  $("es-editar").hidden = !a.fields || a.detached;
+  $("es-resumo-aba").textContent = lista.length
+    ? T("UI_STRUCT_SUMMARY", { n: lista.length, bytes: 1 + lista.reduce((t, c) => t + Number(c.len || 0), 0) })
+    : "";
 
-  $("es-editar").hidden = emEdicao || !a.fields;
-  $("es-acoes").hidden = !emEdicao;
-  $("es-confirmar").hidden = !emEdicao;
-
-  lista.forEach((c, i) => {
+  for (const c of lista) {
     const tr = document.createElement("tr");
-
-    if (!emEdicao) {
-      tr.appendChild(elemento("td", "es-marca", ""));
-      for (const [v, cls] of [
-        [c.n, "num dim"], [c.name, "nome"], [c.type, "tipo"],
-        [c.len, "num"], [c.dec, "num"],
-      ]) {
-        tr.appendChild(elemento("td", cls, String(v)));
-      }
-      corpo.appendChild(tr);
-      return;
+    tr.appendChild(elemento("td", "es-marca", ""));
+    for (const [v, cls] of [
+      [c.n, "num dim"], [c.name, "nome"], [c.type, "tipo"],
+      [c.len, "num"], [c.dec, "num"],
+    ]) {
+      tr.appendChild(elemento("td", cls, String(v)));
     }
+    corpo.appendChild(tr);
+  }
+}
 
-    // --- modo edição ---------------------------------------------------
+
+/*
+ * A TABELA DA MODAL: a mesma de antes, com as células editáveis.
+ *
+ * Separada da listagem de propósito. Enquanto as duas eram a mesma função, o
+ * `emEdicao` decidia linha a linha qual das duas telas estava sendo pintada --
+ * e bastava esse booleano estar certo pela razão errada para o rascunho de um
+ * arquivo aparecer sob o cabeçalho de outro.
+ */
+function desenharEditor() {
+  const corpo = $("ed-estrutura").querySelector("tbody");
+  corpo.textContent = "";
+  if (!esRascunho) return;
+
+  esRascunho.forEach((c, i) => {
+    const tr = document.createElement("tr");
     const erros = c._removido ? [] : esValidaCampo(c, esRascunho, i);
     const estado = c._removido ? "sumiu" : !c._de ? "novo" : esMudou(c) ? "mudou" : "";
     tr.className = (estado ? estado + " " : "") + (i === esSel ? "sel" : "");
@@ -560,7 +578,7 @@ function desenharEstrutura(a) {
       volta.addEventListener("click", (ev) => {
         ev.stopPropagation();
         c._removido = false;
-        desenharConteudo();
+        desenharEditor();
       });
       tdM.appendChild(volta);
     } else {
@@ -586,7 +604,7 @@ function desenharEstrutura(a) {
     corpo.appendChild(tr);
   });
 
-  if (emEdicao) esResumo();
+  esResumo();
 }
 
 /* Mudou em relação ao que está no disco? */
@@ -832,7 +850,7 @@ function esListaErros() {
     nome.type = "button";
     nome.addEventListener("click", () => {
       esSelecionar(a.i);
-      const tr = $("estrutura").querySelector('tbody tr[data-i="' + a.i + '"]');
+      const tr = $("ed-estrutura").querySelector('tbody tr[data-i="' + a.i + '"]');
       if (!tr) return;
       tr.scrollIntoView({ block: "nearest" });
       // O foco vai para a célula que o erro cita, e não para a primeira: quem
@@ -852,7 +870,7 @@ function esListaErros() {
 
 /* Atualiza só a marca de estado da linha, sem recriar nada. */
 function esMarcaDaLinha(c, i) {
-  const tr = $("estrutura").querySelector('tbody tr[data-i="' + i + '"]');
+  const tr = $("ed-estrutura").querySelector('tbody tr[data-i="' + i + '"]');
   if (!tr) return;
   const estado = c._removido ? "sumiu" : !c._de ? "novo" : esMudou(c) ? "mudou" : "";
   tr.classList.remove("novo", "mudou", "sumiu");
@@ -1196,6 +1214,9 @@ async function fecharAba(h) {
   if (fechada) condicoesDoDisco.delete(chaveCaminho(fechada.caminho));
 
   const n = abas.findIndex((a) => a.h === h);
+  /* Editar a estrutura de um arquivo que acabou de ser fechado não faz sentido
+     -- e aplicar mandaria a lista para um handle morto. */
+  if (esAlvo === h) esFechar();
   if (abaAtiva === h) {
     const restantes = abas.filter((a) => a.h !== h);
     abaAtiva = restantes.length
@@ -4880,6 +4901,20 @@ let esSel = -1;          // índice da linha selecionada
 let esSeq = 0;           // gerador de `_id` para campos novos
 let esNovo = null;       // { dir } quando se está montando um arquivo NOVO
 
+/*
+ * NÃO HÁ RASCUNHO POR ABA, e é o ponto da modal.
+ *
+ * A versão anterior guardava um rascunho por handle, com dono e mapa, porque o
+ * editor vivia dentro da aba. Deu para consertar o vazamento da tabela e ainda
+ * assim o resumo e o bloco de impacto continuaram mostrando o arquivo errado --
+ * a visão era espalhada por quatro regiões do DOM e cada uma lia as mesmas
+ * variáveis globais. Cada região era uma chance nova de vazar.
+ *
+ * Com a modal existe um rascunho só, ele nasce quando ela abre e morre quando
+ * ela fecha. `esAlvo` guarda de quem ele é para a hora de aplicar.
+ */
+let esAlvo = null;   // handle do arquivo sendo alterado (null quando é criação)
+
 /* Os tipos que este editor oferece. NTX/DBF clássico: sem os exóticos do FoxPro,
    que o RDD daqui não escreve. */
 const ES_TIPOS = ["C", "N", "D", "L", "M"];
@@ -4992,6 +5027,11 @@ function esTamanhoRegistro(campos) {
  * grava um arquivo novo.
  */
 function esCriarNovo(dirPadrao) {
+  /* Criar NÃO precisa de aba. Enquanto o editor morava dentro da aba, criar um
+     arquivo sequestrava a visão Estrutura de um arquivo que nada tinha a ver
+     com ele -- e trocar de aba no meio deixava o rascunho do arquivo novo
+     desenhado sob outro. Aqui a modal é a tela inteira da tarefa. */
+  esAlvo = null;
   esNovo = { dir: dirPadrao || "" };
   esEditando = true;
   esOriginal = [];
@@ -4999,27 +5039,52 @@ function esCriarNovo(dirPadrao) {
      descobrir por onde se começa. */
   esRascunho = [{ name: "CODIGO", type: "C", len: 10, dec: 0, _id: "n" + ++esSeq, _de: null }];
   esSel = 0;
-  desenharConteudo();
+  $("ed-titulo").textContent = T("UI_NEW_FILE");
+  desenharEditor();
+  if (!$("dlg-estrutura").open) $("dlg-estrutura").showModal();
 }
 
+/* Abre a modal sobre a estrutura da aba `h`. */
 function esEntrarNoModo(ligado) {
-  if (!ligado) esNovo = null;
-  esEditando = ligado;
-  $("es-acoes").hidden = !ligado;
-  $("es-confirmar").hidden = !ligado;
-  $("es-editar").hidden = ligado;
-  if (ligado) {
-    const aba = abas.find((a) => a.h === abaAtiva);
-    esOriginal = (aba && aba.fields ? aba.fields : []).map((c) => ({
-      name: c.name, type: c.type, len: c.len, dec: c.dec,
-    }));
-    esRascunho = esOriginal.map((c, i) => ({ ...c, _id: "o" + i, _de: { ...c } }));
-    esSel = esRascunho.length ? 0 : -1;
-  } else {
-    esOriginal = esRascunho = null;
-    esSel = -1;
-  }
-  desenharConteudo();
+  if (!ligado) { esFechar(); return; }
+
+  const aba = abas.find((a) => a.h === abaAtiva);
+  esAlvo = abaAtiva;
+  esNovo = null;
+  esEditando = true;
+  esOriginal = (aba && aba.fields ? aba.fields : []).map((c) => ({
+    name: c.name, type: c.type, len: c.len, dec: c.dec,
+  }));
+  esRascunho = esOriginal.map((c, i) => ({ ...c, _id: "o" + i, _de: { ...c } }));
+  esSel = esRascunho.length ? 0 : -1;
+  $("ed-titulo").textContent = T("UI_EDIT_STRUCTURE_OF", {
+    file: (aba && aba.info && aba.info.file) || (aba && aba.alias) || "",
+  });
+  desenharEditor();
+  if (!$("dlg-estrutura").open) $("dlg-estrutura").showModal();
+}
+
+/* Fecha a modal e joga o rascunho fora. */
+function esFechar() {
+  /* Os painéis são zerados junto: deixá-los preenchidos faz o próximo abrir
+     mostrar, por um quadro, o impacto e os erros da edição anterior. */
+  $("es-impacto").hidden = true;
+  $("es-impacto-lista").textContent = "";
+  $("es-erros").hidden = true;
+  $("es-erros-lista").textContent = "";
+  $("ed-estrutura").querySelector("tbody").textContent = "";
+  esEditando = false;
+  esOriginal = esRascunho = esNovo = null;
+  esAlvo = null;
+  esSel = -1;
+  if ($("dlg-estrutura").open) $("dlg-estrutura").close();
+}
+
+/* Há trabalho não aplicado? Decide se descartar precisa de pergunta. */
+function esTemMudanca() {
+  if (!esRascunho) return false;
+  if (esNovo) return true;
+  return esRascunho.some((c) => c._removido || !c._de || esMudou(c));
 }
 
 /*
@@ -5063,10 +5128,23 @@ function esImpacto() {
     }
   }
 
-  const ordemMudou = esRascunho
-    .filter((c) => !c._removido && c._de)
-    .some((c, i, arr) => arr[i]._de && esOriginal[i] && esOriginal[i].name !== c._de.name);
-  if (ordemMudou) itens.push({ grave: false, chave: "UI_IMPACT_REORDERED", p: {} });
+  /*
+   * REORDENAR É COMPARAR SEQUÊNCIAS, e a versão anterior comparava índices.
+   *
+   * Ela punha o rascunho vivo lado a lado com `esOriginal` posição a posição --
+   * o que dá certo enquanto ninguém remove nada. Remover um campo encurta a
+   * lista viva, todo mundo depois dele anda uma casa, e a comparação acusava
+   * "a ordem mudou" sobre uma alteração que não mexeu na ordem de nada. Um
+   * aviso que aparece quando não devia ensina a ignorar os avisos.
+   *
+   * O certo é comparar as duas sequências de nomes ORIGINAIS dos sobreviventes:
+   * a ordem em que eles estão agora contra a ordem em que estavam.
+   */
+  const vivos = esRascunho.filter((c) => !c._removido && c._de).map((c) => c._de.name);
+  const antes = esOriginal.map((c) => c.name).filter((n) => vivos.indexOf(n) >= 0);
+  if (vivos.join(" ") !== antes.join(" ")) {
+    itens.push({ grave: false, chave: "UI_IMPACT_REORDERED", p: {} });
+  }
 
   return itens;
 }
@@ -5119,7 +5197,7 @@ $("es-descartar").addEventListener("click", async () => {
  * destaque era caro e errado — e o sintoma só aparece em quem usa, não em quem
  * lê o DOM.
  */
-$("estrutura").addEventListener("click", (ev) => {
+$("ed-estrutura").addEventListener("click", (ev) => {
   if (!esEditando) return;
   const el = alvo(ev);
   if (!el) return;
@@ -5133,7 +5211,7 @@ $("estrutura").addEventListener("click", (ev) => {
 /* Move o destaque trocando classes. Nenhum controle é recriado. */
 function esSelecionar(i) {
   esSel = i;
-  const corpo = $("estrutura").querySelector("tbody");
+  const corpo = $("ed-estrutura").querySelector("tbody");
   for (const tr of corpo.querySelectorAll("tr")) {
     tr.classList.toggle("sel", Number(tr.dataset.i) === i);
   }
@@ -5239,8 +5317,18 @@ $("es-down").addEventListener("click", () => esMove(1));
  * origem e destino por esse nome, nunca por posição.
  */
 async function esAplicar() {
-  const aba = abas.find((a) => a.h === abaAtiva);
+  /*
+   * O ALVO É `esAlvo`, e não `abaAtiva`.
+   *
+   * É aqui que o rascunho vira arquivo. Ler o handle da aba ativa faria a
+   * estrutura montada para um arquivo ser gravada em outro se a aba de trás
+   * mudasse -- sem erro nenhum, porque as duas são estruturas válidas. A modal
+   * anota de quem é o rascunho na hora em que abre, e é esse handle que vale.
+   */
+  const alvo = esAlvo;
+  const aba = abas.find((a) => a.h === alvo);
   if (!aba || aba.detached || !esRascunho) return;
+
 
   const arquivo = (aba.info && aba.info.file) || aba.alias;
   const graves = esImpacto().filter((i) => i.grave);
@@ -5279,13 +5367,13 @@ async function esAplicar() {
 
   try {
     const r = await comProgresso(
-      DBU.rpc("struct.modify", { h: abaAtiva, fields: campos, backup: comBackup })
+      DBU.rpc("struct.modify", { h: alvo, fields: campos, backup: comBackup })
     );
 
-    esEntrarNoModo(false);
+    esFechar();
     // A grade em cache é da estrutura velha -- as colunas mudaram de nome.
-    gradeDe.delete(abaAtiva);
-    colunasDe.delete(abaAtiva);
+    gradeDe.delete(alvo);
+    colunasDe.delete(alvo);
     await repintarDoEstado();
 
     await Swal.fire(
@@ -5353,6 +5441,38 @@ document.addEventListener("keydown", async (ev) => {
     })
   );
   if (r.isConfirmed) location.reload();
+});
+
+/*
+ * DESCARTAR PERGUNTA quando há trabalho montado.
+ *
+ * Fechar sem aviso é barato de programar e caro para quem montou vinte campos.
+ * Sem nada alterado, fecha direto -- confirmar o nada é ruído.
+ */
+async function esDescartar() {
+  if (esTemMudanca()) {
+    const r = await Swal.fire(
+      swalBase({
+        icon: "warning",
+        title: T("UI_DISCARD_TITLE"),
+        html: escapaHtml(T("UI_DISCARD_ASK")),
+        showCancelButton: true,
+        confirmButtonText: T("UI_DISCARD"),
+        cancelButtonText: T("UI_KEEP_EDITING"),
+      })
+    );
+    if (!r.isConfirmed) return;
+  }
+  esFechar();
+}
+
+$("es-descartar").addEventListener("click", esDescartar);
+
+/* Esc é o gesto natural de fechar um diálogo, e o padrão do <dialog> fecha sem
+   perguntar. Aqui ele passa pela mesma porta do botão Descartar. */
+$("dlg-estrutura").addEventListener("cancel", (ev) => {
+  ev.preventDefault();
+  esDescartar();
 });
 
 $("es-aplicar").addEventListener("click", async () => {

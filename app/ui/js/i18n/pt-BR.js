@@ -789,4 +789,43 @@
   UI_RELOAD_DISCARD: "Descartar e recarregar",
   UI_KEEP_EDITING: "Continuar editando",
 
+
+  // ============================================ T13: operações em massa
+  UI_JOB_REPLACE: "Repaçando {file}…",
+  UI_JOB_DELETING: "Marcando registros em {file}…",
+  UI_JOB_RECALLING: "Recuperando registros em {file}…",
+  UI_JOB_APPENDING: "Incluindo registros em {file}…",
+
+  WARN_CANCELED_BULK: {
+    one: "Interrompido. {n} registro já tinha sido alterado e assim ficou — cancelar para a operação, não desfaz o que ela já gravou.",
+    other: "Interrompido. {n} registros já tinham sido alterados e assim ficaram — cancelar para a operação, não desfaz o que ela já gravou.",
+  },
+
+  ERROR_SCOPE_MODE: "Escopo '{mode}' não existe.",
+  ERROR_SCOPE_COUNT: "Informe quantos registros.",
+  ERROR_FOR_INVALID: "O FOR não pôde ser entendido: {detail}",
+  ERROR_FOR_NOT_LOGICAL: "O FOR precisa resultar em verdadeiro ou falso; este resulta em {type}.",
+  ERROR_WHILE_INVALID: "O WHILE não pôde ser entendido: {detail}",
+  ERROR_WHILE_NOT_LOGICAL: "O WHILE precisa resultar em verdadeiro ou falso; este resulta em {type}.",
+
+  ERROR_NO_FIELD_PICKED: "Escolha o campo a repaçar.",
+  ERROR_NO_VALUE: "Informe com o quê repaçar.",
+  ERROR_WITH_INVALID: "A expressão não pôde ser entendida: {detail}",
+  ERROR_TYPE_MISMATCH:
+    "'{field}' é {fieldType} e a expressão resulta em {exprType} — os dois tipos precisam bater.",
+
+  ERROR_NO_SOURCE: "Escolha o arquivo de origem.",
+  ERROR_SOURCE_NOT_FOUND: "'{file}' não foi encontrado.",
+  ERROR_CANNOT_OPEN_SOURCE: "Não foi possível abrir '{file}'.",
+  ERROR_FORMAT_UNKNOWN: "Formato de origem '{format}' não existe.",
+  ERROR_FORMAT_UNAVAILABLE: "Esta versão não lê arquivos {format}.",
+  ERROR_APPEND_FAILED: "Não foi possível acrescentar o registro.",
+  ERROR_APPEND_TEXT_FAILED: "'{file}' não pôde ser lido como {format}.",
+  ERROR_CANNOT_LOCK_FILE:
+    "'{file}' está sendo usado por outra pessoa. Operações em massa exigem o arquivo só para você.",
+
+  UI_EDIT_STRUCTURE_OF: "Estrutura de {file}",
+  UI_DISCARD_TITLE: "Descartar as alterações?",
+  UI_DISCARD_ASK: "A estrutura que você montou ainda não foi aplicada e será perdida.",
+
 };

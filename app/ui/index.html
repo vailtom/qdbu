@@ -242,53 +242,27 @@
         </div>
       </div>
 
-      <!-- visão: estrutura -->
+      <!-- visão: estrutura -- SOMENTE LEITURA.
+
+           O editor mora numa MODAL, e não aqui. Enquanto ele era uma parte
+           desta aba, o rascunho era global e a visão era espalhada por quatro
+           regiões (tabela, resumo, erros, impacto) que liam as mesmas
+           variáveis: editar a estrutura de A e trocar para a aba de B deixava
+           o rascunho de A desenhado sob o cabeçalho de B, e Aplicar ali teria
+           gravado a estrutura de A no arquivo B -- sem erro nenhum, porque as
+           duas são estruturas válidas. Amarrar o rascunho à aba dona corrigiu
+           a tabela e deixou passar o resumo e o bloco de impacto; cada região
+           era uma chance nova de vazar.
+
+           Numa modal a pergunta "de quem é este rascunho?" não existe: há um
+           só, ele nasce quando ela abre e morre quando ela fecha. -->
       <div id="visao-estrutura" class="visao-corpo" hidden>
         <div class="cartoes" id="cartoes"></div>
 
-        <!-- T10: a barra do editor.
-
-             AS EDIÇÕES SE ACUMULAM E SÃO APLICADAS DE UMA VEZ. Cada alteração
-             de estrutura reconstrói o arquivo inteiro fora do lugar (R2), e
-             fazer isso a cada tecla num arquivo de 800 MB seria absurdo. Aqui a
-             pessoa monta o que quer, VÊ o que vai acontecer com os dados, e
-             confirma uma vez só. -->
         <div class="es-barra">
           <button type="button" id="es-editar" data-i18n="UI_EDIT_STRUCTURE"></button>
-
-          <!-- ÍCONE + RÓTULO, e não símbolo sozinho.
-
-               Cinco botões com "+ ↱ − ↑ ↓" obrigam a passar o mouse em cada um
-               para descobrir o que fazem — e o `title` só aparece depois de um
-               segundo parado. É o mesmo padrão do menu ⋯ de conexão, que já
-               tinha aprendido isto. O ícone fica: ele é o que se reconhece de
-               relance depois da primeira vez. -->
-          <span class="es-grupo" id="es-acoes" hidden>
-            <button type="button" id="es-add" data-i18n-title="UI_ADD_FIELD">
-              <span class="es-ico">+</span><span data-i18n="UI_ADD_SHORT"></span>
-            </button>
-            <button type="button" id="es-ins" data-i18n-title="UI_INSERT_FIELD">
-              <span class="es-ico">↱</span><span data-i18n="UI_INSERT_SHORT"></span>
-            </button>
-            <button type="button" id="es-del" class="risco" data-i18n-title="UI_REMOVE_FIELD">
-              <span class="es-ico">−</span><span id="es-del-rotulo"></span>
-            </button>
-            <span class="es-sep"></span>
-            <button type="button" id="es-up" data-i18n-title="UI_MOVE_UP">
-              <span class="es-ico">↑</span><span data-i18n="UI_UP_SHORT"></span>
-            </button>
-            <button type="button" id="es-down" data-i18n-title="UI_MOVE_DOWN">
-              <span class="es-ico">↓</span><span data-i18n="UI_DOWN_SHORT"></span>
-            </button>
-          </span>
-
           <span class="es-espaco"></span>
-          <span class="es-resumo" id="es-resumo"></span>
-
-          <span class="es-grupo" id="es-confirmar" hidden>
-            <button type="button" id="es-descartar" data-i18n="UI_DISCARD"></button>
-            <button type="button" id="es-aplicar" class="primario" data-i18n="UI_APPLY"></button>
-          </span>
+          <span class="es-resumo" id="es-resumo-aba"></span>
         </div>
 
         <div class="tabela-wrap">
@@ -302,34 +276,7 @@
             <tbody></tbody>
           </table>
         </div>
-
-        <!-- OS ERROS, COM NOME E MOTIVO, LOGO ABAIXO DA TABELA.
-
-             A versão anterior dizia só "1 campo com problema": nem qual campo,
-             nem qual problema. A única pista era uma borda vermelha perdida
-             entre nove linhas, e a explicação ficava escondida no `title`, que
-             só aparece depois de um segundo parado.
-
-             Ficou ACIMA da tabela por um tempo, com o argumento de ser lida
-             antes da tentativa de aplicar. Custou caro na prática: empurrava a
-             tabela para baixo e afastava a barra de botões daquilo sobre o que
-             ela age. Aqui embaixo os erros continuam à vista, e a barra volta a
-             encostar na tabela. -->
-        <div class="es-erros" id="es-erros" hidden>
-          <h4 id="es-erros-titulo"></h4>
-          <ul id="es-erros-lista"></ul>
-        </div>
-
-        <!-- O QUE VAI ACONTECER COM OS DADOS.
-
-             É por isto que esta tela existe. Encolher um campo TRUNCA valores;
-             remover um APAGA a coluna; trocar o tipo pode não converter. Nada
-             disso é óbvio na tabela acima, e descobrir depois de aplicar num
-             arquivo de cliente é tarde demais. -->
-        <div class="es-impacto" id="es-impacto" hidden>
-          <h4 data-i18n="UI_IMPACT"></h4>
-          <ul id="es-impacto-lista"></ul>
-        </div>
+      </div>
       </div>
 
     </div>
@@ -510,6 +457,93 @@
     </div>
   </div>
 </div>
+
+<!-- T10: o editor de estrutura.
+
+     AS EDIÇÕES SE ACUMULAM E SÃO APLICADAS DE UMA VEZ. Cada alteração
+     reconstrói o arquivo inteiro fora do lugar (R2), e fazer isso a cada tecla
+     num arquivo de 800 MB seria absurdo. Aqui a pessoa monta o que quer, VÊ o
+     que vai acontecer com os dados, e confirma uma vez só.
+
+     A mesma modal serve para ALTERAR e para CRIAR: são a mesma tarefa -- montar
+     uma lista de campos. Criar não precisa de aba nenhuma, e é por isso que
+     criar deixou de sequestrar a aba ativa. -->
+<dialog id="dlg-estrutura">
+  <form method="dialog" id="form-estrutura">
+    <h2 id="ed-titulo"></h2>
+
+    <div class="es-barra">
+      <!-- ÍCONE + RÓTULO, e não símbolo sozinho.
+
+           Cinco botões com "+ ↱ − ↑ ↓" obrigam a passar o mouse em cada um para
+           descobrir o que fazem -- e o `title` só aparece depois de um segundo
+           parado. O ícone fica: ele é o que se reconhece de relance depois da
+           primeira vez. -->
+      <span class="es-grupo" id="es-acoes">
+        <button type="button" id="es-add" data-i18n-title="UI_ADD_FIELD">
+          <span class="es-ico">+</span><span data-i18n="UI_ADD_SHORT"></span>
+        </button>
+        <button type="button" id="es-ins" data-i18n-title="UI_INSERT_FIELD">
+          <span class="es-ico">↱</span><span data-i18n="UI_INSERT_SHORT"></span>
+        </button>
+        <button type="button" id="es-del" class="risco" data-i18n-title="UI_REMOVE_FIELD">
+          <span class="es-ico">−</span><span id="es-del-rotulo"></span>
+        </button>
+        <span class="es-sep"></span>
+        <button type="button" id="es-up" data-i18n-title="UI_MOVE_UP">
+          <span class="es-ico">↑</span><span data-i18n="UI_UP_SHORT"></span>
+        </button>
+        <button type="button" id="es-down" data-i18n-title="UI_MOVE_DOWN">
+          <span class="es-ico">↓</span><span data-i18n="UI_DOWN_SHORT"></span>
+        </button>
+      </span>
+      <span class="es-espaco"></span>
+      <span class="es-resumo" id="es-resumo"></span>
+    </div>
+
+    <div class="tabela-wrap ed-tabela">
+      <table class="estrutura" id="ed-estrutura">
+        <thead>
+          <tr><th class="es-marca"></th>
+              <th>#</th><th data-i18n="UI_FIELD"></th><th data-i18n="UI_TYPE"></th>
+              <th class="num" data-i18n="UI_SIZE"></th>
+              <th class="num" data-i18n="UI_DEC"></th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- OS ERROS, COM NOME E MOTIVO, LOGO ABAIXO DA TABELA.
+
+         A versão anterior dizia só "1 campo com problema": nem qual campo, nem
+         qual problema. A única pista era uma borda vermelha perdida entre nove
+         linhas, e a explicação ficava escondida no `title`.
+
+         Ficou ACIMA da tabela por um tempo, com o argumento de ser lida antes
+         da tentativa de aplicar. Custou caro: empurrava a tabela para baixo e
+         afastava a barra de botões daquilo sobre o que ela age. -->
+    <div class="es-erros" id="es-erros" hidden>
+      <h4 id="es-erros-titulo"></h4>
+      <ul id="es-erros-lista"></ul>
+    </div>
+
+    <!-- O QUE VAI ACONTECER COM OS DADOS.
+
+         É por isto que esta tela existe. Encolher um campo TRUNCA valores;
+         remover um APAGA a coluna; trocar o tipo pode não converter. Nada disso
+         é óbvio na tabela acima, e descobrir depois de aplicar num arquivo de
+         cliente é tarde demais. -->
+    <div class="es-impacto" id="es-impacto" hidden>
+      <h4 data-i18n="UI_IMPACT"></h4>
+      <ul id="es-impacto-lista"></ul>
+    </div>
+
+    <div class="acoes">
+      <button type="button" id="es-descartar" data-i18n="UI_DISCARD"></button>
+      <button type="button" id="es-aplicar" class="primario" data-i18n="UI_APPLY"></button>
+    </div>
+  </form>
+</dialog>
 
 <!-- Onde salvar o DBF novo.
 
