@@ -12,19 +12,97 @@ moderna, sem abrir mão de nada que um arquivo de cliente exige: trava por
 registro, backup antes de operação destrutiva, e log de tudo que muda bytes no
 disco.
 
+## Aviso
+
+O QDBU nasceu como **prova de conceito e exercício de estudo**. É fornecido
+**sem garantia de nenhuma espécie**, expressa ou implícita, e **o uso é por sua
+conta e risco**.
+
+Ele escreve em arquivo DBF. PACK, ZAP, alteração de estrutura, `REPLACE` em
+massa e edição de registro mudam bytes no disco, e o pré-voo reduz o risco sem
+eliminá-lo. Tenha backup antes de apontá-lo para dado de produção.
+
+Ver [LICENSE](LICENSE).
+
 ## O que ele faz
 
 - **Abre e navega** DBF de qualquer tamanho, com paginação real. Um arquivo de
   421 mil registros abre no mesmo tempo que um de sete.
-- **Edita** registro a registro, na grade ou no formulário, com trava por
-  registro e conferência do disco antes de gravar.
-- **Filtra** por expressão ou por um construtor guiado que recusa valor que não
-  cabe no tipo, em vez de convertê-lo em silêncio.
+- **Edita** registro a registro, na grade ou no formulário.
+- **Filtra** por expressão ou por um construtor guiado.
 - **Indexa**: abre `.ntx` existentes, cria novos, escolhe a ordem ativa.
-- **Altera estrutura**, compacta (PACK) e esvazia (ZAP), sempre atrás de um
-  checklist de pré-voo que confere espaço, copia e verifica a cópia.
-- **Exporta** para CSV, JSON e XLSX; **importa** de CSV e JSON.
-- **Fala três idiomas** (pt-BR, en, es) e tem doze temas.
+- **Altera estrutura**, compacta (PACK) e esvazia (ZAP).
+- **Exporta** para CSV, JSON, XLSX e DBF; **importa** de CSV e JSON.
+
+## Além do DBU original
+
+O DBU resolvia o essencial num terminal de 80 colunas. O QDBU mantém o que ele
+fazia e trata o que ficou de fora:
+
+**Várias work areas ao mesmo tempo**
+
+- **Todas as pastas cadastradas visíveis numa árvore**, sem limite e sem trocar
+  de diretório. Cada uma com nome próprio e busca.
+- **Um arquivo por aba**, cada uma com a própria ordem, filtro e seleção de
+  campos.
+- **A sessão volta como estava**: abas, campos ocultos, ordem ativa e filtro de
+  cada arquivo.
+- **Grade e formulário sobre o mesmo registro.** O formulário mostra todos os
+  campos, inclusive os que a grade escondeu.
+- **A paginação é âncora + deslocamento** (`dbGoTo` → `dbSkip`), nunca offset
+  absoluto: "o 5000º registro" não sobrevive a uma troca de ordem ou filtro.
+
+**Modo compartilhado de verdade**
+
+- **`RLock()` por registro, não `FLock()` no arquivo.** Editar uma célula não
+  bloqueia o ERP que está com o DBF aberto.
+- **Gravação com `expect`**, conferido dentro do `RLock`. A comparação é sobre
+  os bytes de `dbRecordInfo(DBRI_RAWRECORD)`, e não sobre o valor: num `N(12,2)`
+  o `FieldGet()` achata "nunca preenchido" (brancos de `APPEND BLANK`), `0.00` e
+  "não coube" (asteriscos) no mesmo `0`. Se o registro mudou desde a leitura, o
+  QDBU mostra os dois lados e deixa a decisão com quem está na frente.
+- **Releitura automática em ociosidade**, repintando só o que mudou e
+  preservando a rolagem.
+
+**Não corromper arquivo**
+
+- **PACK, ZAP e alteração de estrutura passam por um checklist que roda:**
+  espaço para 3× o conjunto, cópia do conjunto inteiro (DBF, memo e `.ntx`),
+  conferência do tamanho da cópia, e só então a operação.
+- **Estado religado numa rotina só.** Depois do `dbPack()` os RecNo mudam, então
+  o cursor volta pela chave **e** pelo RecNo — só pela chave erra quando há
+  homônimos, e o soft seek para na primeira ocorrência. Em alteração de
+  estrutura os índices são fechados antes, porque passariam a descrever um
+  arquivo que não existe mais.
+- **Cancelamento cooperativo**, sempre entre registros completos.
+- **Log JSONL das operações que mudam bytes**, com o pedido e o desfecho — o
+  `backup: true` do pedido e o nome do arquivo que nasceu.
+
+**Codepage e tipos**
+
+- **Codepage por arquivo**, com cinco lentes: CP850, Windows-1252, ISO-8859-1,
+  CP860 e UTF-8, em cascata arquivo › conexão › global. O byte do language
+  driver (offset 29) sugere, mas não decide — a maioria dos DBFs Clipper grava
+  `0x00`. Ler um DBF gravado em 1252 com a lente do DOS mostra acento trocado, e
+  grava byte errado no primeiro `REPLACE`.
+- **Valor que não cabe no tipo é recusado, nunca coagido.** `Val("abc")` daria
+  `0` e zero é plausível; `CToD("31/02/2026")` daria data vazia e apagaria a que
+  estava lá; um `C(40)` recebendo 60 caracteres seria truncado calado.
+- **`.ntx` casado pela expressão de chave, não pelo nome.** Nas bases reais o
+  índice de `NETCLI.DBF` se chama `ID1CLI.ntx`, e cada dev usa a convenção que
+  quer. O QDBU lê o cabeçalho do índice e confere se os campos citados existem
+  no arquivo.
+- **A expressão de índice e a de filtro compilam em runtime**, então as funções
+  da linguagem estão linkadas de propósito — sem isso um `PADR()` numa chave
+  recusa com "Undefined function", numa função que existe no Clipper desde
+  sempre.
+- **O erro traz `operation` e `args`, não só `description`.** Um `W` digitado
+  por engano num WHILE diz **qual** variável não existe.
+
+**Interface**
+
+- **Três idiomas** — português, inglês e espanhol — trocáveis sem reiniciar.
+- **Doze temas**, um deles claro, com contraste verificado pela fórmula do WCAG.
 
 ## Como se monta
 
