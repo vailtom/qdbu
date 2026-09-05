@@ -5,7 +5,7 @@
  *
  * O editor de estrutura em app/ui/js/app.js valida enquanto a pessoa digita, e
  * e o que faz a tela ser usavel. Mas a DLL nao pode confiar nisso: o cliente C
- * o cliente C de teste chama direto, o --selftest chama direto, e qualquer um que use a
+ * o cliente C (tests/) chama direto, o --selftest chama direto, e qualquer um que use a
  * ponte chama direto. Uma DLL que so valida porque a UI validou aceita um campo
  * chamado "1 CAMPO@" vindo de um chamador distraido, e o arquivo nasce
  * invalido.

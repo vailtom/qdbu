@@ -13,7 +13,7 @@
  *
  * Os passos 1 e 2 sao da tela de proposito: a DLL nao pergunta nada. Ela recebe
  * `backup` ja decidido e executa. Uma DLL que faz perguntas nao tem como ser
- * testada sem GUI, e o cliente C de teste precisa poder exercitar isto.
+ * testada sem GUI, e o cliente C (tests/) precisa poder exercitar isto.
  *
  * O EXCLUSIVO E TENTADO DEPOIS DE PERGUNTAR, e nao antes.
  *

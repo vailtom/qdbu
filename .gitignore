@@ -30,8 +30,14 @@ app/src-tauri/gen/
 
 # A hbxlsxwriter e dependencia versionada, nao produto de build: sem esta
 # excecao o `*.lib` acima a engoliria e o projeto nao compilaria em outra
-# maquina. Ver lib/harbour-xlsxwriter/LICENSE (BSD-2 + zlib).
+# maquina. Ver lib/harbour-xlsxwriter/LICENSE (MIT).
 !lib/harbour-xlsxwriter/*.lib
+
+# ---- Artefatos dos testes ----
+# Gerados por tests/, como as fixtures. Refazem-se rodando o teste.
+tests/fixtures/*.xlsx
+tests/fixtures/*.csv
+tests/fixtures/*.json
 
 # ---- Runtime: tudo que o projeto gera fica em .run/ ----
 .run/

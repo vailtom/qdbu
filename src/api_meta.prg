@@ -5,7 +5,7 @@
  *   cru       Api_Meta_Ping("qdbu")                    -> string
  *   envelope  {"method":"meta.ping","params":{"msg":"qdbu"}} -> JSON
  *
- * O modo cru existe porque o cliente C (o cliente C de teste) e o --selftest
+ * O modo cru existe porque o cliente C (tests/testload.c) e o --selftest
  * exercitam a ponte sem montar envelope -- e e bom que o teste mais basico da
  * ponte nao dependa da camada de roteamento.
  */

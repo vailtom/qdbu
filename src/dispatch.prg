@@ -16,7 +16,7 @@
  * que tem; se pulou, refaz session.state. Invalidacao de cache em uma linha.
  *
  * Compatibilidade: chamada sem envelope (string crua) continua funcionando como
- * `Api_Xxx(cArg) -> string`. E o que o cliente C (o cliente C de teste) usa.
+ * `Api_Xxx(cArg) -> string`. E o que o cliente C (tests/testload.c) usa.
  */
 
 #include "hbclass.ch"
@@ -118,10 +118,10 @@ FUNCTION DllDispatch( cFunc, cArg )
  * registrar.
  *
  * As tres sao o handshake da ponte -- eco e versao, nada mais. Os chamadores
- * reais estao em o cliente C de teste e no `--selftest` de
+ * reais estao em `tests/testload.c` e no `--selftest` de
  * `app/src-tauri/src/main.rs`; TODO o resto do app fala por envelope.
  *
- * Funcao nova aqui e decisao consciente, e o teste de o cliente C de teste
+ * Funcao nova aqui e decisao consciente, e o teste de `tests/testload.c`
  * comparado com esta lista e o que impede a lista de crescer por descuido.
  */
 STATIC FUNCTION PermitidasNaViaCrua()

@@ -56,18 +56,25 @@ app\build.bat                   :: release
 
 ## Validar
 
-O `--selftest` roda a integração inteira sem interface e **afirma**, não imprime:
-toda função nova ganha uma asserção.
+Três trilhos, e nenhum item se dá por pronto sem os três:
 
 ```bat
+testsuild.bat                 :: contrato da DLL, sem Rust nem GUI
 cd app\src-tauri && cargo run --target i686-pc-windows-msvc -- --selftest
 app\devtools\cdp.bat <cmd>      :: dirige a interface por cliques de verdade
 ```
 
+O `--selftest` **afirma**, não imprime: toda função nova ganha uma asserção.
+
 ## Dados de teste
 
 Nenhum arquivo de banco entra no repositório — o `.gitignore` bloqueia `*.dbf`,
-`*.dbt`, `*.ntx` e `*.vew`. Nenhum dado de cliente, nenhum dado de produção.
+`*.dbt`, `*.ntx` e `*.vew`. Nenhum dado de cliente, nenhum dado de produção. As
+fixtures são **geradas**, e o argumento opcional dimensiona o arquivo grande:
+
+```bat
+testsixturesixtures.bat [n]
+```
 
 ## Documentação
 

@@ -534,7 +534,7 @@ fn selftest() -> i32 {
     // Controle no nome: a mensagem de recusa vai para tela e para log, e esta
     // via nao passa por ConvertDeep(). Sanea() apara antes de ecoar. Byte
     // INVALIDO em UTF-8 nao cabe num &str -- esse caso so o cliente C consegue
-    // montar, e esta em o cliente C de teste.
+    // montar, e esta em tests/testload.c.
     let sujo = format!("Api_{}{}Zzz", char::from(1u8), char::from(127u8));
     t.contem(
         "via crua: nome com caractere de controle volta saneado",
@@ -1712,7 +1712,7 @@ fn selftest() -> i32 {
             let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h}"}}"#));
         }
     } else {
-        saida("  --   TA: fixture TIPOS.DBF ausente, pulando (gere as fixtures antes)");
+        saida("  --   TA: fixture TIPOS.DBF ausente, pulando (rode tests/fixtures/fixtures.bat)");
     }
 
     t.resumo()
