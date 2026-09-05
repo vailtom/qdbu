@@ -1,13 +1,16 @@
 # QDBU
 
-Reconstrução do **DBU** — o utilitário de manipulação de DBF do Clipper — como
-aplicativo de desktop: a lógica em **Harbour**, dentro de uma DLL, e a interface
-em **Tauri + Rust + HTML/JS**.
+Utilitário inspirado no **DBU** (o utilitário de manipulação de DBFs do Clipper),
+desenvolvido em **Harbour**, com interface em **Tauri + Rust + HTML/JS**.
 
-O DBU original é especificação de comportamento, não código de partida. O que
-ele fazia por teclado num terminal de 80 colunas, o QDBU faz numa janela — sem
-abrir mão de nada que um arquivo de cliente exige: trava por registro, backup
-antes de operação destrutiva, log de tudo que muda bytes no disco.
+O Harbour é quem faz o trabalho: ele abre, lê, trava, indexa, filtra e grava o
+DBF, com o mesmo RDD que sustenta sistemas em produção há décadas. A camada
+gráfica existe para dar janela ao que ele já sabe fazer — e não o contrário.
+
+O que o DBU fazia por teclado num terminal de 80 colunas, o QDBU faz numa tela
+moderna, sem abrir mão de nada que um arquivo de cliente exige: trava por
+registro, backup antes de operação destrutiva, e log de tudo que muda bytes no
+disco.
 
 ## O que ele faz
 
@@ -27,17 +30,17 @@ antes de operação destrutiva, log de tudo que muda bytes no disco.
 
 | camada | onde |
 |---|---|
-| lógica de dados | `src/` — Harbour, compilado em `bin/qdbudll.dll` |
-| ponte | `src/bridge/` — três exports: `HbStart`, `HbStop`, `HbCall` |
-| aplicação | `app/src-tauri/` — Rust; confina a DLL numa thread dedicada |
+| **Harbour** — toda a lógica de dados | `src/` |
+| ponte | `src/bridge/` — três pontos de entrada: `HbStart`, `HbStop`, `HbCall` |
+| aplicação | `app/src-tauri/` — Rust, que hospeda a VM do Harbour |
 | interface | `app/ui/` — HTML/CSS/JS estático, sem bundler |
 
 Uma string entra, uma string sai; o que é estruturado viaja em JSON. A camada
-Rust nunca chama a DLL direto de um comando Tauri — a VM do Harbour tem
+Rust nunca alcança o Harbour direto de um comando Tauri — a VM dele tem
 afinidade de thread, então todos os pedidos passam por uma fila.
 
-**Tudo é 32-bit**, porque o Harbour instalado é x86. Um processo 64-bit falha ao
-carregar a DLL com erro 193.
+**Tudo é 32-bit**, acompanhando o Harbour x86. Um processo 64-bit falha ao
+carregar a biblioteca com erro 193.
 
 ## Construir
 
