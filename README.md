@@ -77,4 +77,6 @@ que foi feito assim — é onde mora o raciocínio.
 
 ## Licença
 
-Ainda não definida.
+MIT — ver [LICENSE](LICENSE). As duas dependências que acompanham o projeto são
+MIT também: o [SweetAlert2](app/ui/vendor/sweetalert2/LICENSE) e a
+[harbour-xlsxwriter](lib/harbour-xlsxwriter/LICENSE).
