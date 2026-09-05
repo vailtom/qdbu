@@ -1099,7 +1099,7 @@ STATIC FUNCTION MarcaRegistro( hP, lExcluir )
 /* =====================================================================
  * R8 -- O QUE SE EDITA TEM DE SER O QUE ESTA NO DISCO
  *
- * Duas pecas, e a regra que as une esta em docs/10-integridade.md, R8:
+ * Duas pecas, e a regra que as une esta em as regras de integridade, R8:
  *
  *   data.record  -> le UM registro AGORA, e devolve alem dos valores os BYTES
  *                   CRUS de cada campo. E o que a UI chama ao abrir o editor.

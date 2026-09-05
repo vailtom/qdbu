@@ -5,7 +5,7 @@
  *   cru       Api_Meta_Ping("qdbu")                    -> string
  *   envelope  {"method":"meta.ping","params":{"msg":"qdbu"}} -> JSON
  *
- * O modo cru existe porque o cliente C (tests/testload.c) e o --selftest
+ * O modo cru existe porque o cliente C (o cliente C de teste) e o --selftest
  * exercitam a ponte sem montar envelope -- e e bom que o teste mais basico da
  * ponte nao dependa da camada de roteamento.
  */
@@ -106,7 +106,7 @@ FUNCTION Api_Meta_Echo( xArg )
  *
  * Este job nao le nem escreve nada: so dorme em fatias, reportando progresso e
  * consultando o cancelamento entre uma fatia e outra -- exatamente o formato que
- * a R1 de docs/10-integridade.md exige de toda rotina longa. E o cancelamento
+ * a R1 de as regras de integridade exige de toda rotina longa. E o cancelamento
  * nao "para o sono": ele e conferido ENTRE as fatias, que e o unico ponto onde
  * uma operacao real estaria consistente.
  *
@@ -141,7 +141,7 @@ FUNCTION Api_Meta_Slowjob( hP )
       QDbu_Progress( i )
 
       /* Entre fatias, nunca no meio: e onde uma operacao real estaria com o
-         registro completo. R1 de docs/10-integridade.md. */
+         registro completo. R1 de as regras de integridade. */
       IF QDbu_Canceled()
          lParou := .T.
          EXIT

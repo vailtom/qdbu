@@ -1,7 +1,7 @@
 /*
  * api_workspace.prg - conexoes (pastas de trabalho) e listagem de arquivos.
  *
- * Modelo (ver docs/06-plano-de-entrega.md secao 1b):
+ * Modelo (ver o plano de entrega secao 1b):
  *   conexao = um diretorio com DBFs, nomeado. Todas visiveis numa arvore,
  *   sem limite e sem "trocar de pasta".
  *

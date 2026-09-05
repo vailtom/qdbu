@@ -62,7 +62,7 @@ FUNCTION CdpNativa( cNova )
  * compartilham a MESMA tabela Windows-1252. ESWIN representa o CP1252 ocidental
  * -- a conversao de BYTES e identica entre eles; o que muda e a collation, e o
  * QDBU ordena por indice (chave no cabecalho do NTX) ou fisica, nunca pela
- * collation da VM. Ver docs/06-plano-de-entrega.md, B3.
+ * collation da VM. Ver o plano de entrega, B3.
  */
 STATIC FUNCTION Candidatos()
    RETURN { ;

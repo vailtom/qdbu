@@ -25,7 +25,7 @@
  * Ela so e alcancada quando o arquivo esta aberto -- e para arquivo aberto a
  * copia consistente e a que passa pelo RDD, registro a registro. Copiar bytes
  * de um arquivo que outra pessoa esta gravando captura um estado partido. Essa
- * decisao ja foi tomada e documentada em docs/11-backup.md; aqui ela e apenas
+ * decisao ja foi tomada e documentada em o desenho do backup; aqui ela e apenas
  * reusada (`CopiaPorRegistro`).
  */
 

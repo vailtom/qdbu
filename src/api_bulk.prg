@@ -2,7 +2,7 @@
  * api_bulk.prg - PACK e ZAP. As primeiras operacoes que DESTROEM dado.
  *
  * ATE AQUI TUDO SO LIA. Isto muda com este arquivo, e por isso ele e o unico
- * lugar do projeto onde as regras de docs/10-integridade.md sao obrigatorias
+ * lugar do projeto onde as regras de as regras de integridade sao obrigatorias
  * linha a linha, e nao recomendacoes.
  *
  * A SEQUENCIA, e ela e a mesma para os dois comandos:
@@ -13,7 +13,7 @@
  *
  * Os passos 1 e 2 sao da tela de proposito: a DLL nao pergunta nada. Ela recebe
  * `backup` ja decidido e executa. Uma DLL que faz perguntas nao tem como ser
- * testada sem GUI, e o cliente C (tests/) precisa poder exercitar isto.
+ * testada sem GUI, e o cliente C de teste precisa poder exercitar isto.
  *
  * O EXCLUSIVO E TENTADO DEPOIS DE PERGUNTAR, e nao antes.
  *
@@ -34,7 +34,7 @@
  *
  * A estrategia do rename e do autor, e e melhor que copiar-depois-zapar em
  * todos os eixos: mais rapida, nao precisa de espaco para uma copia, e nao ha
- * janela em que exista meia copia. Ver docs/11-backup.md.
+ * janela em que exista meia copia. Ver o desenho do backup.
  *
  * PACK nao tem esse atalho: ele PRESERVA os registros nao marcados, entao o
  * arquivo resultante e diferente do original e o original tem de ser copiado
@@ -81,7 +81,7 @@ FUNCTION Api_Bulk_Zap( hP )
 /*
  * bulk.pack {"h":"h7","backup":true}
  *
- * COM backup: copia por registro (docs/11-backup.md) e depois PACK + dbCommit().
+ * COM backup: copia por registro (o desenho do backup) e depois PACK + dbCommit().
  * SEM backup: PACK + dbCommit().
  */
 FUNCTION Api_Bulk_Pack( hP )

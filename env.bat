@@ -36,10 +36,6 @@ if "%QDBU_LOG%"=="" set "QDBU_LOG=%QDBU_HOME%\.run\qdbu-console.log"
 if "%WEBVIEW2_USER_DATA_FOLDER%"=="" set "WEBVIEW2_USER_DATA_FOLDER=%QDBU_HOME%\.run\webview2"
 if not exist "%QDBU_HOME%\.run" mkdir "%QDBU_HOME%\.run"
 
-rem ---- Backup (arjota.bat) ----
-rem  Definido ANTES das conferencias: backup nao precisa de Harbour nem de VS.
-if "%QDBU_ARJ%"=="" set "QDBU_ARJ=J:\arj.exe"
-
 rem ---- Conferencias ----
 if not exist "%HB_INSTALL_PREFIX%\bin\hbmk2.exe" (
   echo [env] Harbour nao encontrado em "%HB_INSTALL_PREFIX%".

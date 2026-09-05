@@ -26,7 +26,7 @@
  *     nao existem numa expressao de dados, e a DLL nem tem console.
  *   - as que ALTERAM dados (DBDELETE, DBAPPEND, DBCREATE, FERASE, FWRITE...).
  *     Expressao de indice e codigo executado com privilegio total -- ver
- *     docs/09-modelo-de-confianca.md. Nao linkar o que destroi e uma barreira barata, e
+ *     o modelo de confianca. Nao linkar o que destroi e uma barreira barata, e
  *     nenhum indice legitimo chama isso para montar uma chave.
  *   - IIF: e palavra-chave do compilador, nao funcao. O linker procuraria um
  *     HB_FUN_IIF que nao existe; expressoes com iif() ja compilam.

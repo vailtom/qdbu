@@ -57,7 +57,7 @@ fn raiz_projeto() -> Option<PathBuf> {
 
 /// Onde o app instalado grava, quando `raiz_projeto()` nao acha nada.
 ///
-/// A regra 1 do GUIA-DO-PROJETO.md ("nada em %TEMP%, nada em %LOCALAPPDATA%") vale para a
+/// A regra 1 do o guia do projeto ("nada em %TEMP%, nada em %LOCALAPPDATA%") vale para a
 /// ARVORE DE FONTES, onde `qdbudll.hbp` existe e `raiz_projeto()` responde. O app
 /// INSTALADO nao tem `qdbudll.hbp` -- nunca teve, mas ate o instalador existir o
 /// fallback nunca disparava. Agora dispara, e `env::temp_dir()` era a pior das
@@ -171,7 +171,7 @@ struct Resultado {
 /// armadilha: quem roda `make.bat` e depois abre o .exe direto, sem passar pelo
 /// cargo, carregaria a copia VELHA e continuaria vendo o defeito que acabou de
 /// corrigir -- sem nenhum sinal, que e a mesma classe de perda de tempo do
-/// frontend embutido descrita no GUIA-DO-PROJETO.md.
+/// frontend embutido descrita no o guia do projeto.
 ///
 /// Entao: em DEBUG a fonte (`<raiz>/bin/qdbudll.dll`) vem primeiro; em RELEASE,
 /// e no app instalado, a que esta ao lado do executavel -- que la e a unica.
@@ -534,7 +534,7 @@ fn selftest() -> i32 {
     // Controle no nome: a mensagem de recusa vai para tela e para log, e esta
     // via nao passa por ConvertDeep(). Sanea() apara antes de ecoar. Byte
     // INVALIDO em UTF-8 nao cabe num &str -- esse caso so o cliente C consegue
-    // montar, e esta em tests/testload.c.
+    // montar, e esta em o cliente C de teste.
     let sujo = format!("Api_{}{}Zzz", char::from(1u8), char::from(127u8));
     t.contem(
         "via crua: nome com caractere de controle volta saneado",
@@ -931,7 +931,7 @@ fn selftest() -> i32 {
                 //
                 // O escopo e `all` com um `for` sobre o RecNo, e nao
                 // `next n:1`: `conta()` usa `data.page`, que MOVE O PONTEIRO e
-                // para depois da ultima linha (GUIA-DO-PROJETO.md, e o mesmo tropeco da
+                // para depois da ultima linha (o guia do projeto, e o mesmo tropeco da
                 // primeira versao do rebindtest). Um `next` logo apos a
                 // contagem parte do EOF e nao marca nada -- foi o que
                 // aconteceu, e o sintoma foi de novo "removed:0".
@@ -1257,7 +1257,7 @@ fn selftest() -> i32 {
 
                 // --- R8: o que se edita tem de ser o que esta no disco ---
                 //
-                // docs/10-integridade.md, R8. As oito asercoes abaixo sao o
+                // as regras de integridade, R8. As oito asercoes abaixo sao o
                 // contrato do `expect`; cada uma fecha um risco listado no
                 // plano. Rodam sobre a mesma copia descartavel da T8 (h3).
                 let rec = |n: u64| {
@@ -1712,7 +1712,7 @@ fn selftest() -> i32 {
             let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h}"}}"#));
         }
     } else {
-        saida("  --   TA: fixture TIPOS.DBF ausente, pulando (rode tests/fixtures/fixtures.bat)");
+        saida("  --   TA: fixture TIPOS.DBF ausente, pulando (gere as fixtures antes)");
     }
 
     t.resumo()

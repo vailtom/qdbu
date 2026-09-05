@@ -1,7 +1,7 @@
 /*
  * paths.prg - onde o app guarda a propria configuracao.
  *
- * O projeto e autocontido (ver GUIA-DO-PROJETO.md): tudo que ele gera fica sob a raiz.
+ * O projeto e autocontido (ver o guia do projeto): tudo que ele gera fica sob a raiz.
  * A raiz e achada subindo a partir do executavel ate encontrar `qdbudll.hbp` --
  * a mesma marca que o Rust usa em raiz_projeto().
  *

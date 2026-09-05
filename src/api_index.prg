@@ -358,7 +358,7 @@ STATIC FUNCTION IdentificadoresDe( cExpr )
  *               "for":"!Deleted()","unique":false}
  *
  * PRIMEIRA ROTINA DESTE APP QUE ESCREVE UM ARQUIVO -- ainda que um .ntx, e nao
- * o DBF. As regras de docs/10-integridade.md ja valem aqui:
+ * o DBF. As regras de as regras de integridade ja valem aqui:
  *
  *   - nao sobrescreve arquivo existente sem que o chamador diga `replace`
  *   - cancelar apaga o .ntx incompleto (R3): um indice pela metade abre sem
@@ -491,7 +491,7 @@ FUNCTION Api_Index_Create( hP )
 
    IF lParou
       /*
-       * R3 de docs/10-integridade.md: cancelar nao deixa lixo.
+       * R3 de as regras de integridade: cancelar nao deixa lixo.
        *
        * Um .ntx interrompido no meio nao se anuncia -- ele abre, tem cabecalho
        * valido, e devolve o registro errado nas chaves que faltaram. Deixa-lo

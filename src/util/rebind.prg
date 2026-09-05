@@ -1,7 +1,7 @@
 /*
  * rebind.prg - desligar -> operar -> religar -> reancorar.
  *
- * A R5 de docs/10-integridade.md, e o item que o plano marca como o mais
+ * A R5 de as regras de integridade, e o item que o plano marca como o mais
  * perigoso do checklist inteiro. Existe uma rotina so, e todas as operacoes
  * exclusivas passam por ela -- tres implementacoes seriam tres conjuntos de
  * manhas diferentes, e as duas que estivessem erradas errariam em silencio.
@@ -443,7 +443,7 @@ STATIC FUNCTION CaminhoDoBagReg( cBag, aReg )
  * de cada e uma chance de a copia divergir no dia em que a regra mudar. E a
  * regra e delicada: quando NAO se consegue reabrir, o handle nao pode virar um
  * erro passageiro; ele vira `detached`, um ESTADO, e a tela tem de oferecer
- * reconectar. Ver R6 em docs/10-integridade.md.
+ * reconectar. Ver R6 em as regras de integridade.
  *
  * `xErroOriginal` volta intacto: quem chama ja tinha um erro para propagar e
  * nao quer que a reabertura o engula. Se a reabertura TAMBEM falhar, o erro

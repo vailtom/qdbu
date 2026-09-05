@@ -56,31 +56,24 @@ app\build.bat                   :: release
 
 ## Validar
 
-Três trilhos, e nenhum item se dá por pronto sem os três:
+O `--selftest` roda a integração inteira sem interface e **afirma**, não imprime:
+toda função nova ganha uma asserção.
 
 ```bat
-tests\build.bat                 :: contrato da DLL, sem Rust nem GUI
 cd app\src-tauri && cargo run --target i686-pc-windows-msvc -- --selftest
 app\devtools\cdp.bat <cmd>      :: dirige a interface por cliques de verdade
 ```
 
-O `--selftest` **afirma**, não imprime: toda função nova ganha uma asserção.
-
 ## Dados de teste
 
 Nenhum arquivo de banco entra no repositório — o `.gitignore` bloqueia `*.dbf`,
-`*.dbt`, `*.ntx` e `*.vew`. As fixtures são **geradas**:
-
-```bat
-tests\fixtures\fixtures.bat [n]
-```
+`*.dbt`, `*.ntx` e `*.vew`. Nenhum dado de cliente, nenhum dado de produção.
 
 ## Documentação
 
-`docs/` traz o plano de entrega, o modelo de confiança, as regras de integridade
-para operação em bloco, o desenho do backup e a análise dos utilitários
-concorrentes. `GUIA-DO-PROJETO.md` é o guia de trabalho no código: as regras invioláveis,
-as armadilhas já pagas e o porquê de cada uma.
+Em preparação para o primeiro release, em páginas próprias e em vídeo. Por
+enquanto, o comentário no topo de cada módulo explica o que ele resolve e por
+que foi feito assim — é onde mora o raciocínio.
 
 ## Licença
 

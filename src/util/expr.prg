@@ -12,7 +12,7 @@
  *                             ser usado por causa de uma linha entre 400 mil.
  *
  * O compilador de macro do Harbour e o mesmo do Clipper: a expressao roda com
- * privilegio total. Ver docs/09-modelo-de-confianca.md -- um filtro salvo e, na
+ * privilegio total. Ver o modelo de confianca -- um filtro salvo e, na
  * pratica, um executavel.
  */
 

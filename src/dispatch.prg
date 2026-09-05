@@ -16,7 +16,7 @@
  * que tem; se pulou, refaz session.state. Invalidacao de cache em uma linha.
  *
  * Compatibilidade: chamada sem envelope (string crua) continua funcionando como
- * `Api_Xxx(cArg) -> string`. E o que o cliente C (tests/testload.c) usa.
+ * `Api_Xxx(cArg) -> string`. E o que o cliente C (o cliente C de teste) usa.
  */
 
 #include "hbclass.ch"
@@ -52,7 +52,7 @@ FUNCTION DllDispatch( cFunc, cArg )
        * via nao passa por `LogOp()` nem por `ConvertDeep()` -- so `Despacha()`
        * registra. `API_` abriria daqui `Api_Meta_Copyfile`, `Api_Bulk_Delete` e
        * toda destrutiva de T10/T13/T14 SEM linha em `.qdbu/log`, que e o oposto
-       * do que o GUIA-DO-PROJETO.md promete ("nenhuma consegue esquecer").
+       * do que o o guia do projeto promete ("nenhuma consegue esquecer").
        *
        * Nem `API_META_` serve: `Api_Meta_Copyfile` escreve arquivo.
        *
@@ -118,10 +118,10 @@ FUNCTION DllDispatch( cFunc, cArg )
  * registrar.
  *
  * As tres sao o handshake da ponte -- eco e versao, nada mais. Os chamadores
- * reais estao em `tests/testload.c` e no `--selftest` de
+ * reais estao em o cliente C de teste e no `--selftest` de
  * `app/src-tauri/src/main.rs`; TODO o resto do app fala por envelope.
  *
- * Funcao nova aqui e decisao consciente, e o teste de `tests/testload.c`
+ * Funcao nova aqui e decisao consciente, e o teste de o cliente C de teste
  * comparado com esta lista e o que impede a lista de crescer por descuido.
  */
 STATIC FUNCTION PermitidasNaViaCrua()
@@ -133,7 +133,7 @@ STATIC FUNCTION PermitidasNaViaCrua()
  * Dois motivos para nao devolver o que chegou:
  *
  * 1. Esta via nao passa por `ConvertDeep()`, e `qdbudll.rs` decodifica com
- *    `String::from_utf8` ESTRITO (de proposito -- ver GUIA-DO-PROJETO.md). Um byte
+ *    `String::from_utf8` ESTRITO (de proposito -- ver o guia do projeto). Um byte
  *    invalido no nome transformaria a propria recusa num erro duro de ponte,
  *    trocando "funcao nao liberada" por uma falha de decodificacao.
  * 2. A mensagem vai para tela e para log; controle e novalinha nao tem o que

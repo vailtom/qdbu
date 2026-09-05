@@ -55,7 +55,7 @@ function conectar(url) {
  *
  * O SweetAlert entra com animacao: nos primeiros quadros os botoes existem no
  * DOM com `getBoundingClientRect()` zerado. Quem clicava nesse instante caia no
- * ramo `.click()` la embaixo, que -- como diz o GUIA-DO-PROJETO.md -- NAO passa pela
+ * ramo `.click()` la embaixo, que -- como diz o o guia do projeto -- NAO passa pela
  * camada de composicao e chama o manipulador direto. E o ramo que existe para
  * elemento genuinamente sem caixa acabava atendendo o caso "cheguei cedo
  * demais", justamente mascarando os defeitos de top layer que so o clique de

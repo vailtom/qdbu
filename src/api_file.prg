@@ -594,7 +594,7 @@ FUNCTION FileState( cH, lWithFields )
 /*
  * file.reopen {"h":"h7","exclusive":true} -- troca o modo de abertura.
  *
- * A SEQUENCIA E A R6 de docs/10-integridade.md, e cada falha tem tratamento
+ * A SEQUENCIA E A R6 de as regras de integridade, e cada falha tem tratamento
  * proprio porque elas nao sao equivalentes.
  *
  *   1. fotografa o ambiente (rebind.prg)

@@ -1,6 +1,6 @@
 # ---- Dados: NUNCA commitar arquivo de banco ----
-# As fixtures sao GERADAS por tests/fixtures/gen_fixtures.prg.
-# Nenhum DBF real (de cliente ou de producao) entra neste repositorio.
+# Nenhum DBF real -- de cliente ou de producao -- entra neste repositorio.
+# As fixtures de teste sao GERADAS, nunca versionadas.
 *.dbf
 *.DBF
 *.dbt
@@ -18,11 +18,6 @@
 
 # ---- Build ----
 bin/
-
-# O `outro app` dos cenarios de concorrencia (R8). O FONTE entra no
-# repositorio -- sem ele o cenario nao e reproduzivel --, o binario nao:
-# ele se refaz com tests/concorrencia/build.bat.
-tests/concorrencia/*.exe
 target/
 app/src-tauri/gen/
 *.obj
@@ -31,14 +26,12 @@ app/src-tauri/gen/
 *.o
 *.ppo
 *.hrb
+*.exe
 
 # A hbxlsxwriter e dependencia versionada, nao produto de build: sem esta
 # excecao o `*.lib` acima a engoliria e o projeto nao compilaria em outra
 # maquina. Ver lib/harbour-xlsxwriter/LICENSE (BSD-2 + zlib).
 !lib/harbour-xlsxwriter/*.lib
-
-# ---- Backups gerados por arjota.bat ----
-ARJ/
 
 # ---- Runtime: tudo que o projeto gera fica em .run/ ----
 .run/
@@ -47,48 +40,21 @@ ARJ/
 # ---- Configuracao local da maquina (caminhos de toolchain) ----
 env.local.bat
 
-# ---- Material bruto de analise: video nao vai para o repositorio ----
-# As transcricoes .txt VAO -- e nelas que estao as decisoes faladas, citadas
-# como evidencia em cada documento de docs/.
-docs/fontes/*.mp4
-docs/fontes/*.mkv
-docs/fontes/*.avi
-docs/fontes/*.mov
-
 # ---- Estado local da aplicacao ----
-# .qdbu/ e o que ESTA maquina abriu: connections.json com os caminhos reais
-# (J:\bases\...), session.json com abas e expressoes de filtro, e o log de
-# alteracoes. E estado de quem rodou, nao do projeto -- e leva nome de pasta de
-# cliente junto. Mesma razao de .run/ estar fora.
+# .qdbu/ e o que ESTA maquina abriu: connections.json com os caminhos reais,
+# session.json com abas e expressoes de filtro, e o log de alteracoes. E estado
+# de quem rodou, nao do projeto -- e leva nome de pasta de cliente junto.
 .qdbu/
-# O nome anterior, de antes da renomeacao para QDBU. Continua listado porque a
-# migracao (migra_config_em, em main.rs) so roda quando o app sobe: entre o
-# `git pull` e o primeiro boot a pasta velha ainda esta ai, e ela carrega
-# caminho de cliente.
+# O nome anterior, de antes da renomeacao. Continua listado porque a migracao
+# so roda quando o app sobe: entre o `git pull` e o primeiro boot a pasta velha
+# ainda esta ai, e ela carrega caminho de cliente.
 .dbu/
-
-# ---- Material de estudo de terceiros: NUNCA commitar ----
-# documentos_para_projeto/navicat/ sao recursos EXTRAIDOS do executavel do
-# Navicat -- 356 .dfm (os formularios internos deles), .bin, .bmp, icones,
-# cursores. Estudar a interface de um concorrente e legitimo; republicar os
-# binarios dele num repositorio open source nao e. Fica no disco como material
-# de estudo, igual a pasta delphi/ do dll-harbour. Fora do git, sempre.
-documentos_para_projeto/
 
 # ---- Atalhos do Windows: carregam caminho absoluto da maquina ----
 *.lnk
-
-# ---- Artefatos dos testes de exportacao ----
-# Gerados por tests/, como as fixtures. Regeram-se rodando o teste.
-tests/fixtures/*.xlsx
-tests/fixtures/*.csv
-tests/fixtures/*.json
 
 # ---- Editor / SO ----
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-
-# temporario do backup_sources.py (arjota.bat) quando interrompido no meio
-backup_sources_*.lst

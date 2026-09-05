@@ -1172,7 +1172,7 @@ async function repintarDoEstado() {
    * A GRADE DE UM ARQUIVO PERDIDO É DESCARTADA, e isto é a R6 inteira.
    *
    * Deixar as linhas na tela mostraria dados de um arquivo que não está mais
-   * aberto — a falha silenciosa que docs/10-integridade.md existe para
+   * aberto — a falha silenciosa que as regras de integridade existem para
    * impedir. O usuário olharia números que não pode mais confiar, sem nada
    * indicando isso.
    */
@@ -1880,7 +1880,7 @@ async function abrirEditorCelula(td) {
    * Editar em cima dele e gravar seria APAGAR a escrita do outro sem ninguém
    * ver. Então o editor abre com o registro RELIDO agora -- e guarda os bytes
    * crus de cada campo, que voltam como `expect` na hora de gravar
-   * (docs/10-integridade.md, R8).
+   * (regras de integridade, R8).
    */
   let raw = null;
   try {
@@ -2796,7 +2796,7 @@ function desenharComboCodepage() {
   // `pista` e nao `hint`: `hint()` e a funcao da barra de status, global e usada
   // no arquivo inteiro. Um `const hint` aqui a sombreia no corpo desta funcao --
   // a proxima linha que chamasse `hint("...")` morreria com "hint is not a
-  // function". E a familia de defeitos que o GUIA-DO-PROJETO.md lista em "NOME
+  // function". E a familia de defeitos que o guia do projeto lista em "NOME
   // COMPARTILHADO ENTRE ARQUIVOS".
   const pista = (aba && aba.info && aba.info.codepageHint) || "";
 
@@ -3203,7 +3203,7 @@ function condicoesSalvaveis(h) {
  * então os dois são conferidos contra o que existe: o operador contra a lista
  * de operadores, o campo contra a estrutura do arquivo. Um session.json editado
  * à mão -- ou trocado entre máquinas -- não pode virar código só por estar num
- * arquivo que o app confia. Mesmo raciocínio do docs/09-modelo-de-confianca.md.
+ * arquivo que o app confia. Mesmo raciocínio do modelo de confiança.
  */
 function condicaoDoDisco(c, existem) {
   if (!c || typeof c !== "object") return null;
@@ -4317,7 +4317,7 @@ $("pi-chave").addEventListener("blur", () => {
 
 // ---------------------------------------------------------------- exportar
 
-// O diálogo NÃO fecha ao concluir. É o antipadrão F do docs/05, e o autor do
+// O diálogo NÃO fecha ao concluir. É o antipadrão F dos requisitos, e o autor do
 // vídeo do Navicat foi explícito: "posso ter errado o formato, aí volto,
 // corrijo e exporto de novo". Fechar obrigaria a remontar formato, destino,
 // colunas e escopo — tudo de novo, por causa de um separador errado.
@@ -4611,7 +4611,7 @@ async function gravarExport() {
  * esta la, e onde o usuario costuma salvar.
  *
  * Chamado por `invoke("plugin:dialog|save")` e nao pelo pacote npm: o frontend
- * deste projeto e HTML/JS estatico, sem Node e sem bundler (ver GUIA-DO-PROJETO.md).
+ * deste projeto e HTML/JS estatico, sem Node e sem bundler (ver o guia do projeto).
  */
 async function escolherDestino() {
   const inv = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
@@ -5905,7 +5905,7 @@ $("pv-rodar").addEventListener("click", async () => {
  * AS EDIÇÕES SE ACUMULAM; APLICAR É UM ATO SÓ.
  *
  * Alterar estrutura reconstrói o arquivo inteiro fora do lugar (R2 de
- * docs/10-integridade.md). Fazer isso a cada tecla, num arquivo de 800 MB,
+ * regras de integridade). Fazer isso a cada tecla, num arquivo de 800 MB,
  * seria absurdo — e pior, deixaria a pessoa a meio caminho de uma mudança que
  * ela ainda estava pensando.
  *

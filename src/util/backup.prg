@@ -28,7 +28,7 @@
  *
  * POR QUE 3x E NAO 2x
  *
- * A R2 de docs/10-integridade.md manda o destrutivo trabalhar fora do lugar:
+ * A R2 de as regras de integridade manda o destrutivo trabalhar fora do lugar:
  * monta um `.tmp`, verifica, e so entao troca os nomes. Entao em algum instante
  * coexistem tres copias do conjunto -- o original, o backup e o temporario. Com
  * 2x a operacao morre no meio por disco cheio, que e exatamente o cenario onde
@@ -350,7 +350,7 @@ FUNCTION CopiaArquivo( cOrigem, cDestino, nBloco, bEvento, nCopiados, lExclusivo
          Eval( bEvento, nFeito, nTotal )
       ENDIF
 
-      /* Entre pedacos, nunca no meio de um. R1 de docs/10-integridade.md. */
+      /* Entre pedacos, nunca no meio de um. R1 de as regras de integridade. */
       IF QDbu_Canceled()
          FClose( nIn )
          FClose( nOut )

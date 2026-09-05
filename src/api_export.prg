@@ -14,7 +14,7 @@
  *           vez de despejar CSV com outra extensao.
  *
  * O DBF NAO E TOCADO: le-se e escreve-se um arquivo novo ao lado. Ainda assim
- * valem as regras de docs/10-integridade.md, porque o arquivo GERADO pode ficar
+ * valem as regras de as regras de integridade, porque o arquivo GERADO pode ficar
  * pela metade -- ver Cancelado() no fim deste arquivo.
  */
 
@@ -254,7 +254,7 @@ FUNCTION Api_Export_Xlsx( hP )
       cAba := "Dados"
    ENDIF
 
-   /* Temporario dentro do projeto (regra 1 do GUIA-DO-PROJETO.md): a lib grava pedacos do
+   /* Temporario dentro do projeto (regra 1 do o guia do projeto): a lib grava pedacos do
       ZIP em disco durante o constant_memory. */
    cTmp := hb_DirSepAdd( DirRun() )
    IF ! hb_DirExists( cTmp )
@@ -534,7 +534,7 @@ STATIC FUNCTION AliasDestino( cArq )
 
    RETURN cTenta
 
-/* Apaga o DBF e o memo que veio com ele -- R3 de docs/10-integridade.md. */
+/* Apaga o DBF e o memo que veio com ele -- R3 de as regras de integridade. */
 STATIC FUNCTION ApagaDbf( cArq )
 
    LOCAL cSem := hb_FNameExtSet( cArq, "" )
@@ -827,7 +827,7 @@ STATIC FUNCTION DescreveCol( cAlias, aField, nPos )
 /*
  * Resposta comum, e a limpeza do parcial.
  *
- * R3 de docs/10-integridade.md: cancelar nao deixa lixo. Um CSV cortado no meio
+ * R3 de as regras de integridade: cancelar nao deixa lixo. Um CSV cortado no meio
  * de uma linha e um XLSX sem o resto das linhas SAO arquivos validos aos olhos
  * do sistema -- abrem, tem tamanho, e estao incompletos. Deixa-los seria pior
  * que nao ter exportado.

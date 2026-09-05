@@ -83,7 +83,7 @@ FUNCTION SessHandle( cH )
  *
  * Nao e erro passageiro nem foi pedido por ninguem: e um estado, e a aba
  * continua na tela. Sem distingui-lo, a UI mostraria as linhas de um arquivo
- * que nao esta mais aberto -- a falha silenciosa que docs/10-integridade.md
+ * que nao esta mais aberto -- a falha silenciosa que as regras de integridade
  * inteiro existe para impedir. Ver R6 la.
  *
  * Selects the handle's work area. THIS IS THE ISOLATION GUARANTEE: every Api_*
@@ -187,7 +187,7 @@ FUNCTION SessSetConnections( aCon )
  * Marca o handle como perdido, com o motivo.
  *
  * `cPorque` e um CODIGO de traducao, nao uma frase: quem le a mensagem e a
- * mesma pessoa que escolheu o idioma. Ver R6 de docs/10-integridade.md.
+ * mesma pessoa que escolheu o idioma. Ver R6 de as regras de integridade.
  *
  * A workarea nao e fechada aqui -- ela ja nao existe, e por isso chegamos neste
  * estado. O handle fica no mapa, com o caminho, para a aba poder oferecer
