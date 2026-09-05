@@ -124,7 +124,7 @@
   UI_ORDER_TITLE: "Índice controlador del orden de las filas",
   UI_ROWS_PER_PAGE: "filas/pág",
   UI_ROWS_PER_PAGE_TITLE: "Registros por página",
-  UI_LAST_READ: "Última lectura",
+  UI_LAST_READ: "Última lectura — la pantalla se actualiza sola cada 5 s mientras nada esté en edición",
   UI_RELOAD: "Releer del disco (F5)",
 
   UI_FIELD: "Campo",
@@ -440,6 +440,7 @@
 
   UI_PAGE_RANGE: "en esta página: {first}–{last}",
   UI_PAGE_RANGE_EMPTY: "ningún registro a la vista",
+  UI_PAGE_COUNT: { one: "en esta página: {n} registro", other: "en esta página: {n} registros" },
   UI_FILTERED_SUFFIX: "{n} filtrados",
   UI_UNKNOWN_COUNT: "?",
   UI_GOTO_RECORD: "registro {n}",
@@ -531,7 +532,7 @@
 
   UI_PREFLIGHT: "Comprobaciones",
   UI_PREFLIGHT_EXPLAIN:
-    "Antes de alterar el archivo, DBU comprueba lo que puede salir mal y hace " +
+    "Antes de alterar el archivo, QDBU comprueba lo que puede salir mal y hace " +
     "una copia. Nada se altera hasta que usted confirme.",
   UI_BACKUP_RUN: "Hacer la copia",
   UI_BACKUP_DONE: "Copia guardada en {dir}",
@@ -616,16 +617,21 @@
   UI_ASK_BACKUP_TITLE: "¿Hacer una copia antes?",
   UI_ASK_BACKUP:
     "La copia queda en la misma carpeta, con la hora en el nombre, y se abre " +
-    "en DBU como cualquier archivo — puede revisarla antes de borrarla.",
+    "en QDBU como cualquier archivo — puede revisarla antes de borrarla.",
   UI_WITH_BACKUP: "Sí, copiar antes",
   UI_WITHOUT_BACKUP: "No, seguir sin copia",
   UI_GO_AHEAD: "Continuar",
 
-  UI_ZAP_DONE: "'{file}' vaciado: {n} registros borrados.",
-  UI_ZAP_DONE_BACKUP:
-    "'{file}' vaciado: {n} registros borrados. La copia quedó en '{backup}'.",
+  UI_ZAP_DONE: { one: "'{file}' vaciado: {n} registro borrado.", other: "'{file}' vaciado: {n} registros borrados." },
+  UI_ZAP_DONE_BACKUP: {
+    one: "'{file}' vaciado: {n} registro borrado. La copia quedó en '{backup}'.",
+    other: "'{file}' vaciado: {n} registros borrados. La copia quedó en '{backup}'.",
+  },
   UI_PACK_DONE: { one: "'{file}' compactado: {n} registro eliminado.", other: "'{file}' compactado: {n} registros eliminados." },
-  UI_PACK_DONE_BACKUP: "'{file}' compactado: {n} eliminados. La copia quedó en '{backup}'.",
+  UI_PACK_DONE_BACKUP: {
+    one: "'{file}' compactado: {n} registro eliminado. La copia quedó en '{backup}'.",
+    other: "'{file}' compactado: {n} registros eliminados. La copia quedó en '{backup}'.",
+  },
   UI_NOTHING_TO_PACK: "'{file}' no tiene registros marcados; no se cambió nada.",
 
   ERROR_ZAP_CREATE_FAILED:
@@ -903,4 +909,91 @@
   ERROR_ZIP_FAILED: "'{file}' no pudo grabarse: {reason}",
   UI_ROLE_ZIP: "comprimido",
 
+
+  // ---- T8: edicion de registro ----
+  ERROR_CELL_TYPE: "{field} no acepta ese tipo de valor.",
+  ERROR_CELL_TOO_LONG:
+    "{field} admite {len} caracteres y el valor tiene {size} — acórtelo o amplíe el campo en la estructura.",
+  ERROR_CELL_NOT_NUMBER: "{field} es numérico y '{value}' no es un número.",
+  ERROR_CELL_NOT_DATE: "{field} es fecha y '{value}' no lo es — use DD/MM/AAAA.",
+  ERROR_FIELD_TYPE_UNSUPPORTED: "{field} es de tipo {type} y no se puede editar aquí.",
+  ERROR_RECORD_OUT_OF_RANGE: "El registro {recno} no existe — el archivo llega hasta {max}.",
+  ERROR_CANNOT_LOCK_RECORD:
+    "El registro {recno} de '{file}' está bloqueado por otro usuario — inténtelo de nuevo en unos instantes.",
+  ERROR_WRITE_FAILED: "No se pudo grabar el registro {recno} de '{file}'[[: {reason}]].",
+
+  UI_ADD_RECORD: "+ Registro",
+  UI_ADD_RECORD_TITLE: "Agrega un registro en blanco al final del archivo",
+  UI_DELETE_RECORD: "Eliminar",
+  UI_DELETE_RECORD_TITLE: "Marca el registro actual para eliminación (el PACK es quien lo quita)",
+  UI_RECALL_RECORD: "Recuperar",
+  UI_RECALL_RECORD_TITLE: "Deshace la marca de eliminación del registro actual",
+  UI_CONFIRM: "Confirmar",
+  UI_SAVE: "Grabar",
+  UI_MEMO_TITLE: "{field} — registro {n}",
+  UI_NO_CURRENT_RECORD: "Ningún registro seleccionado — haga clic en una fila de la cuadrícula.",
+  INFO_RECORD_UPDATED: "Registro {n} modificado: {field}.",
+  INFO_RECORD_ADDED: "Registro {n} agregado.",
+  INFO_RECORD_ADDED_HIDDEN:
+    "Registro {n} agregado — el filtro activo no lo muestra, porque nace en blanco.",
+  INFO_RECORD_DELETED: "Registro {n} marcado para eliminación.",
+  INFO_RECORD_RECALLED: "Registro {n} recuperado.",
+
+  // ---- T9: formulario ----
+  UI_VIEW_FORM: "Formulario",
+  UI_FIRST_RECORD: "Primer registro",
+  UI_PREV_RECORD: "Registro anterior",
+  UI_NEXT_RECORD: "Registro siguiente",
+  UI_LAST_RECORD: "Último registro",
+  UI_AT_FIRST_RECORD: "Ya está en el primer registro.",
+  UI_AT_LAST_RECORD: "Ya está en el último registro.",
+  UI_DELETED_BADGE: "eliminado",
+
+  // ---- R8: lo que se edita tiene que ser lo que esta en disco ----
+  ERROR_PARAM_MUST_BE_STRING: "El parámetro '{param}' tiene que ser texto[[ (campo {field})]].",
+  ERROR_CONNECTION_NOT_FOUND: "Conexión '{name}' no encontrada.",
+  ERROR_UNKNOWN_CODEPAGE: "El codepage '{codepage}' no es uno de los disponibles.",
+  UI_CDP_PT850: "DOS Brasil (CP850)",
+  UI_CDP_ESWIN: "Windows (CP1252)",
+  UI_CDP_PTISO: "ISO-8859-1 (Latin-1)",
+  UI_CDP_PT860: "DOS Portugal (CP860)",
+  UI_CDP_UTF8: "UTF-8",
+  INFO_CODEPAGE_CHANGED: "Codepage del archivo: {cp}.",
+  // ---- config en tres niveles (global / conexion / archivo) ----
+  UI_PREFERENCES: "Preferencias",
+  UI_CONFIG_EXPLAIN: "Valen para toda la app. Cada conexión y cada archivo pueden tener su propio codepage por encima de estos.",
+  UI_DEFAULT_CODEPAGE: "Codepage predeterminado",
+  UI_SHOW_DELETED: "Mostrar registros eliminados",
+  UI_EPOCH_INFO: "Las fechas de dos dígitos usan el siglo a partir de {year} (SET EPOCH, fijo).",
+  UI_CONN_CODEPAGE: "Codepage",
+  UI_CDP_INHERIT: "(heredar)",
+  UI_MENU_CODEPAGE: "Codepage de la conexión",
+  UI_PIN_FILE: "Fijar este codepage para el archivo",
+  UI_PINNED_FILE: "Codepage fijado para este archivo",
+  UI_CODEPAGE_FROM_CONN: "Heredado de la conexión.",
+  UI_CODEPAGE_FROM_GLOBAL: "Predeterminado de la app.",
+  UI_CODEPAGE_FROM_FILE: "Fijado en este archivo.",
+  INFO_CODEPAGE_PINNED: "Codepage {cp} fijado para este archivo.",
+  INFO_CONFIG_SAVED: "Preferencias guardadas.",
+  INFO_CONNECTION_UPDATED: "Conexión '{name}' actualizada.",
+  WARN_CODEPAGE_NOT_PINNED: "No se pudo escribir en la carpeta; el codepage {cp} vale solo en esta sesión.",
+  WARN_CONFIG_NOT_SAVED: "No se pudo guardar en disco; las preferencias valen solo en esta sesión.",
+  UI_CODEPAGE: "Codepage",
+  UI_CODEPAGE_TITLE: "Cómo los bytes de este archivo se vuelven texto — no altera el archivo",
+  UI_CODEPAGE_HINT: "El encabezado sugiere {cp}.",
+  ERROR_STALE_VALUE:
+    "{field} fue modificado por otra persona mientras editaba: era '{expected}', ahora es '{actual}'.",
+  INFO_RECORD_REFRESHED:
+    "El registro {n} fue modificado por otro usuario — mostrando los valores actuales.",
+  UI_STALE_TITLE: "Modificado por otra persona",
+  UI_STALE_EXPLAIN:
+    "Mientras editaba, {field} del registro {n} cambió de '{expected}' a '{actual}'. ¿Qué hacer con lo que escribió?",
+  UI_STALE_DELETE_ASK:
+    "El registro {n} cambió desde que lo vio — {field}: era '{expected}', ahora es '{actual}'. ¿Eliminar de todos modos?",
+  UI_STALE_RECALL_ASK:
+    "El registro {n} cambió desde que lo vio — {field}: era '{expected}', ahora es '{actual}'. ¿Recuperar de todos modos?",
+  UI_DELETE_ANYWAY: "Eliminar de todos modos",
+  UI_RECALL_ANYWAY: "Recuperar de todos modos",
+  UI_STALE_DISCARD: "Descartar lo mío",
+  UI_STALE_OVERWRITE: "Sobrescribir",
 };

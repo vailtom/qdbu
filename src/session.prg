@@ -6,7 +6,7 @@
  * reindex, refilter per page) would be unworkable. So the state lives here.
  *
  * Since the DLL runs on a single thread (guaranteed by app/src-tauri/src/
- * dbudll.rs), a STATIC is safe without any synchronization.
+ * qdbudll.rs), a STATIC is safe without any synchronization.
  *
  * THE WORK AREA IS THE TRUTH for recno, eof/bof, active order and compiled
  * filter. What lives here is only what Harbour cannot tell us: the handle map,

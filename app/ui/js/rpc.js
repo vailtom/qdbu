@@ -59,14 +59,14 @@ async function chamar(func, arg) {
  * Tem codigo estavel e, as vezes, o campo culpado -- da para destacar na tela.
  * Diferente de falha de runtime, que vira excecao comum.
  */
-class ErroDbu extends Error {
+class ErroQDbu extends Error {
   constructor(erro, metodo) {
     // `message` e o texto em ingles que o Harbour montou. Ele NAO e o que vai
     // para a tela: serve ao log e a quem chama a DLL sem dicionario (o cliente
     // em C, um script). A frase que o usuario le sai de I.doErro(), a partir do
     // codigo e dos params -- ver app/ui/js/i18n.js.
     super(erro.message || "unidentified error");
-    this.name = "ErroDbu";
+    this.name = "ErroQDbu";
     this.codigo = erro.code || "ERROR_UNSPECIFIED";
     this.campo = erro.field || null;
     this.params = erro.params || {};
@@ -78,13 +78,13 @@ class ErroDbu extends Error {
  * Chamada com envelope: `rpc("workspace.files", {nome: "Cliente A"})`.
  *
  * O id de correlacao e gerado no Rust -- aqui nao se pensa nisso. Sucesso
- * devolve o `result` direto; recusa de negocio vira ErroDbu.
+ * devolve o `result` direto; recusa de negocio vira ErroQDbu.
  */
 async function rpc(metodo, params) {
   const resp = await invoke("rpc", { metodo: metodo, params: params || {} });
 
   if (!resp.ok) {
-    throw new ErroDbu(resp.error || {}, metodo);
+    throw new ErroQDbu(resp.error || {}, metodo);
   }
 
   ultimaRev = resp.rev;
@@ -95,4 +95,4 @@ async function rpc(metodo, params) {
 let ultimaRev = 0;
 const rev = () => ultimaRev;
 
-window.DBU = { status, chamar, rpc, rev, abrirPasta, ErroDbu };
+window.QDBU = { status, chamar, rpc, rev, abrirPasta, ErroQDbu };

@@ -284,7 +284,7 @@ function desenhar() {
 async function carregarConexoes() {
   // As conexoes vem no session.state; esta funcao existe so para os pontos que
   // precisam recarregar so a lista, sem repintar tudo.
-  const r = await DBU.rpc("workspace.list");
+  const r = await QDBU.rpc("workspace.list");
   conexoes = r.connections;
   desenhar();
 }
@@ -294,7 +294,7 @@ async function abrirConexao(nome) {
   desenhar();
 
   try {
-    const r = await DBU.rpc("workspace.files", { name: nome });
+    const r = await QDBU.rpc("workspace.files", { name: nome });
     arquivosDe.set(nome, r.files);
     desenhar();
     agendarSalvar();
@@ -319,7 +319,7 @@ async function carregarPastasPendentes() {
 
   for (const con of faltam) {
     try {
-      const r = await DBU.rpc("workspace.files", { name: con.name });
+      const r = await QDBU.rpc("workspace.files", { name: con.name });
       arquivosDe.set(con.name, r.files);
     } catch (e) {
       arquivosDe.set(con.name, null);
@@ -335,7 +335,7 @@ async function removerConexao(nome) {
   if (!window.confirm(T("UI_CONFIRM_REMOVE_CONNECTION", { name: nome }))) {
     return;
   }
-  await DBU.rpc("workspace.remove", { name: nome });
+  await QDBU.rpc("workspace.remove", { name: nome });
   expandidas.delete(nome);
   arquivosDe.delete(nome);
   await carregarConexoes();
@@ -496,10 +496,11 @@ function desenharConteudo() {
     cx.appendChild(cartao(T("UI_CARD_LAST_UPDATE"), dataLegivel(i.lastUpdate)));
   }
   if (i.bytes) cx.appendChild(cartao(T("UI_CARD_SIZE"), tamanhoLegivel(i.bytes)));
-  if (i.codepage) cx.appendChild(cartao(T("UI_CARD_CODEPAGE"), i.codepage));
+  if (i.codepage) cx.appendChild(cartao(T("UI_CARD_CODEPAGE"), rotuloCodepage(i.codepage)));
 
   desenharGrade();
   desenharComboOrdem();
+  desenharComboCodepage();
 
   desenharEstrutura(a);
 }
@@ -1071,12 +1072,17 @@ function moverAba(h, hAlvo) {
  */
 async function garantirEstrutura(aba) {
   if (!aba) return;
-  if (aba.fields && aba.fieldsRev === DBU.rev()) return;
+  if (aba.fields && aba.fieldsRev === QDBU.rev()) return;
   try {
-    const rev = DBU.rev();
-    aba.fields = (await DBU.rpc("file.info", { h: aba.h })).fields;
+    const rev = QDBU.rev();
+    aba.fields = (await QDBU.rpc("file.info", { h: aba.h })).fields;
     aba.fieldsRev = rev;
     desenharConteudo();
+    // O formulário depende de `fields` para saber o que pedir. Esta função é
+    // assíncrona, então quem a chamou já seguiu adiante -- sem este empurrão,
+    // abrir um arquivo com a visão Formulário aberta encontraria `fields` nulo,
+    // desistiria em silêncio, e a tela ficaria com o arquivo anterior.
+    garantirForm(aba);
   } catch (e) {
     /* aba pode ter sido fechada nesse meio tempo */
   }
@@ -1115,6 +1121,7 @@ function ativarAba(h) {
   desenharConteudo();
   garantirEstrutura(abas.find((a) => a.h === h));
   garantirPagina(abas.find((a) => a.h === h));
+  garantirForm(abas.find((a) => a.h === h));
 
   sincronizarPaineis();
   desenharComboOrdem();
@@ -1138,7 +1145,7 @@ function pintar(nome, fn) {
 }
 
 async function repintarDoEstado() {
-  const st = await DBU.rpc("session.state");
+  const st = await QDBU.rpc("session.state");
 
   conexoes = st.connections;
 
@@ -1215,8 +1222,65 @@ async function repintarDoEstado() {
   const ativa = abas.find((a) => a.h === abaAtiva);
   garantirEstrutura(ativa);
   garantirPagina(ativa);
+  garantirForm(ativa);
   sincronizarPaineis();
   return st;
+}
+
+/*
+ * O FORMULÁRIO É A QUARTA GARANTIA, e nasceu esquecida.
+ *
+ * Medido em 04/09/2026 abrindo `NETPAR.DBF` com a visão Formulário já ativa: a
+ * aba dizia "NETPAR @DBU original", a grade repintou com as 107 colunas dele --
+ * e o formulário continuou mostrando os oito campos de TIPOS.DBF, com os dados
+ * da fixture. Uma tela inteira de valores do arquivo ERRADO, sem nada indicando
+ * isso, que é a falha silenciosa que a R6 existe para impedir.
+ *
+ * A causa é a do comentário acima, repetida: `carregarForm()` só era chamada em
+ * `trocarVisao("form")`, então trocar de ARQUIVO com a visão já aberta não
+ * passava por lugar nenhum que a atualizasse. O trio virou quarteto pelo mesmo
+ * motivo que virou trio.
+ *
+ * No-op quando a visão não é o formulário: não custa ida à DLL para quem está
+ * na grade.
+ */
+async function garantirForm(aba) {
+  if (!aba || visaoAtiva !== "form") return;
+  const dados = formDe.get(aba.h);
+  let cursor = cursorDe.get(aba.h);
+  // Já é deste arquivo e deste registro: nada a fazer.
+  if (dados && dados.row && cursor && dados.row.recno === cursor) return;
+
+  /*
+   * O CURSOR NASCE NA PÁGINA, e a página ainda pode não ter chegado.
+   *
+   * Quem escreve `cursorDe` de um arquivo recém-aberto é `desenharGrade()`, que
+   * adota a primeira linha à vista -- e ela só existe depois que `data.page`
+   * responde. `garantirPagina()` é assíncrona e ninguém a esperava, então esta
+   * função rodava com o cursor `undefined`, `carregarForm()` caía no ramo
+   * "nenhum registro" e NADA a chamava de novo quando a página enfim chegava:
+   * abrir um DBF com a visão Formulário ativa deixava a grade cheia e o
+   * formulário vazio para sempre. Aqui a página é esperada, e o cursor sai dela
+   * mesmo quando `desenharGrade()` não chegou a rodar (na visão Formulário ela
+   * não roda).
+   */
+  if (!cursor) {
+    let p = paginaDaAba(aba.h);
+    if (!p) {
+      await garantirPagina(aba);
+      p = paginaDaAba(aba.h);
+    }
+    cursor = cursorDe.get(aba.h) || (p && p.rows.length ? p.rows[0].recno : 0);
+  }
+
+  // Arquivo vazio, ou a página não veio: aí sim não há registro a mostrar.
+  if (!cursor) {
+    formDe.delete(aba.h);
+    if (aba.h === abaAtiva) desenharForm();
+    return;
+  }
+
+  carregarForm(aba.h, cursor);
 }
 
 async function abrirArquivo(caminho, conexao) {
@@ -1236,7 +1300,7 @@ async function abrirArquivo(caminho, conexao) {
   hint(T("UI_OPENING", { file: paraExibir(caminho) }));
 
   try {
-    const i = await DBU.rpc("file.open", { path: caminho, connection: conexao });
+    const i = await QDBU.rpc("file.open", { path: caminho, connection: conexao });
     await repintarDoEstado();
 
     // file.open ja trouxe a estrutura; session.state nao a traz (seria pesado
@@ -1265,7 +1329,12 @@ async function abrirArquivo(caminho, conexao) {
     }
 
     hint(msgErro(e));
-    if (!(e instanceof DBU.ErroDbu)) {
+    // `ErroQDbu`, e nao `ErroDbu`: a classe foi renomeada com o projeto e este
+    // ponto ficou para tras. `undefined` a direita de `instanceof` NAO da
+    // false -- lanca TypeError, entao a recusa de abrir arquivo (inexistente,
+    // travado, cabecalho invalido) escapava sem repintar a tela e sem tocar em
+    // ninguem, deixando a arvore dizendo o contrario da DLL.
+    if (!(e instanceof QDBU.ErroQDbu)) {
       await repintarDoEstado();
     }
   }
@@ -1273,7 +1342,7 @@ async function abrirArquivo(caminho, conexao) {
 
 async function fecharAba(h) {
   try {
-    await DBU.rpc("file.close", { h: h });
+    await QDBU.rpc("file.close", { h: h });
   } catch (e) {
     /* mesmo que a DLL recuse, a aba sai da tela */
   }
@@ -1453,12 +1522,15 @@ async function carregarPagina(h, ancora, deslocamento) {
   if (!aba) return;
 
   try {
-    const p = await DBU.rpc("data.page", {
+    const p = await QDBU.rpc("data.page", {
       h: h,
       anchor: ancora,
       offset: deslocamento || 0,
       count: tamanhoPagina,
     });
+    // O pedido fica junto da página: o refresh automático o repete tal qual,
+    // e é isso que faz a mesma janela do arquivo continuar à vista.
+    p.pedido = { ancora, deslocamento: deslocamento || 0 };
     gradeDe.set(h, p);
     if (h === abaAtiva) desenharGrade();
   } catch (e) {
@@ -1468,8 +1540,10 @@ async function carregarPagina(h, ancora, deslocamento) {
 
 /** Primeira pagina do arquivo, se ainda nao houver nada carregado. */
 function garantirPagina(aba) {
-  if (!aba || gradeDe.has(aba.h)) return;
-  carregarPagina(aba.h, "top", 0);
+  if (!aba || gradeDe.has(aba.h)) return null;
+  // DEVOLVE a promessa: `garantirForm()` precisa esperar por ela para saber em
+  // que registro o formulário abre (o cursor nasce da página).
+  return carregarPagina(aba.h, "top", 0);
 }
 
 function desenharGrade() {
@@ -1542,7 +1616,7 @@ function desenharGrade() {
     if (linha.deleted) tdn.title = T("UI_DELETED_RECORD");
     tr.appendChild(tdn);
 
-    linha.values.forEach((v, i) => tr.appendChild(celula(v, p.cols[i])));
+    linha.values.forEach((v, i) => tr.appendChild(celulaEditavel(v, p.cols[i], i)));
     corpo.appendChild(tr);
   }
 
@@ -1572,7 +1646,7 @@ async function porCursorEm(h, recno) {
   }
   atualizarRegistroAtual();
   try {
-    await DBU.rpc("data.goto", { h, recno });
+    await QDBU.rpc("data.goto", { h, recno });
   } catch (e) {
     /* A marca é da tela; se a DLL recusar, quem opera avisa. */
   }
@@ -1602,6 +1676,23 @@ function atualizarRegistroAtual() {
    * este tamanho. Quantos passam pelo filtro é assunto do texto ao lado.
    */
   const p = gradeDe.get(abaAtiva);
+
+  /*
+   * ARQUIVO VAZIO NÃO TEM REGISTRO ATUAL.
+   *
+   * O cursor continua valendo 1 num arquivo de zero registros -- é o que o
+   * `RecNo()` de um DBF vazio devolve --, e a frase saía "reg. 1 de 0". Visto
+   * na tela em 03/09/2026 logo depois de um ZAP, lado a lado com "nenhum
+   * registro à vista": duas afirmações no mesmo rodapé, uma delas impossível.
+   *
+   * Some, e não vira "reg. 0 de 0": o texto ao lado já diz que não há nada, e
+   * repetir a mesma notícia em duas caixas é o defeito que o pré-voo teve.
+   */
+  if (p && p.records === 0) {
+    el.hidden = true;
+    return;
+  }
+
   const naTela = !!$("grade").querySelector("tbody tr.cursor");
   el.hidden = false;
   el.textContent = T("UI_CURRENT_RECORD", {
@@ -1622,6 +1713,15 @@ $("pg-atual").addEventListener("click", async () => {
 });
 
 /** Uma celula, formatada por tipo. */
+/*
+ * Uma celula, formatada por tipo -- e carregando o que o editor da T8 precisa.
+ *
+ * O `dataset` guarda o valor CRU (`bruto`) além do formatado que aparece. Sem
+ * isso o editor teria de desfazer a formatação para saber o que estava lá: ler
+ * "1.234,56" da tela e adivinhar se a vírgula é decimal, ou "05/03/2009" e
+ * remontar o ISO. Toda conversão de volta é uma chance de o valor mudar sozinho
+ * ao abrir e fechar o editor sem tocar em nada.
+ */
 function celula(v, col) {
   // Memo nao viaja na pagina: 200 memos seriam megabytes. A DLL manda so o
   // tamanho; o conteudo vem quando o editor pedir (T8).
@@ -1680,6 +1780,411 @@ function celula(v, col) {
   return td;
 }
 
+/*
+ * Envolve `celula()` para carimbar campo, tipo e valor cru na td.
+ *
+ * Feito aqui e não dentro de `celula()` porque ela tem seis `return` -- um por
+ * tipo -- e carimbar em cada um é o tipo de repetição onde um dos lugares
+ * esquece. Foi assim que os cinco botões da modal de estrutura nasceram
+ * quebrados: o mesmo trio repetido à mão em dois caminhos.
+ */
+function celulaEditavel(v, col, idx) {
+  const td = celula(v, col);
+  td.dataset.campo = col.name;
+  td.dataset.tipo = col.type;
+  td.dataset.idx = String(idx);
+  // `bruto` é o que veio da DLL, em JSON: string, number, boolean, ou o
+  // {memo,len} do campo memo. JSON.stringify preserva o tipo na volta.
+  td.dataset.bruto = JSON.stringify(v === undefined ? null : v);
+  return td;
+}
+
+
+/* ===================================================================
+ * T8 -- EDIÇÃO DE REGISTRO
+ *
+ * Até aqui a grade só lê. Daqui para baixo ela escreve, e a diferença que
+ * organiza este bloco é uma só: **o que aparece na tela depois de gravar vem
+ * do arquivo, nunca do que foi digitado.** `data.update` devolve a linha
+ * relida (`row`), e é ela que repinta.
+ *
+ * Sem isso a tela mentiria em casos comuns e discretos: um N(5,2) que recebeu
+ * 3,999 mostra 4,00 no disco; um C(10) que recebeu espaços à direita volta sem
+ * eles; uma data digitada 5/3/9 volta 05/03/2009. Repintar com o que a pessoa
+ * digitou deixaria a tela certa e o arquivo diferente -- e a divergência só
+ * apareceria ao reabrir, longe da causa.
+ * =================================================================== */
+
+/* A célula em edição, ou null. Uma por vez: duas células abertas obrigariam a
+   decidir o que fazer com a segunda quando a primeira falha ao gravar. */
+let edicao = null;
+
+/* O valor cru que a DLL mandou para esta célula. */
+function bruteDaCelula(td) {
+  try {
+    return JSON.parse(td.dataset.bruto || "null");
+  } catch (e) {
+    return null;
+  }
+}
+
+/*
+ * O texto que entra no editor.
+ *
+ * Parte do valor CRU e não do texto da célula, com uma exceção deliberada: em
+ * data e número o formato de tela já é o que a pessoa reconhece (DD/MM/AAAA,
+ * vírgula decimal) e o backend aceita os dois -- reescrever aqui só criaria uma
+ * terceira grafia.
+ */
+function textoParaEditor(td) {
+  const v = bruteDaCelula(td);
+  const tipo = td.dataset.tipo;
+
+  if (v === null || v === undefined) return "";
+  if (tipo === "L") return v ? "S" : "N";
+  if (tipo === "D" || tipo === "N") return td.textContent.trim();
+  return String(v);
+}
+
+/*
+ * Abre o editor na célula.
+ *
+ * Campo memo não edita aqui: abre a modal própria. Um textarea de 4 KB dentro
+ * de uma td de 80 px seria pior que não ter editor.
+ */
+async function abrirEditorCelula(td) {
+  if (edicao) fecharEditorCelula(false);
+  if (!td || td.classList.contains("recno")) return;
+
+  const aba = abas.find((a) => a.h === abaAtiva);
+  if (!aba) return;
+
+  let tr = td.parentElement;
+  const recno = Number((tr.querySelector("td.recno") || {}).textContent);
+  if (!recno) return;
+
+  if (td.dataset.tipo === "M" || td.dataset.tipo === "P") {
+    await abrirEditorMemo(recno, td.dataset.campo);
+    return;
+  }
+
+  // O cursor acompanha: quem edita a linha 12 espera que "registro atual" seja
+  // a 12 -- e é dele que Excluir e Recuperar partem.
+  await porCursorEm(abaAtiva, recno);
+
+  /*
+   * R8 -- O QUE SE EDITA TEM DE SER O QUE ESTÁ NO DISCO.
+   *
+   * A página em memória pode ter envelhecido: outro programa gravou este
+   * registro depois de a grade o ler, e a célula ainda mostra o valor antigo.
+   * Editar em cima dele e gravar seria APAGAR a escrita do outro sem ninguém
+   * ver. Então o editor abre com o registro RELIDO agora -- e guarda os bytes
+   * crus de cada campo, que voltam como `expect` na hora de gravar
+   * (docs/10-integridade.md, R8).
+   */
+  let raw = null;
+  try {
+    const r = await QDBU.rpc("data.record", { h: abaAtiva, recno });
+    raw = r.raw;
+    if (linhaMudou(recno, r.row)) {
+      aplicarLinha(recno, r.row);
+      hint(T("INFO_RECORD_REFRESHED", { n: recno }));
+      td = celulaDe(recno, td.dataset.campo) || td;
+      tr = td.parentElement;
+    }
+  } catch (e) {
+    hint(msgErro(e));
+    return;
+  }
+
+  const largura = td.getBoundingClientRect().width;
+  const original = td.innerHTML;
+
+  const inp = document.createElement("input");
+  inp.type = "text";
+  inp.className = "cel-editor";
+  inp.value = textoParaEditor(td);
+  inp.style.width = Math.max(60, largura - 10) + "px";
+  inp.setAttribute("aria-label", td.dataset.campo);
+
+  // Confirmar e cancelar VISÍVEIS, e não só Enter/Esc (B7.2). O teclado
+  // continua valendo; o que não pode é a única saída ser uma tecla que a
+  // pessoa tem de adivinhar.
+  const ok = elemento("button", "cel-ok", "✓");
+  ok.title = T("UI_CONFIRM");
+  ok.type = "button";
+  const nao = elemento("button", "cel-cancel", "✗");
+  nao.title = T("UI_CANCEL");
+  nao.type = "button";
+
+  td.textContent = "";
+  td.classList.add("editando");
+  td.appendChild(inp);
+  td.appendChild(ok);
+  td.appendChild(nao);
+
+  /*
+   * `inicial` E O TEXTO COM QUE O EDITOR NASCEU, guardado aqui e não relido
+   * depois. `textoParaEditor(td)` só funciona sobre a célula INTACTA: em `D` e
+   * `N` ela devolve `td.textContent`, e a td agora contém o input e os botões
+   * ✓/✗ -- o texto dela virou "✓✗". Comparar contra isso nunca dá igual, então
+   * confirmar sem ter digitado nada gravava assim mesmo: uma escrita no disco,
+   * uma linha no log de alterações e, se outro processo tivesse mexido no
+   * registro, um ERROR_STALE_VALUE por uma edição que não houve. Tabular pela
+   * linha escrevia em toda célula numérica ou de data no caminho.
+   */
+  edicao = { td, tr, recno, campo: td.dataset.campo, original, inp, raw, inicial: inp.value };
+
+  ok.addEventListener("mousedown", (ev) => {
+    // mousedown e não click: o blur do input chegaria primeiro e fecharia o
+    // editor antes de o clique no botão ser processado.
+    ev.preventDefault();
+    confirmarEdicao();
+  });
+  nao.addEventListener("mousedown", (ev) => {
+    ev.preventDefault();
+    fecharEditorCelula(false);
+  });
+
+  inp.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      confirmarEdicao();
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      fecharEditorCelula(false);
+    } else if (ev.key === "Tab") {
+      // Tab confirma e anda: é como uma planilha se comporta, e digitar numa
+      // grade sem isso obriga a alternar teclado e mouse a cada campo.
+      ev.preventDefault();
+      confirmarEdicao(ev.shiftKey ? -1 : 1);
+    }
+  });
+
+  inp.focus();
+  inp.select();
+}
+
+/* Devolve a célula ao que era. `gravou` evita repintar por cima da linha nova
+   que `aplicarLinha()` acabou de desenhar. */
+function fecharEditorCelula(gravou) {
+  if (!edicao) return;
+  const { td, original, recno, envelheceu } = edicao;
+  edicao = null;
+  td.classList.remove("editando");
+  td.classList.remove("recusado");
+  if (!gravou) td.innerHTML = original;
+  // Quem viu a colisão e desistiu não pode receber de volta o valor de quando
+  // o editor abriu -- é justamente o que já não existe no disco (R8).
+  if (!gravou && envelheceu) relerLinha(recno);
+}
+
+/*
+ * Grava a célula.
+ *
+ * A recusa NÃO fecha o editor: o texto digitado continua lá para ser corrigido.
+ * Fechar e devolver o valor antigo obrigaria a pessoa a redigitar tudo por
+ * causa de um caractere -- e é justamente quando o valor é comprido que o erro
+ * acontece.
+ */
+async function confirmarEdicao(passo) {
+  if (!edicao) return;
+  const { td, recno, campo, inp, raw, inicial } = edicao;
+  const texto = inp.value;
+
+  // Nada mudou: não gasta uma escrita nem uma linha de log.
+  if (texto === inicial) {
+    fecharEditorCelula(false);
+    if (passo) moverEdicao(td, passo);
+    return;
+  }
+
+  /*
+   * `expect` são os bytes que a célula tinha quando o editor abriu. A DLL só
+   * grava se o disco AINDA for igual a eles -- conferido dentro do RLock, que
+   * é o único lugar onde "ainda" vale (R8). Se alguém gravou no meio, volta
+   * ERROR_STALE_VALUE com os dois valores, e quem decide é a pessoa.
+   */
+  let expect = raw && campo in raw ? { [campo]: raw[campo] } : undefined;
+
+  for (;;) {
+    try {
+      const r = await QDBU.rpc("data.update", {
+        h: abaAtiva,
+        recno,
+        values: { [campo]: texto },
+        expect,
+      });
+      fecharEditorCelula(true);
+      aplicarLinha(recno, r.row);
+      hint(T("INFO_RECORD_UPDATED", { n: recno, field: campo }));
+      if (passo) moverEdicao(celulaDe(recno, campo), passo);
+      return;
+    } catch (e) {
+      if (e.codigo === "ERROR_STALE_VALUE") {
+        const decisao = await perguntarColisao(e, recno);
+        if (decisao === "sobrescrever") {
+          // Por cima do que está lá AGORA -- se mudar de novo antes de gravar,
+          // a pergunta volta. Nunca por cima do desconhecido.
+          expect = { [campo]: e.params.raw };
+          continue;
+        }
+        if (decisao === "descartar") {
+          fecharEditorCelula(false);
+          await relerLinha(recno);
+          return;
+        }
+        // "deixa eu olhar": o editor fica aberto, marcado, com o texto digitado
+        // -- e lembra que a célula envelheceu, para não voltar a ela ao fechar.
+        if (edicao) edicao.envelheceu = true;
+      }
+      /*
+       * A RECUSA APARECE NA CÉLULA, e não só na barra de status.
+       *
+       * O olho de quem acabou de digitar está na célula; uma frase no rodapé, a
+       * 900 px dali, é lida depois de a pessoa já ter tentado de novo. A borda
+       * vermelha diz ONDE, o hint diz O QUÊ, e o title guarda o motivo enquanto o
+       * editor estiver aberto.
+       */
+      const msg = msgErro(e);
+      td.classList.add("recusado");
+      inp.title = msg;
+      hint(msg);
+      inp.focus();
+      inp.select();
+      return;
+    }
+  }
+}
+
+/* A td de um campo numa linha, depois de a linha ter sido repintada. */
+function celulaDe(recno, campo) {
+  for (const tr of $("grade").querySelectorAll("tbody tr")) {
+    const n = Number((tr.querySelector("td.recno") || {}).textContent);
+    if (n === recno) return tr.querySelector('td[data-campo="' + campo + '"]');
+  }
+  return null;
+}
+
+/*
+ * A linha em memória difere do que acabou de vir do disco?
+ * Compara os valores e a marca de exclusão -- o que a grade mostra.
+ */
+function linhaMudou(recno, row) {
+  const p = gradeDe.get(abaAtiva);
+  if (!p || !row) return false;
+  const l = p.rows.find((x) => x.recno === recno);
+  if (!l) return false;
+  return JSON.stringify(l.values) !== JSON.stringify(row.values) || !!l.deleted !== !!row.deleted;
+}
+
+/* Relê UM registro do disco e repinta a linha dele. */
+async function relerLinha(recno) {
+  try {
+    const r = await QDBU.rpc("data.record", { h: abaAtiva, recno });
+    aplicarLinha(recno, r.row);
+    return r;
+  } catch (e) {
+    hint(msgErro(e));
+    return null;
+  }
+}
+
+/*
+ * A COLISÃO É DECISÃO DA PESSOA, não do programa.
+ *
+ * Três saídas: gravar por cima; descartar o que se digitou e ver o valor novo;
+ * ou Esc, que não decide nada e deixa o editor aberto com o texto, para olhar
+ * de novo. O foco nasce no botão seguro (descartar): Enter por reflexo não
+ * apaga a escrita do outro.
+ */
+async function perguntarColisao(e, recno) {
+  const p = e.params || {};
+  const r = await Swal.fire(
+    swalBase({
+      icon: "warning",
+      title: T("UI_STALE_TITLE"),
+      html: escapaHtml(
+        T("UI_STALE_EXPLAIN", {
+          field: p.field,
+          n: recno,
+          expected: textoDeColisao(p.expected),
+          actual: textoDeColisao(p.actual),
+        })
+      ),
+      showCancelButton: true,
+      confirmButtonText: T("UI_STALE_OVERWRITE"),
+      cancelButtonText: T("UI_STALE_DISCARD"),
+      focusCancel: true,
+    })
+  );
+  if (r.isConfirmed) return "sobrescrever";
+  if (r.dismiss === Swal.DismissReason.cancel) return "descartar";
+  return "olhar";
+}
+
+/* Um valor da recusa como texto curto: memo de 4 KB não cabe numa pergunta. */
+function textoDeColisao(v) {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object" && v.memo) return "«" + T("UI_MEMO") + " " + v.len + "»";
+  const t = typeof v === "boolean" ? textoDoValor({ type: "L", len: 1, dec: 0 }, v) : String(v);
+  return t.length > 60 ? t.slice(0, 57) + "…" : t;
+}
+
+/* Abre o editor na célula vizinha, pulando as que não se editam na grade. */
+function moverEdicao(td, passo) {
+  if (!td) return;
+  let alvo = td;
+  for (;;) {
+    alvo = passo > 0 ? alvo.nextElementSibling : alvo.previousElementSibling;
+    if (!alvo) return;
+    if (alvo.classList.contains("recno")) return;
+    if (alvo.dataset.tipo !== "M" && alvo.dataset.tipo !== "P") break;
+  }
+  abrirEditorCelula(alvo);
+}
+
+/*
+ * Repinta UMA linha com o que voltou do arquivo.
+ *
+ * Repintar a página inteira funcionaria e custaria uma volta à DLL por tecla --
+ * numa grade de 500 linhas isso se sente. Mais grave: a página nova viria com o
+ * scroll no topo, e quem estava editando a linha 380 seria jogado para longe do
+ * que estava fazendo.
+ */
+function aplicarLinha(recno, row, cols) {
+  if (!row) return;
+  const p = gradeDe.get(abaAtiva);
+  // O formulário grava com TODOS os campos e a grade mostra os visíveis:
+  // casa pelo nome, nunca pela posição.
+  if (p && cols) row = remapeiaLinha(row, cols, p.cols);
+  if (p) {
+    const i = p.rows.findIndex((l) => l.recno === recno);
+    if (i >= 0) p.rows[i] = row;
+  }
+  for (const tr of $("grade").querySelectorAll("tbody tr")) {
+    const n = Number((tr.querySelector("td.recno") || {}).textContent);
+    if (n !== recno) continue;
+
+    tr.classList.toggle("deletado", !!row.deleted);
+    const tds = tr.querySelectorAll("td");
+    row.values.forEach((v, i) => {
+      const antiga = tds[i + 1];
+      if (!antiga || !p) return;
+      const nova = celulaEditavel(v, p.cols[i], i);
+      tr.replaceChild(nova, antiga);
+    });
+    return;
+  }
+}
+
+function remapeiaLinha(row, deCols, paraCols) {
+  const porNome = new Map(deCols.map((c, i) => [c.name, row.values[i]]));
+  return Object.assign({}, row, {
+    values: paraCols.map((c) => (porNome.has(c.name) ? porNome.get(c.name) : null)),
+  });
+}
+
 function atualizarBarraGrade(p) {
   const nf = (n) => n.toLocaleString(window.I.idioma());
   const pos = $("pg-posicao");
@@ -1692,34 +2197,43 @@ function atualizarBarraGrade(p) {
   }
 
   /*
-   * O INTERVALO DESCREVE A PÁGINA, e não uma posição -- e a diferença derrubou
-   * uma leitura inteira.
+   * SOB ÍNDICE, `first`–`last` NÃO DESCREVE A PÁGINA -- e o rótulo sozinho não
+   * resolveu isso.
    *
    * `first`/`last` são o RecNo da primeira e da última linha à vista
-   * (api_data.prg:86-87), não o quantos-ésimo elas são. Em ordem física os dois
-   * sentidos coincidem e ninguém percebe. Sob ÍNDICE, divergem: num arquivo
-   * cujo campo-chave dividia os registros em "ANTES" (recnos 66.501+) e
-   * "DEPOIS" (1 a 66.500), a PRIMEIRA página do arquivo indexado mostrava
-   * "66.501–66.550 de 1.196.032" -- que se lê como "estou a 5,5% do arquivo"
-   * quando se está no TOPO. Pior: com empates fora de ordem física, `first`
-   * pode ser MAIOR que `last`, e o intervalo sai invertido.
+   * (api_data.prg:92-93), não o quantos-ésimo elas são. O próprio arquivo diz:
+   * "RecNo() is the identity of the row, never its position."
    *
-   * O DBU original não tinha esse problema porque nunca mostrou intervalo: o
-   * `browse` do Clipper é um cursor rolante, sem página, e a linha de status
-   * dizia UM registro -- `Recno()/Lastrec()` (DBUEDIT.PRG:600). Identidade
-   * sobre tamanho, que não tem como ser lido como posição.
+   * Em ordem FÍSICA os dois sentidos coincidem e o intervalo é verdadeiro. Sob
+   * índice, divergem, e a frase passa a mentir com números certos. Medido em
+   * 03/09/2026 na fixture TIPOS.DBF, 7 registros indexados por TXT: a tela
+   * mostrava as sete linhas e o rodapé dizia "nesta página: 4–5" -- um intervalo
+   * de dois onde há sete, porque 4 e 5 eram só os recnos que calharam de ficar
+   * nas pontas. Com empates fora de ordem física `first` pode até ser MAIOR que
+   * `last`, e o intervalo sai invertido.
    *
-   * Aqui as duas informações ficam separadas: a identidade vai para `pg-atual`
-   * (o Recno()/Lastrec() do original) e este texto passa a se anunciar como o
-   * que sempre foi -- o que está NESTA PÁGINA.
+   * A correção anterior (fix(T3)) trocou o rótulo de posição para "nesta
+   * página" e parou aí -- honesta sobre o que a frase descreve, ainda errada
+   * sobre os números. Aqui a escolha é pelo que se pode afirmar: em ordem
+   * física, o intervalo; sob índice, QUANTAS linhas estão à vista, que é
+   * verdade em qualquer ordem e não exige contar o arquivo.
+   *
+   * O DBU original não tinha o problema porque nunca mostrou intervalo: o
+   * `browse` do Clipper é um cursor rolante e a linha de status dizia UM
+   * registro -- `Recno()/Lastrec()` (DBUEDIT.PRG:600). Identidade sobre
+   * tamanho, que não tem como ser lida como posição. Essa identidade continua
+   * inteira em `pg-atual`.
    */
   const aba = abas.find((a) => a.h === abaAtiva);
   const filtrado = !!(aba && aba.info && aba.info.filter);
   const cont = contagemDe.get(abaAtiva);
+  const indexada = ordensDaAba(abaAtiva).some((o) => o.active);
 
-  pos.textContent = p.rows.length
-    ? T("UI_PAGE_RANGE", { first: nf(p.first), last: nf(p.last) })
-    : T("UI_PAGE_RANGE_EMPTY");
+  pos.textContent = !p.rows.length
+    ? T("UI_PAGE_RANGE_EMPTY")
+    : indexada
+      ? T("UI_PAGE_COUNT", { n: p.rows.length })
+      : T("UI_PAGE_RANGE", { first: nf(p.first), last: nf(p.last) });
 
   /* Quantos passam pelo filtro é OUTRO fato, e não o tamanho do arquivo. Só
      aparece quando há filtro -- e "?" enquanto ninguém pediu a contagem, que é
@@ -1758,6 +2272,7 @@ function trocarVisao(qual) {
   }
   $("visao-dados").hidden = qual !== "dados";
   $("visao-estrutura").hidden = qual !== "estrutura";
+  $("visao-form").hidden = qual !== "form";
 
   // O botao Colunas so vale sobre a grade; na Estrutura ele nao tem o que
   // filtrar e ficaria aceso comandando um painel que ninguem ve.
@@ -1766,7 +2281,48 @@ function trocarVisao(qual) {
   $("pg-filtro").hidden = qual !== "dados";
   $("pg-exportar").hidden = qual !== "dados";
 
-  if (qual === "dados") garantirPagina(abas.find((a) => a.h === abaAtiva));
+  /*
+   * As tres de REGISTRO valem na grade E no formulario -- as duas visoes falam
+   * do mesmo registro, e o cursor e o mesmo. Escondê-las no formulario, que e
+   * onde a pessoa esta olhando UM registro, seria escondê-las justamente onde
+   * fazem mais sentido.
+   */
+  const emRegistro = qual === "dados" || qual === "form";
+  $("pg-inserir").hidden = !emRegistro;
+  $("pg-excluir").hidden = !emRegistro;
+  $("pg-recuperar").hidden = !emRegistro;
+
+  if (qual === "dados") {
+    garantirPagina(abas.find((a) => a.h === abaAtiva));
+    /*
+     * Navegar no formulário move o cursor, e ele pode ter saído da página que a
+     * grade tem em memória -- percorrer 300 registros ali e voltar mostraria a
+     * grade parada na página velha, sem a linha do cursor em lugar nenhum. Só
+     * recarrega quando de fato saiu: repaginar à toa jogaria o scroll para o
+     * topo a cada alternância.
+     */
+    const alvo = cursorDe.get(abaAtiva);
+    const pag = gradeDe.get(abaAtiva);
+    if (alvo && pag && !pag.rows.some((l) => l.recno === alvo)) {
+      carregarPagina(abaAtiva, alvo, 0);
+    } else if (alvo) {
+      /*
+       * O registro continua na página, mas a MARCA não: quem navegou no
+       * formulário mudou o cursor sem que a grade repintasse, e ela voltava com
+       * o realce na linha onde ele estava ANTES. O rodapé dizia "reg. 5" e a
+       * faixa acesa era a 1 -- duas afirmações sobre o mesmo cursor, uma delas
+       * falsa, e é a visual que a pessoa usa para conferir onde está.
+       */
+      porCursorEm(abaAtiva, alvo);
+    }
+  }
+
+  /*
+   * O FORMULARIO SEGUE O CURSOR DA GRADE, e é isso que faz as duas serem vistas
+   * do mesmo registro em vez de telas diferentes sobre o mesmo arquivo. Quem
+   * estava na linha 12 encontra a 12 aqui -- e volta para a 12 lá.
+   */
+  if (qual === "form") carregarForm(abaAtiva, cursorDe.get(abaAtiva));
 }
 
 // ------------------------------------------------------- eventos da grade
@@ -1814,7 +2370,7 @@ $("pg-ir").addEventListener("keydown", async (ev) => {
   if (!n) return;
 
   try {
-    await DBU.rpc("data.goto", { h: abaAtiva, recno: n });
+    await QDBU.rpc("data.goto", { h: abaAtiva, recno: n });
     await carregarPagina(abaAtiva, n, 0);
     /* Depois da pintura, senão a marca some junto com as linhas antigas. */
     await porCursorEm(abaAtiva, n);
@@ -1872,7 +2428,7 @@ let filtroColuna = "";
 
 async function carregarColunas(h) {
   try {
-    const r = await DBU.rpc("fields.available", { h: h });
+    const r = await QDBU.rpc("fields.available", { h: h });
     colunasDe.set(h, r.fields);
     return r.fields;
   } catch (e) {
@@ -1884,7 +2440,7 @@ async function carregarColunas(h) {
 /** Aplica a selecao atual da lista e recarrega a pagina que esta na tela. */
 async function aplicarColunas(h, nomes) {
   try {
-    const r = await DBU.rpc("fields.select", { h: h, fields: nomes });
+    const r = await QDBU.rpc("fields.select", { h: h, fields: nomes });
 
     // `info` e o retrato que o save le. Sem atualizar aqui ele ficaria com a
     // selecao anterior ate o proximo session.state.
@@ -2040,7 +2596,7 @@ $("pc-todas").addEventListener("click", async () => {
   // Lista vazia = "sem selecao" para a DLL, que e exatamente "todas". Mandar os
   // 366 nomes daria no mesmo com mais bytes e travaria a selecao numa ordem.
   try {
-    await DBU.rpc("fields.reset", { h: abaAtiva });
+    await QDBU.rpc("fields.reset", { h: abaAtiva });
     const aba = abas.find((a) => a.h === abaAtiva);
     if (aba && aba.info) aba.info.visible = [];
     await carregarColunas(abaAtiva);
@@ -2090,7 +2646,7 @@ function ordensDaAba(h) {
 
 async function carregarCandidatos(h) {
   try {
-    const r = await DBU.rpc("index.available", { h: h });
+    const r = await QDBU.rpc("index.available", { h: h });
     indicesDe.set(h, r.candidates);
     return r.candidates;
   } catch (e) {
@@ -2121,7 +2677,7 @@ async function aposMexerNoIndice(h, estado) {
 
 async function abrirIndice(caminho) {
   try {
-    const r = await DBU.rpc("index.open", { h: abaAtiva, path: caminho });
+    const r = await QDBU.rpc("index.open", { h: abaAtiva, path: caminho });
     await aposMexerNoIndice(abaAtiva, r);
     hint(T("INFO_INDEX_OPENED", { order: r.order, key: r.orderKey }));
   } catch (e) {
@@ -2131,7 +2687,7 @@ async function abrirIndice(caminho) {
 
 async function fecharIndice(caminho) {
   try {
-    const r = await DBU.rpc("index.close", { h: abaAtiva, path: caminho });
+    const r = await QDBU.rpc("index.close", { h: abaAtiva, path: caminho });
     await aposMexerNoIndice(abaAtiva, r);
   } catch (e) {
     hint(msgErro(e));
@@ -2140,13 +2696,182 @@ async function fecharIndice(caminho) {
 
 async function trocarOrdem(n) {
   try {
-    const r = await DBU.rpc("index.setorder", { h: abaAtiva, order: Number(n) });
+    const r = await QDBU.rpc("index.setorder", { h: abaAtiva, order: Number(n) });
     await aposMexerNoIndice(abaAtiva, r);
     hint(r.order === 0
       ? T("UI_PHYSICAL_ORDER")
       : T("UI_ORDERED_BY", { key: r.orderKey }));
   } catch (e) {
     hint(msgErro(e));
+  }
+}
+
+// -------------------------------------------------------------- preferencias
+
+/*
+ * Preferencias: a config GLOBAL do app (o nivel mais geral da cascata).
+ * Codepage padrao + mostrar registros deletados. O SET EPOCH e fixo (1979) e
+ * so aparece informado.
+ */
+async function abrirConfig() {
+  try {
+    const c = await QDBU.rpc("config.get", {});
+    codepagesDisp = c.codepages || codepagesDisp;
+    preencherSelectCodepage($("cfg-codepage"), false);
+    $("cfg-codepage").value = c.codepage || "PT850";
+    $("cfg-deleted").checked = !!c.showDeleted;
+    $("cfg-epoch").textContent = T("UI_EPOCH_INFO", { year: String(c.epoch) });
+    $("dlg-config").showModal();
+  } catch (e) {
+    hint(msgErro(e));
+  }
+}
+
+async function gravarConfig() {
+  try {
+    const r = await QDBU.rpc("config.set", {
+      codepage: $("cfg-codepage").value,
+      showDeleted: $("cfg-deleted").checked,
+    });
+    $("dlg-config").close();
+    // SET DELETED e GLOBAL na VM: vale para TODAS as abas. As paginas em cache
+    // (gradeDe/formDe) das outras envelhecem -- limpa-las forca a recarga ao
+    // reativar; a ativa recarrega agora. Sem isto, trocar de aba mostraria o
+    // estado de deletados anterior.
+    gradeDe.clear();
+    formDe.clear();
+    if (visaoAtiva === "form") await carregarForm(abaAtiva, cursorDe.get(abaAtiva));
+    else await carregarPagina(abaAtiva, "top", 0);
+    hint(r.saved ? T("INFO_CONFIG_SAVED") : T("WARN_CONFIG_NOT_SAVED"));
+  } catch (e) {
+    hint(msgErro(e));
+  }
+}
+
+$("btn-config").addEventListener("click", abrirConfig);
+$("cfg-cancelar").addEventListener("click", () => $("dlg-config").close());
+$("form-config").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  gravarConfig();
+});
+
+// --------------------------------------------------------------- codepage
+
+/*
+ * A codepage e POR ARQUIVO -- a lente com que a ponte le/grava os bytes de um
+ * DBF, sem tocar no disco (B3.2/B3.5). A lista vem uma vez da DLL, filtrada
+ * pelo que linkou; o rotulo de cada uma e traduzido (UI_CDP_<id>), o id nao.
+ */
+let codepagesDisp = [];
+
+async function carregarCodepages() {
+  try {
+    const r = await QDBU.rpc("meta.codepages", {});
+    codepagesDisp = r.codepages || [];
+  } catch (e) {
+    codepagesDisp = []; // sem lista, o seletor some -- e o padrao PT850 vale
+  }
+}
+
+/* Rotulo traduzido; cai no proprio id se nao houver chave (codepage nova). */
+function rotuloCodepage(id) {
+  const k = "UI_CDP_" + id;
+  const t = T(k);
+  return t === k ? id : t;
+}
+
+/* Preenche um <select> com as codepages disponiveis. `comHerdar` inclui uma
+   primeira opcao vazia "herda do nivel acima" -- para conexao e por-arquivo,
+   onde nao escolher e legitimo (cai na cascata). */
+function preencherSelectCodepage(sel, comHerdar) {
+  sel.textContent = "";
+  if (comHerdar) sel.appendChild(new Option(T("UI_CDP_INHERIT"), ""));
+  for (const c of codepagesDisp) sel.appendChild(new Option(rotuloCodepage(c.id), c.id));
+}
+
+function desenharComboCodepage() {
+  const sel = $("pg-codepage");
+  const aba = abas.find((a) => a.h === abaAtiva);
+  const atual = (aba && aba.info && aba.info.codepage) || "";
+  // `pista` e nao `hint`: `hint()` e a funcao da barra de status, global e usada
+  // no arquivo inteiro. Um `const hint` aqui a sombreia no corpo desta funcao --
+  // a proxima linha que chamasse `hint("...")` morreria com "hint is not a
+  // function". E a familia de defeitos que o GUIA-DO-PROJETO.md lista em "NOME
+  // COMPARTILHADO ENTRE ARQUIVOS".
+  const pista = (aba && aba.info && aba.info.codepageHint) || "";
+
+  sel.textContent = "";
+  for (const c of codepagesDisp) {
+    sel.appendChild(new Option(rotuloCodepage(c.id), c.id));
+  }
+  sel.value = atual;
+  sel.disabled = !aba || !codepagesDisp.length || (aba && aba.detached);
+
+  /*
+   * O CABECALHO SUGERE, mas nao decide (a maioria dos DBFs Clipper grava 0x00).
+   * Quando ele aponta uma codepage diferente da ativa, o seletor se destaca e
+   * o title diz qual -- a pessoa troca se quiser, e nada muda sozinho.
+   */
+  const origem = (aba && aba.info && aba.info.codepageOrigin) || "";
+  const sugere = pista && pista !== atual;
+  sel.classList.toggle("sugere", !!sugere);
+  // O title diz a origem (herdado da conexao/global) e, se houver, a sugestao
+  // do cabecalho -- assim a pessoa sabe por que aquela lente esta ativa.
+  const partes = [];
+  if (origem === "connection") partes.push(T("UI_CODEPAGE_FROM_CONN"));
+  else if (origem === "global" || origem === "default") partes.push(T("UI_CODEPAGE_FROM_GLOBAL"));
+  else if (origem === "file") partes.push(T("UI_CODEPAGE_FROM_FILE"));
+  if (sugere) partes.push(T("UI_CODEPAGE_HINT", { cp: rotuloCodepage(pista) }));
+  sel.title = partes.length ? partes.join(" ") : T("UI_CODEPAGE_TITLE");
+
+  const fixar = $("pg-cod-fixar");
+  if (fixar) {
+    fixar.disabled = sel.disabled;
+    // "ja fixado neste arquivo" quando a origem e o proprio arquivo
+    fixar.classList.toggle("ativo", origem === "file");
+    fixar.title = origem === "file" ? T("UI_PINNED_FILE") : T("UI_PIN_FILE");
+  }
+}
+
+/*
+ * Troca a lente do arquivo ativo. `file.setcodepage` nao toca no disco -- so
+ * muda como os bytes viram texto --, entao recarregar a visao a vista basta
+ * para o acento aparecer certo. Reversivel: e so escolher outra.
+ */
+/*
+ * Troca a lente do arquivo ativo. Duas formas, e a diferenca e SE grava:
+ *   persist=false (seletor)  -> vale so nesta sessao, nada escrito em disco
+ *   persist=true  (fixar)    -> grava em <pasta>/.qdbu/arquivos.json (opt-in)
+ * Fixar e best-effort: se a pasta do cliente recusar, a lente vale igual e a
+ * barra avisa. Ninguem cria arquivo de config sem pedir.
+ */
+async function trocarCodepage(id, persist) {
+  const aba = abas.find((a) => a.h === abaAtiva);
+  if (!aba) return;
+  try {
+    const arg = { h: abaAtiva, codepage: id };
+    if (persist) arg.persist = "file";
+    const r = await QDBU.rpc("file.setcodepage", arg);
+    if (aba.info) {
+      aba.info.codepage = r.codepage;
+      aba.info.codepageHint = r.codepageHint;
+      aba.info.codepageOrigin = r.codepageOrigin;
+    }
+    if (visaoAtiva === "form") await carregarForm(abaAtiva, cursorDe.get(abaAtiva));
+    else {
+      const p = paginaDaAba(abaAtiva);
+      await carregarPagina(abaAtiva, p && p.rows.length ? p.first : "top", 0);
+    }
+    desenharComboCodepage();
+    if (persist) {
+      hint(r.saved ? T("INFO_CODEPAGE_PINNED", { cp: rotuloCodepage(id) })
+                   : T("WARN_CODEPAGE_NOT_PINNED", { cp: rotuloCodepage(id) }));
+    } else {
+      hint(T("INFO_CODEPAGE_CHANGED", { cp: rotuloCodepage(id) }));
+    }
+  } catch (e) {
+    hint(msgErro(e));
+    desenharComboCodepage(); // volta o combo para a codepage que ficou
   }
 }
 
@@ -2311,7 +3036,7 @@ $("pi-pasta").addEventListener("click", (ev) => {
 
 $("pi-fechar-todos").addEventListener("click", async () => {
   try {
-    const r = await DBU.rpc("index.close", { h: abaAtiva, all: true });
+    const r = await QDBU.rpc("index.close", { h: abaAtiva, all: true });
     await aposMexerNoIndice(abaAtiva, r);
     hint(T("INFO_INDEXES_CLOSED"));
   } catch (e) {
@@ -2320,6 +3045,11 @@ $("pi-fechar-todos").addEventListener("click", async () => {
 });
 
 $("pg-ordem").addEventListener("change", (ev) => trocarOrdem(ev.target.value));
+$("pg-codepage").addEventListener("change", (ev) => trocarCodepage(ev.target.value, false));
+$("pg-cod-fixar").addEventListener("click", () => {
+  const id = $("pg-codepage").value;
+  if (id) trocarCodepage(id, true);
+});
 
 /**
  * Clique no cabecalho ordena -- SE houver indice que sirva.
@@ -2814,7 +3544,7 @@ async function sugestoesPara(campo) {
   $("ff-parcial").hidden = true;
   if (!campo || !abaAtiva) return;
   try {
-    const r = await DBU.rpc("filter.values", { h: abaAtiva, field: campo });
+    const r = await QDBU.rpc("filter.values", { h: abaAtiva, field: campo });
     for (const v of r.values) dl.appendChild(new Option(v));
     $("ff-parcial").hidden = !r.partial;
   } catch (e) {
@@ -2981,7 +3711,7 @@ async function aplicarFiltro() {
   const expr = expressaoValidada();
   if (!expr) return;
   try {
-    const r = await DBU.rpc("filter.set", { h: abaAtiva, expr: expr });
+    const r = await QDBU.rpc("filter.set", { h: abaAtiva, expr: expr });
     const aba = abas.find((a) => a.h === abaAtiva);
     if (aba && aba.info) aba.info.filter = r.filter;
 
@@ -3009,7 +3739,7 @@ async function aplicarFiltro() {
 
 async function limparFiltro() {
   try {
-    const r = await DBU.rpc("filter.clear", { h: abaAtiva });
+    const r = await QDBU.rpc("filter.clear", { h: abaAtiva });
     const aba = abas.find((a) => a.h === abaAtiva);
     if (aba && aba.info) aba.info.filter = "";
     contagemDe.delete(abaAtiva);
@@ -3030,7 +3760,7 @@ async function conferirFiltro() {
   const expr = expressaoValidada();
   if (!expr) return;
   try {
-    const r = await DBU.rpc("expr.check", { h: abaAtiva, expr: expr, expect: "L" });
+    const r = await QDBU.rpc("expr.check", { h: abaAtiva, expr: expr, expect: "L" });
     if (!r.compiles) {
       msgFiltro(T("UI_EXPR_RESULT", { expr: expr, value: r.error }), "erro");
     } else if (!r.typeOk) {
@@ -3048,7 +3778,7 @@ async function conferirFiltro() {
 async function contarFiltro() {
   msgFiltro(T("UI_COUNTING"));
   try {
-    const r = await comProgresso(DBU.rpc("filter.count", { h: abaAtiva }));
+    const r = await comProgresso(QDBU.rpc("filter.count", { h: abaAtiva }));
     if (r.partial) {
       // Contagem interrompida NAO vira número na barra: "142.000 filtrados"
       // sobre uma contagem que parou no meio seria um dado errado com cara de
@@ -3206,7 +3936,7 @@ async function irParaRegistro(recno, msg) {
 async function buscarPorIndice(texto) {
   if (!texto) return;
   try {
-    const r = await DBU.rpc("data.seek", { h: abaAtiva, value: texto, soft: true });
+    const r = await QDBU.rpc("data.seek", { h: abaAtiva, value: texto, soft: true });
     if (!r.found) {
       hint(T("ERROR_NOTHING_FROM", { value: texto }));
       return;
@@ -3245,7 +3975,7 @@ async function buscarPorVarredura(texto, doTopo) {
   try {
     const anterior = ultimoAchado.get(abaAtiva);
     const r = await comProgresso(
-      DBU.rpc("data.locate", {
+      QDBU.rpc("data.locate", {
         h: abaAtiva,
         expr: expr,
         from: doTopo || !anterior ? "top" : String(anterior),
@@ -3476,7 +4206,7 @@ async function conferirIndice() {
   }
 
   try {
-    const k = await DBU.rpc("expr.check", { h: abaAtiva, expr: chave });
+    const k = await QDBU.rpc("expr.check", { h: abaAtiva, expr: chave });
     if (!k.compiles) {
       msgIndice(T("ERROR_EXPR_INVALID", { detail: k.error }), "erro");
       return false;
@@ -3488,7 +4218,7 @@ async function conferirIndice() {
 
     const cond = $("pi-for").value.trim();
     if (cond) {
-      const c = await DBU.rpc("expr.check", { h: abaAtiva, expr: cond, expect: "L" });
+      const c = await QDBU.rpc("expr.check", { h: abaAtiva, expr: cond, expect: "L" });
       if (!c.compiles) {
         msgIndice(T("ERROR_EXPR_INVALID", { detail: c.error }), "erro");
         return false;
@@ -3533,7 +4263,7 @@ async function criarIndice() {
 
   msgIndice(T("UI_CREATING"));
   try {
-    const r = await comProgresso(DBU.rpc("index.create", corpo));
+    const r = await comProgresso(QDBU.rpc("index.create", corpo));
     await aposMexerNoIndice(abaAtiva, r);
     formIndice(false);
     hint(T("INFO_INDEX_CREATED", { order: r.order, key: r.orderKey }));
@@ -3544,7 +4274,7 @@ async function criarIndice() {
       if (window.confirm(T("UI_CONFIRM_OVERWRITE", { file: nome }))) {
         corpo.replace = true;
         try {
-          const r = await comProgresso(DBU.rpc("index.create", corpo));
+          const r = await comProgresso(QDBU.rpc("index.create", corpo));
           await aposMexerNoIndice(abaAtiva, r);
           formIndice(false);
           hint(T("INFO_INDEX_REBUILT", { order: r.order, key: r.orderKey }));
@@ -3738,7 +4468,7 @@ async function previaExport() {
     const corpo = corpoExport("preview." + extensaoAtual());
     corpo.timestamp = false;
     corpo.preview = 5;
-    const r = await DBU.rpc("export.preview", corpo);
+    const r = await QDBU.rpc("export.preview", corpo);
     $("ex-amostra").textContent = r.sample || T("UI_EMPTY_FILE_PREVIEW");
     // records < 0 significa "nao sei": com filtro ativo, saber exigiria
     // percorrer o arquivo, e a previa nao pode custar isso num arquivo de um
@@ -3838,7 +4568,7 @@ async function gravarExport() {
 
   msgExport(T("UI_EXPORTING"));
   try {
-    const r = await comProgresso(DBU.rpc(metodo, corpoExport(caminho)));
+    const r = await comProgresso(QDBU.rpc(metodo, corpoExport(caminho)));
     const mb = r.size > 1048576
       ? (r.size / 1048576).toFixed(1) + " MB"
       : Math.round(r.size / 1024) + " KB";
@@ -4008,7 +4738,7 @@ function agendarSalvar() {
 async function salvarSessao() {
   try {
     const ativa = abas.find((a) => a.h === abaAtiva);
-    await DBU.rpc("session.save", {
+    await QDBU.rpc("session.save", {
       panelWidth: Math.round($("painel").getBoundingClientRect().width),
       expanded: [...expandidas],
       // caminho, nao handle: handle so existe na sessao viva
@@ -4051,7 +4781,7 @@ async function salvarSessao() {
 async function restaurarSessao() {
   let est;
   try {
-    est = await DBU.rpc("session.load");
+    est = await QDBU.rpc("session.load");
   } catch (e) {
     return;
   }
@@ -4105,7 +4835,12 @@ async function restaurarSessao() {
     const p = item.path || "";
     if (!p || jaAbertos.has(chave(p))) continue;
     try {
-      const novo = await DBU.rpc("file.open", { path: p, connection: item.connection || "" });
+      // Sem codepage aqui: a cascata (arquivo > conexao > global > PT850)
+      // resolve no file.open. A escolha persiste nesses niveis, nao na sessao.
+      const novo = await QDBU.rpc("file.open", {
+        path: p,
+        connection: item.connection || "",
+      });
 
       // Reaplica as colunas escolhidas. Se um campo sumiu porque a estrutura
       // mudou desde a ultima sessao, a DLL recusa a lista inteira -- entao os
@@ -4115,7 +4850,7 @@ async function restaurarSessao() {
         const existem = new Set((novo.fields || []).map((c) => c.name));
         const validos = item.fields.filter((n) => existem.has(n));
         if (validos.length) {
-          await DBU.rpc("fields.select", { h: novo.h, fields: validos });
+          await QDBU.rpc("fields.select", { h: novo.h, fields: validos });
         }
       }
 
@@ -4124,7 +4859,7 @@ async function restaurarSessao() {
       // de abrir -- ele abre sem filtro, e o aviso diz por que.
       if (item.filter) {
         try {
-          await DBU.rpc("filter.set", { h: novo.h, expr: item.filter });
+          await QDBU.rpc("filter.set", { h: novo.h, expr: item.filter });
         } catch (e) {
           filtrosPerdidos.push(hb_nome(p) + ": " + msgErro(e));
         }
@@ -4318,12 +5053,36 @@ $("busca").addEventListener("input", (ev) => {
 const dlg = $("dlg-conexao");
 
 $("btn-nova-conexao").addEventListener("click", () => {
+  conEditando = null;
   $("con-dir").value = "";
   $("con-nome").value = "";
+  $("con-dir").disabled = false;
+  $("con-nome").disabled = false;
+  preencherSelectCodepage($("con-codepage"), true);
+  $("con-codepage").value = "";
   $("con-erro").hidden = true;
+  $("form-conexao").querySelector("button[type=submit]").textContent = T("UI_ADD");
   dlg.showModal();
   $("con-dir").focus();
 });
+
+/* Editar o codepage de uma conexao existente. Reusa o diálogo, com pasta e
+   nome travados -- so a codepage muda (workspace.update). */
+let conEditando = null;
+function editarCodepageConexao(nome) {
+  const con = (conexoes || []).find((c) => c.name === nome);
+  conEditando = nome;
+  $("con-dir").value = con ? con.dir : "";
+  $("con-nome").value = nome;
+  $("con-dir").disabled = true;
+  $("con-nome").disabled = true;
+  preencherSelectCodepage($("con-codepage"), true);
+  $("con-codepage").value = (con && con.codepage) || "";
+  $("con-erro").hidden = true;
+  $("form-conexao").querySelector("button[type=submit]").textContent = T("UI_SAVE");
+  dlg.showModal();
+  $("con-codepage").focus();
+}
 
 $("con-cancelar").addEventListener("click", () => dlg.close());
 
@@ -4337,9 +5096,21 @@ $("form-conexao").addEventListener("submit", async (ev) => {
     .forEach((e) => e.classList.remove("culpado"));
 
   try {
-    const r = await DBU.rpc("workspace.add", {
+    if (conEditando) {
+      await QDBU.rpc("workspace.update", {
+        name: conEditando,
+        codepage: $("con-codepage").value,
+      });
+      dlg.close();
+      await carregarConexoes();
+      hint(T("INFO_CONNECTION_UPDATED", { name: conEditando }));
+      conEditando = null;
+      return;
+    }
+    const r = await QDBU.rpc("workspace.add", {
       dir: $("con-dir").value.trim(),
       nome: $("con-nome").value.trim(),
+      codepage: $("con-codepage").value,
     });
     dlg.close();
     await carregarConexoes();
@@ -4357,7 +5128,7 @@ $("form-conexao").addEventListener("submit", async (ev) => {
 // --------------------------------------------------------------------- boot
 
 (async () => {
-  const s = await DBU.status();
+  const s = await QDBU.status();
 
   const badge = $("badge");
   // Guardar a CHAVE no proprio elemento, e nao so o texto: o HTML nasce com
@@ -4382,6 +5153,9 @@ $("form-conexao").addEventListener("submit", async (ev) => {
     hint(s.erro || T("ERROR_DLL_NOT_LOADED"));
     return;
   }
+
+  // A lista de codepages (uma vez): o seletor por arquivo do rodape sai dela.
+  await carregarCodepages();
 
   // A DLL e a fonte da verdade: repinta a partir do que ela tem em memoria.
   // Depois disso, restaura o que a sessao anterior tinha e ainda nao esta aberto.
@@ -4422,12 +5196,14 @@ window.addEventListener("idioma-mudou", () => {
   pintar("abas", desenharAbas);
   pintar("conteudo", desenharConteudo);
   pintar("combo de ordem", desenharComboOrdem);
+  pintar("combo de codepage", desenharComboCodepage);
   pintar("busca", ajustarBusca);
   pintar("cdp", () => {
     $("cdp").textContent = portaCdp
       ? T("UI_CDP_PORT", { port: portaCdp })
       : T("UI_CDP_OFF");
-  });
+    if (visaoAtiva === "form") desenharForm();
+});
 
   // Paineis e dialogo so repintam se estiverem na tela: desenhar um painel
   // fechado o traria de volta aberto.
@@ -4522,7 +5298,7 @@ function menuConexao(botao) {
   // leva o Explorer para a pasta do usuario, que engana mais que nao abrir.
   if (con.exists) {
     itemMenu(cx, "🗀", "UI_MENU_OPEN_FOLDER", () => {
-      DBU.abrirPasta(con.dir).catch((e) =>
+      QDBU.abrirPasta(con.dir).catch((e) =>
         hint(T("ERROR_OPEN_FOLDER_FAILED", { detail: msgErro(e) }))
       );
     });
@@ -4554,6 +5330,7 @@ function menuConexao(botao) {
 
   // Destrutivo separado por uma linha: e o unico daqui que apaga cadastro, e
   // colar ele nos outros convida ao clique errado.
+  itemMenu(cx, "\u2691", "UI_MENU_CODEPAGE", () => editarCodepageConexao(nome));
   itemMenu(cx, "×", "UI_MENU_REMOVE", () => removerConexao(nome), "risco");
 
   // Posiciona so depois de preenchido -- antes disso a altura nao existe.
@@ -4625,7 +5402,7 @@ async function abrirLog() {
   $("lg-busca").value = "";
 
   try {
-    const r = await DBU.rpc("log.days");
+    const r = await QDBU.rpc("log.days");
     const sel = $("lg-dia");
     sel.textContent = "";
     for (const d of r.days) {
@@ -4656,7 +5433,7 @@ async function abrirLog() {
 async function carregarLog() {
   if (!logDia) return;
   try {
-    const r = await DBU.rpc("log.read", {
+    const r = await QDBU.rpc("log.read", {
       day: logDia,
       filter: $("lg-busca").value.trim(),
     });
@@ -4759,7 +5536,7 @@ $("lg-busca").addEventListener("input", () => {
 $("lg-pasta").addEventListener("click", () => {
   const dir = $("lg-caminho").dataset.dir;
   if (!dir) return;
-  DBU.abrirPasta(dir).catch((e) =>
+  QDBU.abrirPasta(dir).catch((e) =>
     msgLog(T("ERROR_OPEN_FOLDER_FAILED", { detail: msgErro(e) }), "erro")
   );
 });
@@ -4775,7 +5552,7 @@ $("lg-pasta").addEventListener("click", () => {
  * conferido, o resultado de cada item, e a lista do que vai ser copiado.
  *
  * É essa transparência que autoriza a ferramenta a fazer PACK e ZAP — que é a
- * razão de o DBU existir. Recusar-se a operar não é segurança: é uma ferramenta
+ * razão de o QDBU existir. Recusar-se a operar não é segurança: é uma ferramenta
  * que não serve.
  *
  * O fluxo é sempre o mesmo, e vem de src/api_backup.prg:
@@ -4839,7 +5616,7 @@ async function abrirPrevoo(h, aoConfirmar, opcoes) {
    livre é do volume de DESTINO, então mudar a pasta muda a resposta. */
 async function recarregarPrevoo() {
   desenharPrevoo(
-    await DBU.rpc("backup.check", {
+    await QDBU.rpc("backup.check", {
       h: prevooHandle,
       path: prevooAlvo,
       forOperation: prevooOperacao,
@@ -5024,7 +5801,7 @@ $("dc-reconectar").addEventListener("click", async () => {
   botao.disabled = true;
   msgDesconectado("");
   try {
-    const r = await DBU.rpc("file.reconnect", { h: abaAtiva });
+    const r = await QDBU.rpc("file.reconnect", { h: abaAtiva });
     await repintarDoEstado();
     hint(T("UI_RECONNECTED", { file: r.file }));
   } catch (e) {
@@ -5096,7 +5873,7 @@ $("pv-rodar").addEventListener("click", async () => {
 
   try {
     const r = await comProgresso(
-      DBU.rpc("backup.run", {
+      QDBU.rpc("backup.run", {
         h: prevooHandle,
         path: prevooOperacao ? "" : $("pv-destino").value.trim(),
         forOperation: prevooOperacao,
@@ -5639,7 +6416,7 @@ async function esAplicar() {
 
   try {
     const r = await comProgresso(
-      DBU.rpc("struct.modify", { h: alvo, fields: campos, backup: comBackup })
+      QDBU.rpc("struct.modify", { h: alvo, fields: campos, backup: comBackup })
     );
 
     // A grade em cache é da estrutura velha -- as colunas mudaram de nome.
@@ -5818,7 +6595,7 @@ async function nvCriar(substituir) {
     .map((c) => ({ name: c.name, type: c.type, len: c.len, dec: c.dec }));
 
   try {
-    const r = await DBU.rpc("struct.create", {
+    const r = await QDBU.rpc("struct.create", {
       path: caminho,
       fields: campos,
       replace: !!substituir,
@@ -5829,7 +6606,7 @@ async function nvCriar(substituir) {
 
     /* Abre o que acabou de nascer: criar um arquivo e não mostrá-lo obrigaria a
        procurá-lo na árvore para conferir se saiu como se pediu. */
-    const a = await DBU.rpc("file.open", { path: r.path });
+    const a = await QDBU.rpc("file.open", { path: r.path });
     await repintarDoEstado();
     ativarAba(a.h);
     hint(T("UI_CREATED", { file: r.file, n: r.fields }));
@@ -6120,7 +6897,7 @@ async function msExecutar() {
    */
   if (escopo.mode !== "all" && cursorDe.has(msAlvo)) {
     try {
-      await DBU.rpc("data.goto", { h: msAlvo, recno: cursorDe.get(msAlvo) });
+      await QDBU.rpc("data.goto", { h: msAlvo, recno: cursorDe.get(msAlvo) });
     } catch (e) {
       /* Recno fora de faixa: a própria operação recusa com o motivo. */
     }
@@ -6165,7 +6942,7 @@ async function msExecutar() {
   $("dlg-massa").close();
 
   try {
-    const r = await comProgresso(DBU.rpc("mass." + msOp, params));
+    const r = await comProgresso(QDBU.rpc("mass." + msOp, params));
     gradeDe.delete(msAlvo);
     await repintarDoEstado();
     await Swal.fire(
@@ -6341,7 +7118,7 @@ function swalAlvo() {
 function swalBase(extra) {
   return Object.assign(
     {
-      customClass: { popup: "dbu-swal", container: "dbu-swal-fundo" },
+      customClass: { popup: "qdbu-swal", container: "qdbu-swal-fundo" },
       buttonsStyling: true,
       reverseButtons: true,
       focusCancel: true,
@@ -6417,7 +7194,7 @@ async function destrutiva(acao) {
 
   try {
     const r = await comProgresso(
-      DBU.rpc(acao === "zap" ? "bulk.zap" : "bulk.pack", {
+      QDBU.rpc(acao === "zap" ? "bulk.zap" : "bulk.pack", {
         h: abaAtiva,
         backup: comBackup,
       })
@@ -6465,3 +7242,789 @@ function mensagemDoResultado(acao, r) {
 
 $("pg-pack").addEventListener("click", () => destrutiva("pack"));
 $("pg-zap").addEventListener("click", () => destrutiva("zap"));
+
+/*
+ * O MEMO EDITA NUMA MODAL, e não na célula.
+ *
+ * Memo é campo sem tamanho declarado: os arquivos reais têm de 20 bytes a
+ * vários KB no mesmo campo. Um editor de 80 px de largura serviria para o
+ * primeiro caso e seria inútil no segundo -- e é o segundo que justifica o
+ * campo memo existir.
+ *
+ * O conteúdo vem do `raw` de `data.record` e não da grade: `data.page` manda só
+ * o tamanho, de propósito (200 memos por página seriam megabytes a cada
+ * rolagem). Houve um `data.memo`; ele saiu quando o `data.record` da R8 passou
+ * a trazer o texto e os bytes de expectativa na MESMA leitura -- duas idas à
+ * DLL para o mesmo registro abriam justamente a janela que a R8 fecha.
+ */
+/* O texto do memo no instante em que a modal abriu -- é o `expect` dele (R8). */
+let memoAberto = null;
+
+async function abrirEditorMemo(recno, campo) {
+  const dlg = $("dlg-memo");
+  const ta = $("memo-texto");
+  const titulo = $("memo-titulo");
+
+  await porCursorEm(abaAtiva, recno);
+
+  try {
+    // Uma leitura só: o registro (para a linha, se envelheceu) e o memo. Em
+    // `raw`, um campo M já vem como TEXTO -- é assim que o expect do memo
+    // funciona, porque o registro guarda só o número do bloco (R8).
+    const r = await QDBU.rpc("data.record", { h: abaAtiva, recno });
+    if (linhaMudou(recno, r.row)) {
+      aplicarLinha(recno, r.row);
+      hint(T("INFO_RECORD_REFRESHED", { n: recno }));
+    }
+    memoAberto = (r.raw && r.raw[campo]) || "";
+    ta.value = memoAberto;
+  } catch (e) {
+    hint(msgErro(e));
+    return;
+  }
+
+  titulo.textContent = T("UI_MEMO_TITLE", { field: campo, n: recno });
+  dlg.dataset.recno = String(recno);
+  dlg.dataset.campo = campo;
+  $("memo-msg").textContent = "";
+  atualizarContagemMemo();
+  // A pilha de modais se mantém sozinha: showModal/close estão
+  // instrumentados no fim deste arquivo, para o SweetAlert saber
+  // sobre qual diálogo se ancorar.
+  dlg.showModal();
+  ta.focus();
+}
+
+/* O tamanho aparece enquanto se digita: memo não tem limite declarado, mas
+   quem edita quer saber o que está criando. */
+function atualizarContagemMemo() {
+  $("memo-conta").textContent = T("UI_N_BYTES", { n: $("memo-texto").value.length });
+}
+
+async function gravarMemo() {
+  const dlg = $("dlg-memo");
+  const recno = Number(dlg.dataset.recno);
+  const campo = dlg.dataset.campo;
+  let expect = memoAberto === null ? undefined : { [campo]: memoAberto };
+
+  for (;;) {
+    try {
+      // Grava por `data.update` -- o caminho único de escrita. Ver o comentário
+      // de Api_Data_Memo em src/api_data.prg.
+      const r = await QDBU.rpc("data.update", {
+        h: abaAtiva,
+        recno,
+        values: { [campo]: $("memo-texto").value },
+        expect,
+      });
+      aplicarLinha(recno, r.row);
+      dlg.close();
+      hint(T("INFO_RECORD_UPDATED", { n: recno, field: campo }));
+      return;
+    } catch (e) {
+      if (e.codigo === "ERROR_STALE_VALUE") {
+        const decisao = await perguntarColisao(e, recno);
+        if (decisao === "sobrescrever") {
+          expect = { [campo]: e.params.raw };
+          continue;
+        }
+        if (decisao === "descartar") {
+          dlg.close();
+          await relerLinha(recno);
+          return;
+        }
+      }
+      // Não fecha: o texto digitado continua ali para ser corrigido.
+      $("memo-msg").textContent = msgErro(e);
+      $("memo-msg").className = "ff-msg erro";
+      return;
+    }
+  }
+}
+
+/*
+ * Inserir, excluir e recuperar.
+ *
+ * `data.delete` MARCA, não remove -- e é por isso que Recuperar existe ao lado,
+ * com o mesmo peso visual. O DBU original já fazia esse par; uma tela que só
+ * oferece "excluir" ensina que a marca é definitiva quando não é, e leva a
+ * pessoa ao PACK para desfazer o que um clique desfaria.
+ */
+async function inserirRegistro() {
+  try {
+    const r = await QDBU.rpc("data.append", { h: abaAtiva });
+
+    /*
+     * Leva a grade até o registro novo -- ele nasce no FIM do arquivo, quase
+     * sempre fora da página à vista, e "registro 8 acrescentado" sobre algo que
+     * não se vê não é confirmação, é promessa.
+     *
+     * O deslocamento NEGATIVO é o que preserva o contexto: ancorar no novo com
+     * offset 0 traz uma página que começa nele -- e como ele é o último, a
+     * grade fica com UMA linha só e a pessoa perde o arquivo de vista. Voltando
+     * uma página inteira antes de colher, ele aparece no fim de uma tela cheia,
+     * que é onde a vista dela já estava.
+     */
+    /*
+     * No FORMULÁRIO o registro novo simplesmente vira o registro à vista -- não
+     * há página para reposicionar nem célula para abrir. Sem este desvio, quem
+     * clicasse em "+ Registro" no formulário veria a grade recarregar por baixo
+     * e o formulário continuar no registro anterior.
+     */
+    if (visaoAtiva === "form") {
+      cursorDe.set(abaAtiva, r.recno);
+      await carregarForm(abaAtiva, r.recno);
+      hint(T("INFO_RECORD_ADDED", { n: r.recno }));
+      const primeiro = $("fm-campos").querySelector(".fm-campo");
+      if (primeiro) primeiro.focus();
+      return;
+    }
+
+    await carregarPagina(abaAtiva, r.recno, -(tamanhoPagina - 1));
+    await porCursorEm(abaAtiva, r.recno);
+
+    /*
+     * COM FILTRO ATIVO O REGISTRO NOVO PODE NÃO APARECER, e isso não é falha:
+     * ele nasce em branco e um filtro como `CLI_EST == 'SP'` legitimamente o
+     * exclui. O que não pode é a tela ficar calada -- a pessoa clicou, o hint
+     * disse "acrescentado", e ela olharia uma grade onde nada mudou.
+     */
+    const td = celulaDe(r.recno, primeiroCampoEditavel());
+    if (!td) {
+      hint(T("INFO_RECORD_ADDED_HIDDEN", { n: r.recno }));
+      return;
+    }
+
+    hint(T("INFO_RECORD_ADDED", { n: r.recno }));
+    // Abre o editor no primeiro campo: um registro em branco existe para ser
+    // preenchido, e obrigar um duplo clique a mais só adia o inevitável.
+    abrirEditorCelula(td);
+  } catch (e) {
+    hint(msgErro(e));
+  }
+}
+
+function primeiroCampoEditavel() {
+  const p = gradeDe.get(abaAtiva);
+  if (!p) return "";
+  const c = p.cols.find((x) => x.type !== "M" && x.type !== "P");
+  return c ? c.name : "";
+}
+
+async function marcarRegistro(excluir) {
+  const recno = cursorDe.get(abaAtiva);
+  if (!recno) {
+    hint(T("UI_NO_CURRENT_RECORD"));
+    return;
+  }
+
+  /*
+   * R8 VALE PARA A MARCA TAMBÉM. Quem exclui decide OLHANDO a linha; se o
+   * registro mudou depois que a tela o leu, a decisão foi tomada sobre outro
+   * registro. Então: relê, mostra a diferença e pergunta -- e ainda assim
+   * manda `expect`, porque entre a pergunta e a marca cabe outra escrita.
+   *
+   * No formulário a comparação é com TODOS os campos (é o que ele mostra); na
+   * grade, com as colunas visíveis.
+   */
+  const aba = abas.find((a) => a.h === abaAtiva);
+  const dados = visaoAtiva === "form" ? formDe.get(abaAtiva) : null;
+  const noForm = !!(dados && dados.row && dados.row.recno === recno && aba && aba.fields);
+  const fields = noForm ? aba.fields.map((f) => f.name) : undefined;
+
+  for (;;) {
+    let r0;
+    try {
+      r0 = await QDBU.rpc("data.record", { h: abaAtiva, recno, fields });
+    } catch (e) {
+      hint(msgErro(e));
+      return;
+    }
+
+    const velha = noForm ? dados.row : (paginaDaAba(abaAtiva) || { rows: [] }).rows.find((l) => l.recno === recno);
+    const cols = noForm ? dados.cols : (paginaDaAba(abaAtiva) || {}).cols;
+    const dif = velha ? diferencaDaLinha(velha, r0.row, cols) : null;
+    if (dif) {
+      if (noForm) {
+        dados.row = r0.row;
+        dados.raw = r0.raw;
+        desenharForm();
+      }
+      aplicarLinha(recno, r0.row, noForm ? dados.cols : undefined);
+      hint(T("INFO_RECORD_REFRESHED", { n: recno }));
+      if (!(await perguntarMarcaSobreLinhaVelha(excluir, recno, dif))) return;
+    }
+
+    try {
+      const r = await QDBU.rpc(excluir ? "data.delete" : "data.recall", {
+        h: abaAtiva,
+        recno,
+        expect: r0.raw,
+        fields,
+      });
+      aplicarLinha(recno, r.row, noForm ? dados.cols : undefined);
+      // A marca de excluído também é do formulário: sem isto, marcar no
+      // formulário deixaria o distintivo apagado sobre um registro marcado.
+      if (noForm) {
+        dados.row = r.row;
+        desenharForm();
+      }
+      hint(T(excluir ? "INFO_RECORD_DELETED" : "INFO_RECORD_RECALLED", { n: recno }));
+      return;
+    } catch (e) {
+      // Mudou entre a leitura e a marca: volta ao começo, que relê e pergunta.
+      if (e.codigo === "ERROR_STALE_VALUE") continue;
+      hint(msgErro(e));
+      return;
+    }
+  }
+}
+
+/* A primeira coluna cujo valor difere entre duas leituras da mesma linha. */
+function diferencaDaLinha(velha, nova, cols) {
+  if (!velha || !nova || !cols) return null;
+  for (let i = 0; i < cols.length; i++) {
+    const a = JSON.stringify(velha.values[i]);
+    const b = JSON.stringify(nova.values[i]);
+    if (a !== b) return { field: cols[i].name, expected: velha.values[i], actual: nova.values[i] };
+  }
+  return null;
+}
+
+async function perguntarMarcaSobreLinhaVelha(excluir, recno, dif) {
+  const r = await Swal.fire(
+    swalBase({
+      icon: "warning",
+      title: T("UI_STALE_TITLE"),
+      html: escapaHtml(
+        T(excluir ? "UI_STALE_DELETE_ASK" : "UI_STALE_RECALL_ASK", {
+          n: recno,
+          field: dif.field,
+          expected: textoDeColisao(dif.expected),
+          actual: textoDeColisao(dif.actual),
+        })
+      ),
+      showCancelButton: true,
+      confirmButtonText: T(excluir ? "UI_DELETE_ANYWAY" : "UI_RECALL_ANYWAY"),
+      cancelButtonText: T("UI_CANCEL"),
+      focusCancel: true,
+    })
+  );
+  return r.isConfirmed;
+}
+
+/*
+ * DUPLO CLIQUE ABRE O EDITOR; clique simples só move o cursor.
+ *
+ * Mesma convenção da árvore, onde um clique seleciona e dois abrem. Abrir no
+ * clique simples poria a grade em edição sempre que alguém clicasse para
+ * escolher a linha de um escopo -- e um editor aberto por engano sobre um
+ * arquivo de cliente é exatamente o que a T8 não pode fazer.
+ */
+$("grade").addEventListener("dblclick", (ev) => {
+  const td = ev.target.closest("td");
+  if (!td || td.classList.contains("recno")) return;
+  if (td.classList.contains("editando")) return;
+  abrirEditorCelula(td);
+});
+
+/* Clique simples: cursor. Sem isto, Excluir partiria de uma linha que a pessoa
+   não escolheu. */
+$("grade").addEventListener("click", (ev) => {
+  const td = ev.target.closest("td");
+  if (!td || edicao) return;
+  const tr = td.parentElement;
+  const recno = Number((tr.querySelector("td.recno") || {}).textContent);
+  if (recno) porCursorEm(abaAtiva, recno);
+});
+
+$("pg-inserir").addEventListener("click", inserirRegistro);
+$("pg-excluir").addEventListener("click", () => marcarRegistro(true));
+$("pg-recuperar").addEventListener("click", () => marcarRegistro(false));
+
+$("memo-texto").addEventListener("input", atualizarContagemMemo);
+$("memo-gravar").addEventListener("click", gravarMemo);
+$("memo-fechar").addEventListener("click", () => $("dlg-memo").close());
+
+/* ===================================================================
+ * T9 -- FORMULÁRIO
+ *
+ * A MESMA linha da grade, virada de lado. A grade mostra muitos registros e
+ * poucas colunas; o formulário mostra um registro e TODAS as colunas -- que é
+ * o caso que a grade não resolve: 40 campos onde cabem 8, e um C(200) espremido
+ * em 80 px.
+ *
+ * Três decisões que vêm daí:
+ *
+ * 1. MOSTRA TODOS OS CAMPOS, inclusive os que o painel Colunas escondeu. Ocultar
+ *    ali é para caber na grade; repetir a escolha aqui tiraria do formulário a
+ *    única razão de ele existir.
+ *
+ * 2. NÃO TEM BACKEND PRÓPRIO. Grava por `data.update`, o mesmo caminho da T8 --
+ *    que já valida, trava por registro, e devolve a linha relida. Um segundo
+ *    caminho de escrita teria de repetir as três recusas de tipo e envelheceria
+ *    em separado.
+ *
+ * 3. O CURSOR É A LIGAÇÃO com a grade. Alternar as visões não muda de registro:
+ *    quem estava na linha 12 vê a 12 no formulário e volta para a 12 na grade.
+ *    Sem isso as duas seriam telas diferentes sobre o mesmo arquivo, e não duas
+ *    vistas do mesmo registro.
+ * =================================================================== */
+
+/* O registro que o formulário tem em mãos, por handle. */
+const formDe = new Map();
+
+/*
+ * Carrega no formulário o registro onde o cursor está.
+ *
+ * Pede a página de UM registro ancorada no cursor, com `fields` explícito: sem
+ * ele a DLL serviria a seleção de colunas do handle, que é justamente o que o
+ * formulário não quer.
+ */
+async function carregarForm(h, recno) {
+  const aba = abas.find((a) => a.h === h);
+  if (!aba || !aba.fields) return;
+
+  const alvo = recno || cursorDe.get(h);
+  if (!alvo) {
+    formDe.delete(h);
+    if (h === abaAtiva) desenharForm();
+    return;
+  }
+
+  try {
+    // `data.record`, e não `data.page`: traz o registro E os bytes crus de
+    // cada campo na MESMA leitura (R8). Também posiciona a work area nele,
+    // para Excluir/Recuperar partirem daqui.
+    const r = await QDBU.rpc("data.record", {
+      h,
+      recno: alvo,
+      fields: aba.fields.map((f) => f.name),
+    });
+    formDe.set(h, { row: r.row, cols: r.cols, records: r.records, raw: r.raw });
+    cursorDe.set(h, r.row.recno);
+  } catch (e) {
+    formDe.set(h, null);
+    fmMsg(msgErro(e), "erro");
+  }
+  if (h === abaAtiva) {
+    desenharForm();
+    atualizarRegistroAtual();
+  }
+}
+
+function fmMsg(txt, classe) {
+  const el = $("fm-msg");
+  el.textContent = txt || "";
+  el.className = "fm-msg" + (classe ? " " + classe : "");
+}
+
+/*
+ * Desenha os campos.
+ *
+ * Cada campo já nasce editável -- não há "modo edição". Num formulário o
+ * editável é o estado normal: exigir um duplo clique por campo, como na grade,
+ * transformaria a tela feita para digitar na mais lenta de todas para digitar.
+ * A grade é o contrário justamente porque lá o clique também serve para
+ * escolher linha.
+ */
+function desenharForm() {
+  const campos = $("fm-campos");
+  const vazio = $("fm-vazio");
+  const dados = formDe.get(abaAtiva);
+  const aba = abas.find((a) => a.h === abaAtiva);
+
+  campos.textContent = "";
+
+  if (!aba || !dados || !dados.row) {
+    vazio.hidden = false;
+    vazio.textContent = T(aba && aba.info && aba.info.filter ? "UI_EMPTY_FILTERED" : "UI_EMPTY_PAGE");
+    $("fm-pos").textContent = "";
+    $("fm-deletado").hidden = true;
+    return;
+  }
+  vazio.hidden = true;
+
+  const { row, cols, records } = dados;
+  $("fm-pos").textContent = T("UI_CURRENT_RECORD", {
+    n: window.I.numero(row.recno),
+    total: window.I.numero(records),
+  });
+  $("fm-deletado").hidden = !row.deleted;
+
+  row.values.forEach((v, i) => {
+    const col = cols[i];
+    const linha = elemento("div", "fm-linha");
+
+    const rot = elemento("label", "fm-rotulo", col.name);
+    rot.htmlFor = "fm-" + col.name;
+    // O tipo fica ao lado do nome, como na aba Estrutura: quem edita precisa
+    // saber que ali cabem 10 caracteres ANTES de digitar 15 e levar recusa.
+    rot.appendChild(elemento("span", "fm-tipo", tipoCurto(col)));
+    linha.appendChild(rot);
+
+    linha.appendChild(controleDoCampo(col, v, row.recno));
+    campos.appendChild(linha);
+  });
+}
+
+/* "C 40" · "N 12,2" · "M" -- a mesma notação da aba Estrutura. */
+function tipoCurto(col) {
+  if (col.type === "M" || col.type === "P") return col.type;
+  if (col.type === "N") return col.type + " " + col.len + (col.dec ? "," + col.dec : "");
+  if (col.type === "L" || col.type === "D") return col.type;
+  return col.type + " " + col.len;
+}
+
+/*
+ * O controle de um campo.
+ *
+ * Memo ganha `textarea` e ocupa a linha inteira -- é o campo que a grade não
+ * conseguia mostrar, e para o qual a T8 precisou de uma modal. Aqui ele cabe no
+ * lugar, sem modal nenhuma.
+ */
+function controleDoCampo(col, valor, recno) {
+  const memo = col.type === "M" || col.type === "P";
+  const el = document.createElement(memo ? "textarea" : "input");
+
+  el.id = "fm-" + col.name;
+  el.className = "fm-campo" + (memo ? " fm-memo" : "");
+  el.dataset.campo = col.name;
+  el.dataset.tipo = col.type;
+  el.dataset.recno = String(recno);
+  if (memo) el.rows = 4;
+
+  if (memo) {
+    // O texto do memo já veio no `raw` do MESMO data.record que trouxe o
+    // registro -- uma leitura só, e é ela que vale como expect (R8).
+    const dados = formDe.get(abaAtiva);
+    el.value = (dados && dados.raw && dados.raw[col.name]) || "";
+    el.dataset.original = el.value;
+  } else {
+    el.type = "text";
+    el.value = textoDoValor(col, valor);
+    el.dataset.original = el.value;
+  }
+
+  /*
+   * GRAVA AO SAIR DO CAMPO, e só se mudou.
+   *
+   * `change` e não `input`: gravar a cada tecla mandaria uma escrita por
+   * caractere ao arquivo do cliente, e encheria o log de alterações com uma
+   * linha por letra -- o log existe para responder "o que mudou", não para
+   * transcrever a digitação.
+   */
+  el.addEventListener("change", () => gravarCampo(el));
+
+  el.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      ev.preventDefault();
+      el.value = el.dataset.original || "";
+      fmMsg("");
+      el.blur();
+    } else if (ev.key === "Enter" && !memo) {
+      // No memo o Enter é quebra de linha, e tem de continuar sendo.
+      ev.preventDefault();
+      el.blur();
+    }
+  });
+
+  return el;
+}
+
+/* O valor formatado como a pessoa espera digitar -- mesma convenção da grade. */
+function textoDoValor(col, v) {
+  if (v === null || v === undefined) return "";
+  if (col.type === "L") return v ? "S" : "N";
+  if (col.type === "N") return typeof v === "number" ? v.toFixed(col.dec || 0).replace(".", ",") : String(v);
+  if (col.type === "D") {
+    const iso = String(v);
+    return iso.length === 10 ? iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4) : iso;
+  }
+  return String(v);
+}
+
+/*
+ * Grava um campo.
+ *
+ * A recusa DEVOLVE O FOCO ao campo e mantém o texto -- igual à célula da T8.
+ * Um formulário que aceita o blur e deixa o valor recusado parado na tela faria
+ * a pessoa sair achando que gravou.
+ */
+async function gravarCampo(el) {
+  const original = el.dataset.original || "";
+  if (el.value === original) return;
+
+  const recno = Number(el.dataset.recno);
+  const campo = el.dataset.campo;
+  const aba = abas.find((a) => a.h === abaAtiva);
+  const dados = formDe.get(abaAtiva);
+  const fields = aba && aba.fields ? aba.fields.map((f) => f.name) : undefined;
+
+  // R8: os bytes que o campo tinha quando o registro foi lido. O contrato é o
+  // de confirmarEdicao(); a diferença é onde a pergunta aparece.
+  let expect =
+    dados && dados.raw && campo in dados.raw ? { [campo]: dados.raw[campo] } : undefined;
+
+  for (;;) {
+    try {
+      const r = await QDBU.rpc("data.update", {
+        h: abaAtiva,
+        recno,
+        values: { [campo]: el.value },
+        expect,
+        fields,
+      });
+      el.classList.remove("recusado");
+      fmMsg(T("INFO_RECORD_UPDATED", { n: recno, field: campo }), "ok");
+
+      // Reescreve o campo com o que FICOU no arquivo, não com o que foi digitado
+      // -- mesma razão do `row` da T8. E atualiza a grade em memória, para
+      // alternar de visão não mostrar o valor velho.
+      if (dados && r.row) {
+        dados.row = r.row;
+        dados.raw = r.raw; // a próxima gravação confere contra os bytes NOVOS
+        const i = dados.cols.findIndex((c) => c.name === campo);
+        if (i >= 0 && el.dataset.tipo !== "M" && el.dataset.tipo !== "P") {
+          el.value = textoDoValor(dados.cols[i], r.row.values[i]);
+        }
+      }
+      el.dataset.original = el.value;
+      aplicarLinha(recno, r.row, dados ? dados.cols : undefined);
+      return;
+    } catch (e) {
+      if (e.codigo === "ERROR_STALE_VALUE") {
+        const decisao = await perguntarColisao(e, recno);
+        if (decisao === "sobrescrever") {
+          expect = { [campo]: e.params.raw };
+          continue;
+        }
+        if (decisao === "descartar") {
+          // Mostra o registro como está no disco -- o que a pessoa digitou some
+          // porque ela escolheu isso, e o valor do outro é o que fica.
+          await carregarForm(abaAtiva, recno);
+          return;
+        }
+      }
+      el.classList.add("recusado");
+      fmMsg(msgErro(e), "erro");
+      el.focus();
+      el.select();
+      return;
+    }
+  }
+}
+
+/*
+ * Navegação registro a registro.
+ *
+ * Anda pelo `data.page` com âncora e deslocamento, e não por `data.skip`: a
+ * travessia tem de respeitar índice e filtro ativos, e é a página que sabe
+ * disso. Um `skip` cru andaria na ordem física e o formulário discordaria da
+ * grade sobre qual é "o próximo".
+ */
+async function navegarForm(para) {
+  const aba = abas.find((a) => a.h === abaAtiva);
+  if (!aba || !aba.fields) return;
+
+  const dados = formDe.get(abaAtiva);
+  const atual = dados && dados.row ? dados.row.recno : cursorDe.get(abaAtiva);
+
+  let ancora = atual;
+  let desloc = 0;
+  if (para === "top") ancora = "top";
+  else if (para === "bottom") ancora = "bottom";
+  else if (!atual) ancora = "top";
+  else desloc = para;
+
+  try {
+    const p = await QDBU.rpc("data.page", {
+      h: abaAtiva,
+      anchor: ancora,
+      offset: desloc,
+      count: 1,
+      fields: aba.fields.map((f) => f.name),
+    });
+
+    /*
+     * O LIMITE NÃO SE DETECTA POR `rows.length`.
+     *
+     * Medido em 04/09/2026: `data.page` com âncora no último registro e
+     * `offset: 1` devolve UMA linha -- o próprio último -- com `eof: true`.
+     * `dbSkip(1)` em EOF não sai do lugar, e a página volta o que encontrou.
+     * A primeira versão testava `!p.rows.length` e por isso nunca avisava nada:
+     * clicar ▶ no fim do arquivo não mudava a tela nem dizia por quê, e a
+     * pessoa clica de novo achando que o botão falhou.
+     *
+     * O que denuncia o limite é o registro NÃO TER MUDADO depois de um pedido
+     * de deslocamento -- fato que vale tanto para o fim quanto para o começo, e
+     * que não depende de como o RDD trata EOF.
+     */
+    const chegou = p.rows.length ? p.rows[0].recno : null;
+    if (chegou === null || (desloc !== 0 && chegou === atual)) {
+      fmMsg(T(desloc < 0 ? "UI_AT_FIRST_RECORD" : "UI_AT_LAST_RECORD"), "aviso");
+      return;
+    }
+
+    fmMsg("");
+    // O `data.page` acima só serviu para achar QUAL é o próximo na ordem
+    // vigente; o que se mostra vem de carregarForm(), numa leitura só com os
+    // bytes crus (R8).
+    await carregarForm(abaAtiva, chegou);
+  } catch (e) {
+    fmMsg(msgErro(e), "erro");
+  }
+}
+
+$("fm-topo").addEventListener("click", () => navegarForm("top"));
+$("fm-fim").addEventListener("click", () => navegarForm("bottom"));
+$("fm-anterior").addEventListener("click", () => navegarForm(-1));
+$("fm-proximo").addEventListener("click", () => navegarForm(1));
+
+// ------------------------------------------------------ refresh automático (R9)
+/*
+ * A TELA ENVELHECE, E O DBU ORIGINAL SABIA DISSO.
+ *
+ * `TB_REFRESH_RATE 5`: a cada 5 s sem tecla, o browse do DBU relê o arquivo.
+ * Aqui é o mesmo, com as mesmas duas regras: só quando ninguém está mexendo, e
+ * sem mover nada que a pessoa esteja olhando. O R8 já garante que nenhuma
+ * EDIÇÃO parte de dado velho; isto garante que a LEITURA também não fica velha.
+ *
+ * Quando NÃO roda: janela oculta, editor de célula aberto, qualquer modal ou
+ * pergunta aberta, tarefa longa em andamento, foco num campo do formulário,
+ * botão do mouse apertado, ou interação (roda, rolagem, tecla, clique) há
+ * menos de 1 s.
+ *
+ * O que repinta: só se a página MUDOU (linhas ou total). Página igual só
+ * renova o horário da leitura. E a rolagem é preservada: repintar é trocar as
+ * linhas, não levar a pessoa de volta ao topo.
+ *
+ * Quanto custa: uma `data.page` (ou `data.record`, no formulário) por ciclo.
+ * Sob filtro esparso num arquivo grande isso pode demorar, e a VM é uma só --
+ * um refresh lento a cada 5 s deixaria TUDO lento. Por isso o intervalo se
+ * adapta: nunca menos que 10× o que a última leitura levou, até 60 s.
+ */
+const AUTO_REFRESH_MS = 5000;
+const AUTO_REFRESH_MAX_MS = 60000;
+const AUTO_REFRESH_QUIETO_MS = 1000;
+let autoTimer = null;
+let autoOcupado = false;
+let autoIntervalo = AUTO_REFRESH_MS;
+let ultimaInteracao = 0;
+let mouseApertado = false;
+
+function marcarInteracao() {
+  ultimaInteracao = Date.now();
+}
+document.addEventListener("wheel", marcarInteracao, { passive: true, capture: true });
+document.addEventListener("scroll", marcarInteracao, { passive: true, capture: true });
+document.addEventListener("keydown", marcarInteracao, { capture: true });
+document.addEventListener(
+  "mousedown",
+  () => {
+    mouseApertado = true;
+    marcarInteracao();
+  },
+  { capture: true }
+);
+document.addEventListener(
+  "mouseup",
+  () => {
+    mouseApertado = false;
+    marcarInteracao();
+  },
+  { capture: true }
+);
+
+function telaOciosa() {
+  if (document.hidden || !abaAtiva) return false;
+  if (edicao || mouseApertado) return false;
+  if (Date.now() - ultimaInteracao < AUTO_REFRESH_QUIETO_MS) return false;
+  if (document.querySelector("dialog[open]")) return false;
+  if (document.body.classList.contains("swal2-shown")) return false;
+  if (!$("tarefa").hidden || vigiaTarefa) return false;
+  const foco = document.activeElement;
+  if (foco && ($("fm-campos").contains(foco) || foco.classList.contains("cel-editor"))) return false;
+  return true;
+}
+
+function agendarAuto(ms) {
+  clearTimeout(autoTimer);
+  autoTimer = setTimeout(cicloAuto, ms);
+}
+
+async function cicloAuto() {
+  if (autoOcupado) return agendarAuto(autoIntervalo);
+  if (!telaOciosa()) return agendarAuto(AUTO_REFRESH_QUIETO_MS);
+  autoOcupado = true;
+  const t0 = performance.now();
+  try {
+    if (visaoAtiva === "dados") await refrescarGrade();
+    else if (visaoAtiva === "form") await refrescarForm();
+  } catch (e) {
+    /* refresh é acessório: nunca pode incomodar quem está trabalhando */
+  } finally {
+    autoOcupado = false;
+    const dur = performance.now() - t0;
+    autoIntervalo = Math.min(AUTO_REFRESH_MAX_MS, Math.max(AUTO_REFRESH_MS, Math.round(dur * 10)));
+    agendarAuto(autoIntervalo);
+  }
+}
+
+async function refrescarGrade() {
+  const h = abaAtiva;
+  const p = gradeDe.get(h);
+  if (!p || !p.pedido) return;
+
+  const novo = await QDBU.rpc("data.page", {
+    h,
+    anchor: p.pedido.ancora,
+    offset: p.pedido.deslocamento,
+    count: tamanhoPagina,
+  });
+  // A resposta pode chegar depois de a pessoa trocar de aba, navegar ou começar
+  // a editar. Aí ela é jogada fora: o próximo ciclo pede de novo.
+  if (h !== abaAtiva || gradeDe.get(h) !== p || visaoAtiva !== "dados" || !telaOciosa()) return;
+
+  novo.pedido = p.pedido;
+  const mudou = novo.records !== p.records || JSON.stringify(novo.rows) !== JSON.stringify(p.rows);
+  gradeDe.set(h, novo);
+  if (mudou) {
+    const wrap = $("grade-wrap");
+    const topo = wrap.scrollTop;
+    const lado = wrap.scrollLeft;
+    desenharGrade();
+    wrap.scrollTop = topo;
+    wrap.scrollLeft = lado;
+  } else {
+    atualizarBarraGrade(novo); // só o horário da leitura
+  }
+  // `data.page` move o ponteiro; o cursor da pessoa volta para onde estava.
+  const rec = cursorDe.get(h);
+  if (rec) QDBU.rpc("data.goto", { h, recno: rec }).catch(() => {});
+}
+
+async function refrescarForm() {
+  const h = abaAtiva;
+  const aba = abas.find((a) => a.h === h);
+  const dados = formDe.get(h);
+  if (!aba || !aba.fields || !dados || !dados.row) return;
+
+  const recno = dados.row.recno;
+  const r = await QDBU.rpc("data.record", { h, recno, fields: aba.fields.map((f) => f.name) });
+  if (h !== abaAtiva || formDe.get(h) !== dados || visaoAtiva !== "form" || !telaOciosa()) return;
+
+  // Os bytes novos valem como `expect` daqui em diante -- inclusive quando o
+  // valor à vista não mudou (coluna escondida, ou estado que a tela achata).
+  dados.raw = r.raw;
+  dados.records = r.records;
+  if (JSON.stringify(r.row) === JSON.stringify(dados.row)) return;
+
+  dados.row = r.row;
+  desenharForm();
+  atualizarRegistroAtual();
+  fmMsg(T("INFO_RECORD_REFRESHED", { n: recno }), "aviso");
+  aplicarLinha(recno, r.row, dados.cols);
+}
+
+agendarAuto(AUTO_REFRESH_MS);

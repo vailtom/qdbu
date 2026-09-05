@@ -1,10 +1,10 @@
-﻿# Projeto hbmk2 - DLL do DBU (Harbour com VM linkada), consumida pelo app Tauri.
+﻿# Projeto hbmk2 - DLL do QDBU (Harbour com VM linkada), consumida pelo app Tauri.
 #
 # Tudo aqui e 32-bit: o Harbour instalado em C:\hbmsvc e x86, e o app Tauri
 # precisa ser i686 para conseguir carregar esta DLL (um processo 64-bit falha
 # com erro 193). Ver GUIA-DO-PROJETO.md.
 -hbdynvm
--obin/dbudll
+-obin/qdbudll
 -gtnul
 
 # Clipper Tools (hbct): STRZERO e outras funcoes que expressoes de indice NTX
@@ -16,7 +16,7 @@ hbct.hbc
 lib/harbour-xlsxwriter/hbxlsxwriter.hbc
 hbmzip.hbc
 -w3
--dflag=/DEF:src/bridge/dbudll.def
+-dflag=/DEF:src/bridge/qdbudll.def
 
 # Cabecalhos proprios. `#define` no Harbour vale so ate o fim do ARQUIVO, entao
 # constante compartilhada entre dois .prg tem de morar num .ch -- e o compilador
@@ -33,6 +33,7 @@ src/session.prg
 src/util/err.prg
 src/util/cdp.prg
 src/util/paths.prg
+src/util/config.prg
 src/util/expr_funcs.prg
 src/util/expr.prg
 src/util/conv.prg
@@ -46,6 +47,7 @@ src/util/rebind.prg
 
 # api, um arquivo por dominio
 src/api_meta.prg
+src/api_config.prg
 src/api_workspace.prg
 src/api_file.prg
 src/api_data.prg

@@ -447,7 +447,7 @@ FUNCTION Api_Index_Create( hP )
 
    nTotal := LastRec()
 
-   Dbu_JobBegin( JobMsg( "UI_JOB_INDEXING", cArq ), nTotal )
+   QDbu_JobBegin( JobMsg( "UI_JOB_INDEXING", cArq ), nTotal )
 
    BEGIN SEQUENCE WITH {| e | Break( e ) }
 
@@ -473,7 +473,7 @@ FUNCTION Api_Index_Create( hP )
    RECOVER USING oErr
 
       ordCondSet()          /* limpa a condicao, senao vaza para o proximo */
-      Dbu_JobEnd()
+      QDbu_JobEnd()
       LimpaParcial( cArq )
 
       RETURN Err( "ERROR_INDEX_CREATE_FAILED", "could not create index", "path", ;
@@ -486,8 +486,8 @@ FUNCTION Api_Index_Create( hP )
 
    ordCondSet()
 
-   lParou := Dbu_Canceled()   /* antes do JobEnd, que zera o sinalizador */
-   Dbu_JobEnd()
+   lParou := QDbu_Canceled()   /* antes do JobEnd, que zera o sinalizador */
+   QDbu_JobEnd()
 
    IF lParou
       /*
@@ -519,9 +519,9 @@ FUNCTION Api_Index_Create( hP )
    Devolver .F. faz o RDD abortar a indexacao. */
 STATIC FUNCTION ProgressoIndice()
 
-   Dbu_Progress( RecNo() )
+   QDbu_Progress( RecNo() )
 
-   RETURN ! Dbu_Canceled()
+   RETURN ! QDbu_Canceled()
 
 /* Apaga um indice que ficou pela metade. */
 STATIC FUNCTION LimpaParcial( cArq )

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DBU</title>
+<title>QDBU</title>
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -15,7 +15,7 @@
          de codificação. É o símbolo matemático de "porque" — o mesmo "porque"
          que este código persegue nos comentários: o que o programa faz se lê
          nas linhas, o motivo não. Fica sem espaço antes, colado ao nome. -->
-    <h1>DBU∵</h1>
+    <h1>QDBU∵</h1>
     <span class="sub" data-i18n="UI_SUBTITLE"></span>
   </div>
   <div class="acoes-topo">
@@ -24,6 +24,7 @@
          no Windows os pares de indicador regional saem como as letras "BR". -->
     <!-- Tema antes do idioma: os dois sao preferencia de quem olha, e o de
          cores e o mais mexido dos dois. Montado por js/tema.js. -->
+    <button type="button" id="btn-config" class="icone" data-i18n-title="UI_PREFERENCES">⚙</button>
     <div class="tema" id="tema"></div>
     <div class="idioma" id="idioma"></div>
     <button id="btn-nova-conexao" class="primario" data-i18n="UI_NEW_CONNECTION"></button>
@@ -55,6 +56,11 @@
       <div class="visoes" role="tablist" data-i18n-aria="UI_FILE_VIEW">
         <button type="button" class="visao" data-visao="estrutura" role="tab" data-i18n="UI_VIEW_STRUCTURE"></button>
         <button type="button" class="visao ativa" data-visao="dados" role="tab" data-i18n="UI_VIEW_DATA"></button>
+        <!-- T9. Terceira visao do MESMO registro, e nao uma tela a parte: a
+             grade mostra muitas linhas e poucas colunas, o formulario mostra
+             uma linha e TODAS as colunas. Alternam pelo cursor, que ja e
+             pegajoso desde a T8. -->
+        <button type="button" class="visao" data-visao="form" role="tab" data-i18n="UI_VIEW_FORM"></button>
 
         <!-- Ferramentas da grade ficam nesta barra, nao na de baixo: e onde o
              Navicat poe `Columns` e `Filter & Sort`, e o Filtro (T6) entra aqui
@@ -73,6 +79,19 @@
              — uma converte, a outra copia idêntico. -->
         <button type="button" id="pg-backup" class="ferramenta"
                 data-i18n-title="UI_BACKUP_TITLE" data-i18n="UI_BACKUP"></button>
+        <!-- T8: as tres que agem sobre UM registro. Ficam antes do divisor de
+             risco porque nao sao destrutivas no mesmo sentido -- inserir cria,
+             e excluir apenas MARCA, com Recuperar do lado desfazendo. E por
+             isso que os dois andam juntos e com o mesmo peso: uma tela que so
+             oferece "excluir" ensina que a marca e definitiva quando nao e. -->
+        <span class="visoes-sep"></span>
+        <button type="button" id="pg-inserir" class="ferramenta"
+                data-i18n-title="UI_ADD_RECORD_TITLE" data-i18n="UI_ADD_RECORD"></button>
+        <button type="button" id="pg-excluir" class="ferramenta"
+                data-i18n-title="UI_DELETE_RECORD_TITLE" data-i18n="UI_DELETE_RECORD"></button>
+        <button type="button" id="pg-recuperar" class="ferramenta"
+                data-i18n-title="UI_RECALL_RECORD_TITLE" data-i18n="UI_RECALL_RECORD"></button>
+
         <!-- As duas que DESTROEM. Separadas por um divisor e marcadas com a cor
              de risco: ficam na mesma barra porque é onde se age sobre o
              arquivo, mas não podem parecer irmãs de "Colunas" e "Filtro". -->
@@ -236,6 +255,11 @@
             </select>
           </label>
 
+          <label class="cod"><span data-i18n="UI_CODEPAGE"></span>
+            <select id="pg-codepage" data-i18n-title="UI_CODEPAGE_TITLE"></select>
+            <button type="button" id="pg-cod-fixar" data-i18n-title="UI_PIN_FILE">📌</button>
+          </label>
+
           <label class="tam">
             <select id="pg-tamanho" data-i18n-title="UI_ROWS_PER_PAGE_TITLE">
               <option>50</option><option>100</option>
@@ -291,6 +315,26 @@
             <tbody></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- visão: formulário (T9) -->
+      <div id="visao-form" class="visao-corpo" hidden>
+        <!-- A navegação fica no TOPO e não no rodapé como a da grade: aqui ela
+             é a ação principal -- percorrer registro a registro é o que se faz
+             num formulário. Na grade, navegar é secundário à leitura. -->
+        <div class="fm-barra">
+          <button type="button" id="fm-topo" data-i18n-title="UI_FIRST_RECORD">⏮</button>
+          <button type="button" id="fm-anterior" data-i18n-title="UI_PREV_RECORD">◀</button>
+          <span class="fm-pos" id="fm-pos"></span>
+          <button type="button" id="fm-proximo" data-i18n-title="UI_NEXT_RECORD">▶</button>
+          <button type="button" id="fm-fim" data-i18n-title="UI_LAST_RECORD">⏭</button>
+          <span class="fm-sep"></span>
+          <span class="fm-deletado" id="fm-deletado" hidden data-i18n="UI_DELETED_BADGE"></span>
+          <span class="fm-espaco"></span>
+          <span class="fm-msg" id="fm-msg"></span>
+        </div>
+        <div class="fm-campos" id="fm-campos"></div>
+        <p class="fm-vazio" id="fm-vazio" hidden></p>
       </div>
       </div>
 
@@ -699,7 +743,7 @@
      este diálogo mostra o que foi conferido, o resultado de cada item, e o que
      vai ser copiado. Quem confirma sabendo o que vai acontecer confia na
      ferramenta -- e é essa confiança que permite a ferramenta fazer PACK e ZAP,
-     que é a razão de o DBU existir. -->
+     que é a razão de o QDBU existir. -->
 <dialog id="dlg-prevoo">
   <form method="dialog" id="form-prevoo">
     <h2 data-i18n="UI_PREFLIGHT"></h2>
@@ -759,6 +803,27 @@
 </dialog>
 
 <!-- Visualizador do log de operações. -->
+<!-- T8: editor de memo.
+     Modal e nao edicao na celula porque memo nao tem tamanho declarado: os
+     arquivos reais vao de 20 bytes a varios KB no mesmo campo, e um editor de
+     80 px serviria so para o primeiro caso. O conteudo vem do `raw` de
+     `data.record` (R8), ja que `data.page` manda apenas o tamanho -- houve um
+     `data.memo`, e ele saiu quando o data.record passou a trazer texto e bytes
+     na MESMA leitura. -->
+<dialog id="dlg-memo">
+  <form method="dialog" id="form-memo">
+    <h2 id="memo-titulo"></h2>
+    <textarea id="memo-texto" rows="16" spellcheck="false"></textarea>
+    <div class="memo-rodape">
+      <span class="memo-conta" id="memo-conta"></span>
+      <p class="ff-msg" id="memo-msg"></p>
+      <span class="memo-espaco"></span>
+      <button type="button" id="memo-fechar" data-i18n="UI_CANCEL"></button>
+      <button type="button" id="memo-gravar" class="primario" data-i18n="UI_SAVE"></button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="dlg-log">
   <form method="dialog" id="form-log">
     <h2 data-i18n="UI_OPERATIONS_LOG"></h2>
@@ -801,6 +866,29 @@
   </form>
 </dialog>
 
+<!-- diálogo: preferências (config global) -->
+<dialog id="dlg-config">
+  <form method="dialog" id="form-config">
+    <h2 data-i18n="UI_PREFERENCES"></h2>
+    <p class="explica" data-i18n="UI_CONFIG_EXPLAIN"></p>
+
+    <label>
+      <span data-i18n="UI_DEFAULT_CODEPAGE"></span>
+      <select id="cfg-codepage"></select>
+    </label>
+    <label class="linha-check">
+      <input type="checkbox" id="cfg-deleted">
+      <span data-i18n="UI_SHOW_DELETED"></span>
+    </label>
+    <p class="explica" id="cfg-epoch"></p>
+
+    <div class="acoes">
+      <button type="button" id="cfg-cancelar" class="ghost" data-i18n="UI_CANCEL"></button>
+      <button type="submit" class="primario" data-i18n="UI_SAVE"></button>
+    </div>
+  </form>
+</dialog>
+
 <!-- diálogo: nova conexão -->
 <dialog id="dlg-conexao">
   <form method="dialog" id="form-conexao">
@@ -814,6 +902,10 @@
     <label>
       <span data-i18n="UI_NAME"></span> <span class="opcional" data-i18n="UI_NAME_OPTIONAL"></span>
       <input id="con-nome" name="nome" data-i18n-ph="UI_PH_CONNECTION_NAME" spellcheck="false">
+    </label>
+    <label>
+      <span data-i18n="UI_CONN_CODEPAGE"></span> <span class="opcional" data-i18n="UI_NAME_OPTIONAL"></span>
+      <select id="con-codepage"></select>
     </label>
 
     <p id="con-erro" class="erro-campo" hidden></p>

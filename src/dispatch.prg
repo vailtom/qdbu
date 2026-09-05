@@ -39,27 +39,30 @@ FUNCTION DllDispatch( cFunc, cArg )
       ELSEIF Empty( cFunc )
          xRet := "ERR:funcao nao informada"
       /*
-       * SO FUNCAO `API_`, e a checagem de prefixo vem ANTES da de existencia.
+       * A VIA CRUA TEM LISTA FECHADA -- ver `PermitidasNaViaCrua()`.
        *
        * `__dynsIsFun()` responde por QUALQUER simbolo linkado na DLL -- o
-       * runtime inteiro do Harbour, nao so o nosso. Sem o prefixo, uma string
+       * runtime inteiro do Harbour, nao so o nosso. Sem filtro, uma string
        * digitada num campo de texto alcanca `OS()`, `VERSION()` e, o que
        * importa, `__QUIT()`: o processo morre sem erro, sem log e sem o "ERR:"
        * que o contrato promete. Medido em 03/09/2026 -- `OS()` devolveu
        * "Windows 8 6.2.9200" por esta via.
        *
-       * A via do envelope ja era segura: `NomeDaFuncao()` monta "API_" + metodo
-       * e nao ha como escapar disso. O buraco era so aqui, na chamada crua que
-       * existe por compatibilidade com o cliente C -- e o cliente C so chama
-       * `Api_*` mesmo.
+       * A primeira correcao foi um prefixo `API_`, e ele era largo DEMAIS: esta
+       * via nao passa por `LogOp()` nem por `ConvertDeep()` -- so `Despacha()`
+       * registra. `API_` abriria daqui `Api_Meta_Copyfile`, `Api_Bulk_Delete` e
+       * toda destrutiva de T10/T13/T14 SEM linha em `.qdbu/log`, que e o oposto
+       * do que o GUIA-DO-PROJETO.md promete ("nenhuma consegue esquecer").
+       *
+       * Nem `API_META_` serve: `Api_Meta_Copyfile` escreve arquivo.
        *
        * Herdado do dll-harbour, o projeto-ponte de onde este nasceu. Apontado
        * por revisao de codigo naquele repositorio; conferido e corrigido aqui.
        */
-      ELSEIF ! ( Left( Upper( cFunc ), 4 ) == "API_" )
-         xRet := "ERR:so funcoes Api_* podem ser chamadas (" + cFunc + ")"
+      ELSEIF hb_AScan( PermitidasNaViaCrua(), Upper( cFunc ), , , .T. ) == 0
+         xRet := "ERR:funcao nao liberada na via crua (" + Sanea( cFunc ) + ")"
       ELSEIF ! __dynsIsFun( Upper( cFunc ) )
-         xRet := "ERR:funcao '" + cFunc + "' nao existe na DLL"
+         xRet := "ERR:funcao '" + Sanea( cFunc ) + "' nao existe na DLL"
       ELSE
          xRet := hb_ExecFromArray( Upper( cFunc ), { cArg } )
       ENDIF
@@ -86,11 +89,70 @@ FUNCTION DllDispatch( cFunc, cArg )
          nao passa por ele de novo -- seria repetir o que acabou de estourar. */
       xRet := "ERR:" + ErrDesc( oErr )
 
+      /*
+       * A LENTE VOLTA AO PADRAO AQUI, e nao so no fim de `Despacha()`.
+       *
+       * Um erro de runtime dentro da Api_* rompe direto para este RECOVER,
+       * pulando o `CdpNativa( cCdpAnt )` do caminho normal -- e `s_cNativa`
+       * ficaria travada na codepage do pedido que falhou. O proximo envelope a
+       * escolhe de novo, mas o canal de progresso (`job.prg`) converte para
+       * UTF-8 FORA do dispatcher: uma tarefa ainda viva passaria a rotular a
+       * barra com a lente errada. Voltar ao padrao e o unico estado que nao
+       * depende de qual pedido morreu.
+       */
+      CdpNativa( CdpPadrao() )
+
    END SEQUENCE
 
    ErrorBlock( bOld )
 
    RETURN xRet
+
+/*
+ * A lista fechada da via crua -- a chamada `HbCall( "Api_Xxx", cArg )` sem
+ * envelope, que existe por compatibilidade com o cliente C.
+ *
+ * O criterio e uma pergunta so: ESTA FUNCAO PODE MUDAR BYTES EM DISCO? Se
+ * puder, ela nao entra aqui, porque esta via NAO passa por `LogOp()`. Entrar
+ * seria criar uma rota autorizada e sem registro para o que o log existe para
+ * registrar.
+ *
+ * As tres sao o handshake da ponte -- eco e versao, nada mais. Os chamadores
+ * reais estao em `tests/testload.c` e no `--selftest` de
+ * `app/src-tauri/src/main.rs`; TODO o resto do app fala por envelope.
+ *
+ * Funcao nova aqui e decisao consciente, e o teste de `tests/testload.c`
+ * comparado com esta lista e o que impede a lista de crescer por descuido.
+ */
+STATIC FUNCTION PermitidasNaViaCrua()
+   RETURN { "API_META_PING", "API_META_VERSION", "API_META_ECHO" }
+
+/*
+ * O nome recusado volta ecoado na mensagem, e ele e ENTRADA NAO CONFIAVEL.
+ *
+ * Dois motivos para nao devolver o que chegou:
+ *
+ * 1. Esta via nao passa por `ConvertDeep()`, e `qdbudll.rs` decodifica com
+ *    `String::from_utf8` ESTRITO (de proposito -- ver GUIA-DO-PROJETO.md). Um byte
+ *    invalido no nome transformaria a propria recusa num erro duro de ponte,
+ *    trocando "funcao nao liberada" por uma falha de decodificacao.
+ * 2. A mensagem vai para tela e para log; controle e novalinha nao tem o que
+ *    fazer em nenhum dos dois.
+ *
+ * Fica so ASCII imprimivel, cortado em 64 caracteres -- o suficiente para a
+ * pessoa reconhecer o que digitou.
+ */
+STATIC FUNCTION Sanea( cNome )
+
+   LOCAL cOut := ""
+   LOCAL i, n
+
+   FOR i := 1 TO Min( Len( cNome ), 64 )
+      n := Asc( SubStr( cNome, i, 1 ) )
+      cOut += iif( n >= 32 .AND. n <= 126, Chr( n ), "?" )
+   NEXT
+
+   RETURN cOut + iif( Len( cNome ) > 64, "...", "" )
 
 /*
  * Trata um envelope. Recebe o JSON cru, devolve o JSON cru.
@@ -103,7 +165,7 @@ STATIC FUNCTION Despacha( cJson )
    LOCAL hReq := NIL
    LOCAL cId := ""
    LOCAL cMetodo, cFuncao, xResp, hParams
-   LOCAL nInicio
+   LOCAL nInicio, cCdpAnt, cSaida
 
    IF hb_jsonDecode( cJson, @hReq ) == 0 .OR. ! HB_ISHASH( hReq )
       RETURN Envelope( "", Err( "ERROR_BAD_ENVELOPE", "envelope is not valid JSON" ) )
@@ -124,16 +186,28 @@ STATIC FUNCTION Despacha( cJson )
    hParams := iif( hb_HHasKey( hReq, "params" ) .AND. HB_ISHASH( hReq[ "params" ] ), ;
                    hReq[ "params" ], { => } )
 
-   /* O JSON chega em UTF-8; o lado DBF fala CP850. Converter aqui, num ponto
-      unico, evita que cada Api_* tenha de lembrar -- e nao deixa caminho escapar. */
+   /*
+    * CODEPAGE POR ARQUIVO (B3.2/B3.5). A conversao acontece aqui, num ponto
+    * unico -- mas cada arquivo tem o seu, entao a lente e escolhida ANTES,
+    * a partir do handle (ou do `codepage` do proprio file.open) que o pedido
+    * carrega. `CdpDoPedido` le esses campos CRUS: `h`, `codepage` e `path` sao
+    * ASCII, seguros de ler antes do ConvertDeep. Restaurada no fim do caminho
+    * normal; se a Api_* estourar, o RECOVER de `DllDispatch()` a devolve ao
+    * padrao -- e o unico jeito de nenhuma saida deixar a lente presa.
+    */
+   cCdpAnt := CdpNativa( CdpDoPedido( cMetodo, hParams ) )
+
+   /* O JSON chega em UTF-8; o lado DBF fala a codepage do arquivo. Converter
+      aqui, num ponto unico, evita que cada Api_* tenha de lembrar. */
    hParams := ConvertDeep( hParams, .F. )
 
    cFuncao := NomeDaFuncao( cMetodo )
 
    IF ! __dynsIsFun( cFuncao )
-      RETURN Envelope( cId, ;
-         Err( "ERROR_UNKNOWN_METHOD", "method does not exist", , ;
-               { "method" => cMetodo } ) )
+      xResp := Err( "ERROR_UNKNOWN_METHOD", "method does not exist", , ;
+                    { "method" => cMetodo } )
+      CdpNativa( cCdpAnt )
+      RETURN Envelope( cId, xResp )
    ENDIF
 
    nInicio := hb_MilliSeconds()
@@ -164,7 +238,61 @@ STATIC FUNCTION Despacha( cJson )
           iif( xResp[ "ok" ] .AND. hb_HHasKey( xResp, "result" ) .AND. ;
                HB_ISHASH( xResp[ "result" ] ), xResp[ "result" ], NIL ) )
 
-   RETURN Envelope( cId, xResp )
+   /* Envelope AINDA sob a codepage do arquivo: e ela que converte a saida para
+      UTF-8. So depois restaura, para o proximo pedido nao herdar esta. */
+   cSaida := Envelope( cId, xResp )
+   CdpNativa( cCdpAnt )
+
+   RETURN cSaida
+
+/*
+ * Os metodos em que um `codepage` NO PEDIDO escolhe a lente.
+ *
+ * A lista e fechada de proposito. `codepage` e nome de parametro de mais de um
+ * metodo: `workspace.add`, `workspace.update` e `config.set` tambem o recebem
+ * -- mas ali ele e DADO A GUARDAR, nao a lente com que ler o pedido. Honrar o
+ * campo em qualquer metodo fazia `workspace.add {"nome":"Ação","codepage":
+ * "ESWIN"}` gravar o nome em CP1252 no connections.json, que o `workspace.list`
+ * (sem `h` e sem `codepage`) depois lia sob PT850: acento quebrado na arvore e
+ * o `Upper()` de `CodepageDaConexao` deixando de casar.
+ *
+ * So os dois metodos que falam de UM DBF entram: `file.open`, que ainda nao tem
+ * handle, e `file.setcodepage`, que troca a lente do handle que ja tem.
+ */
+STATIC FUNCTION AceitaCodepageNoPedido( cMetodo )
+   RETURN Lower( cMetodo ) == "file.open" .OR. Lower( cMetodo ) == "file.setcodepage"
+
+/*
+ * A codepage com que ESTE pedido le e grava bytes de DBF.
+ *
+ * Ordem: o `codepage` do proprio pedido (so file.open/file.setcodepage) vence;
+ * senao o do handle `h`, que o file.open guardou; senao o padrao. Le os campos
+ * CRUS do envelope -- `h`, `codepage`, `path` sao ASCII, entao ler antes do
+ * ConvertDeep nao corrompe nada.
+ */
+STATIC FUNCTION CdpDoPedido( cMetodo, hParams )
+
+   LOCAL hInfo
+
+   IF ! HB_ISHASH( hParams )
+      RETURN CdpPadrao()
+   ENDIF
+
+   IF AceitaCodepageNoPedido( cMetodo ) .AND. ;
+      hb_HHasKey( hParams, "codepage" ) .AND. HB_ISSTRING( hParams[ "codepage" ] ) .AND. ;
+      CdpValida( hParams[ "codepage" ] )
+      RETURN hParams[ "codepage" ]
+   ENDIF
+
+   IF hb_HHasKey( hParams, "h" ) .AND. HB_ISSTRING( hParams[ "h" ] )
+      hInfo := SessHandle( hParams[ "h" ] )
+      IF HB_ISHASH( hInfo ) .AND. hb_HHasKey( hInfo, "codepage" ) .AND. ;
+         ! Empty( hInfo[ "codepage" ] )
+         RETURN hInfo[ "codepage" ]
+      ENDIF
+   ENDIF
+
+   RETURN CdpPadrao()
 
 /*
  * "file.open" -> "API_FILE_OPEN"

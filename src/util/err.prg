@@ -62,6 +62,7 @@
  *     ERROR_PARAM_TOO_SMALL         param, min
  *     ERROR_PARAM_TOO_BIG           param, value, max
  *     ERROR_PARAM_MUST_BE_LIST      param
+ *     ERROR_PARAM_MUST_BE_STRING    param, field
  *     ERROR_BAD_DATE                value
  *     ERROR_BAD_ANCHOR
  *
@@ -84,6 +85,10 @@
  *
  *   fields
  *     ERROR_FIELD_NOT_FOUND         field, alias
+ *     ERROR_UNKNOWN_CODEPAGE       codepage   (nao e uma das oferecidas)
+ *     ERROR_CONNECTION_NOT_FOUND    name
+ *     ERROR_STALE_VALUE             field, expected, actual, raw   (R8: o campo mudou
+ *                                   no disco entre a leitura e a gravacao)
  *     ERROR_NO_COLUMNS
  *
  *   expressions

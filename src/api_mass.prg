@@ -727,7 +727,7 @@ STATIC FUNCTION AnexaDeTabela( aTab, hP, nFeitos, nVistos, xErro )
       nTeto := Int( hEsc[ "n" ] )
    ENDIF
 
-   Dbu_JobBegin( JobMsg( "UI_JOB_APPENDING", Alias() ), Len( aLinhas ) )
+   QDbu_JobBegin( JobMsg( "UI_JOB_APPENDING", Alias() ), Len( aLinhas ) )
 
    FOR EACH aLinha IN aLinhas
 
@@ -735,7 +735,7 @@ STATIC FUNCTION AnexaDeTabela( aTab, hP, nFeitos, nVistos, xErro )
 
       dbAppend()
       IF NetErr()
-         Dbu_JobEnd()
+         QDbu_JobEnd()
          RETURN Err( "ERROR_APPEND_FAILED", "could not add a record", "h" )
       ENDIF
 
@@ -754,16 +754,16 @@ STATIC FUNCTION AnexaDeTabela( aTab, hP, nFeitos, nVistos, xErro )
       ENDIF
 
       IF nVistos % 500 == 0
-         Dbu_Progress( nVistos )
-         IF Dbu_Canceled()
-            Dbu_JobEnd()
+         QDbu_Progress( nVistos )
+         IF QDbu_Canceled()
+            QDbu_JobEnd()
             RETURN Err( "WARN_CANCELED_BULK", "canceled by user", , ;
                         { "n" => nFeitos } )
          ENDIF
       ENDIF
    NEXT
 
-   Dbu_JobEnd()
+   QDbu_JobEnd()
 
    RETURN NIL
 

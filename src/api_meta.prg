@@ -2,8 +2,8 @@
  * api_meta.prg - funcoes de servico: identidade, versao, saude.
  *
  * Estas aceitam OS DOIS modos de chamada:
- *   cru       Api_Meta_Ping("dbu")                    -> string
- *   envelope  {"method":"meta.ping","params":{"msg":"dbu"}} -> JSON
+ *   cru       Api_Meta_Ping("qdbu")                    -> string
+ *   envelope  {"method":"meta.ping","params":{"msg":"qdbu"}} -> JSON
  *
  * O modo cru existe porque o cliente C (tests/testload.c) e o --selftest
  * exercitam a ponte sem montar envelope -- e e bom que o teste mais basico da
@@ -71,6 +71,24 @@ STATIC FUNCTION VersaoXlsx()
 
 /* Devolve o argumento intacto. Existe para o selftest exercitar o protocolo de
    buffer (respostas maiores que o buffer inicial) e o round-trip UTF-8. */
+/*
+ * meta.codepages -> { "codepages":[{"id":"PT850","cp":850},...], "default":"PT850" }
+ *
+ * A lista que a tela mostra no seletor de codepage por arquivo. Vem filtrada
+ * pelo que linkou (ver CodepagesDisponiveis em util/cdp.prg); a UI casa cada
+ * id com o rotulo traduzido UI_CDP_<id>.
+ */
+FUNCTION Api_Meta_Codepages( hP )
+
+   HB_SYMBOL_UNUSED( hP )
+
+   /* Ok() e nao hb_jsonEncode: via envelope, o dispatcher embrulha o retorno.
+      Uma string crua viraria `result:"{...}"` (texto), e a UI leria result.codepages
+      como indefinido. As demais Api_* de dados fazem igual. */
+   RETURN Ok( { ;
+      "codepages" => CodepagesDisponiveis(), ;
+      "default"   => CdpPadrao() } )
+
 FUNCTION Api_Meta_Echo( xArg )
    RETURN Arg( xArg, "texto" )
 
@@ -115,22 +133,22 @@ FUNCTION Api_Meta_Slowjob( hP )
    nPassos := Max( 1, Min( Int( nPassos ), 1000 ) )
    nFatia  := nSeg / nPassos
 
-   Dbu_JobBegin( JobMsg( "UI_JOB_SIMULATING" ), nPassos )
+   QDbu_JobBegin( JobMsg( "UI_JOB_SIMULATING" ), nPassos )
 
    FOR i := 1 TO nPassos
       hb_idleSleep( nFatia )
       nFeitos := i
-      Dbu_Progress( i )
+      QDbu_Progress( i )
 
       /* Entre fatias, nunca no meio: e onde uma operacao real estaria com o
          registro completo. R1 de docs/10-integridade.md. */
-      IF Dbu_Canceled()
+      IF QDbu_Canceled()
          lParou := .T.
          EXIT
       ENDIF
    NEXT
 
-   Dbu_JobEnd()
+   QDbu_JobEnd()
 
    RETURN Ok( { ;
       "seconds"  => nSeg, ;

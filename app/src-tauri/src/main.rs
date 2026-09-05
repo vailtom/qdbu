@@ -4,7 +4,7 @@
 // `log()` abaixo e o campo `log` de StatusDll, que a UI mostra no rodape.
 #![windows_subsystem = "windows"]
 
-mod dbudll;
+mod qdbudll;
 
 use std::env;
 use std::fs::OpenOptions;
@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Instant;
 
-use dbudll::Harbour;
+use qdbudll::Harbour;
 use serde::Serialize;
 use tauri::{Manager, State};
 
@@ -25,7 +25,7 @@ use tauri::{Manager, State};
 /// sem sinal em lugar nenhum). Ver app/devtools/cdp.bat.
 ///
 /// 9333 e nao 9222 de proposito: a 9222 costuma estar ocupada pelo Chrome.
-/// Sobrescrevivel por DBU_CDP_PORT; `DBU_CDP_PORT=0` desliga.
+/// Sobrescrevivel por QDBU_CDP_PORT; `QDBU_CDP_PORT=0` desliga.
 const CDP_PORT_PADRAO: &str = "9333";
 
 static PROXIMO_ID: AtomicU64 = AtomicU64::new(1);
@@ -41,13 +41,13 @@ static INICIO: OnceLock<Instant> = OnceLock::new();
 static LOG_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 /// Raiz do projeto, achada subindo a partir do executavel ate encontrar
-/// `dbudll.hbp`. O projeto e autocontido: tudo que ele gera (log, dados do
+/// `qdbudll.hbp`. O projeto e autocontido: tudo que ele gera (log, dados do
 /// WebView2, binarios) fica sob esta pasta, nunca em %TEMP% ou %LOCALAPPDATA%.
 fn raiz_projeto() -> Option<PathBuf> {
     let exe = env::current_exe().ok()?;
     let mut dir = exe.parent()?.to_path_buf();
     for _ in 0..8 {
-        if dir.join("dbudll.hbp").is_file() {
+        if dir.join("qdbudll.hbp").is_file() {
             return Some(dir);
         }
         dir = dir.parent()?.to_path_buf();
@@ -55,21 +55,60 @@ fn raiz_projeto() -> Option<PathBuf> {
     None
 }
 
+/// Onde o app instalado grava, quando `raiz_projeto()` nao acha nada.
+///
+/// A regra 1 do GUIA-DO-PROJETO.md ("nada em %TEMP%, nada em %LOCALAPPDATA%") vale para a
+/// ARVORE DE FONTES, onde `qdbudll.hbp` existe e `raiz_projeto()` responde. O app
+/// INSTALADO nao tem `qdbudll.hbp` -- nunca teve, mas ate o instalador existir o
+/// fallback nunca disparava. Agora dispara, e `env::temp_dir()` era a pior das
+/// escolhas possiveis: a limpeza do Windows apaga `%TEMP%` sem aviso, entao o log
+/// de "o que este programa fez com o meu arquivo?" sumiria sozinho.
+///
+/// A ordem: primeiro ao lado do executavel (mantem o app autocontido, e o que
+/// vale para instalacao portatil numa pasta gravavel); se nao der para escrever
+/// ali -- `C:\Program Files` nao deixa --, `%LOCALAPPDATA%\dbu-harbour`, que e
+/// por design o lugar de dado por usuario de app instalado no Windows.
+/// RESPONDIDA UMA VEZ. A sondagem cria e apaga um arquivo, e `arquivo_janela()`
+/// chama isto a cada mover/redimensionar da janela -- sem o cache seriam dois
+/// toques de disco por evento de janela, para uma resposta que nao muda enquanto
+/// o processo vive.
+static BASE_INSTALADO: OnceLock<PathBuf> = OnceLock::new();
+
+fn base_instalado() -> PathBuf {
+    BASE_INSTALADO
+        .get_or_init(|| {
+            if let Some(dir) = env::current_exe().ok().and_then(|p| p.parent().map(PathBuf::from)) {
+                // Sondagem de escrita real: `Program Files` e legivel e listavel,
+                // entao so tentar criar o arquivo responde a pergunta que importa.
+                let sonda = dir.join(".qdbu-escrita.tmp");
+                if std::fs::write(&sonda, b"").is_ok() {
+                    let _ = std::fs::remove_file(&sonda);
+                    return dir;
+                }
+            }
+            env::var_os("LOCALAPPDATA")
+                .map(PathBuf::from)
+                .unwrap_or_else(env::temp_dir)
+                .join("dbu-harbour")
+        })
+        .clone()
+}
+
 /// Pasta de artefatos de execucao, dentro do projeto: `<raiz>/.run`.
 fn dir_run() -> PathBuf {
-    let base = raiz_projeto().unwrap_or_else(env::temp_dir);
+    let base = raiz_projeto().unwrap_or_else(base_instalado);
     let d = base.join(".run");
     let _ = std::fs::create_dir_all(&d);
     d
 }
 
-/// Arquivo de log: `DBU_LOG` se definida, senao `<raiz>/.run/dbu-console.log`.
+/// Arquivo de log: `QDBU_LOG` se definida, senao `<raiz>/.run/qdbu-console.log`.
 fn caminho_log() -> &'static Path {
     LOG_PATH.get_or_init(|| {
-        env::var("DBU_LOG")
+        env::var("QDBU_LOG")
             .map(PathBuf::from)
             .ok()
-            .unwrap_or_else(|| dir_run().join("dbu-console.log"))
+            .unwrap_or_else(|| dir_run().join("qdbu-console.log"))
     })
 }
 
@@ -99,7 +138,7 @@ struct Estado {
     /// propria tarefa -- que e exatamente o problema que progress.c resolve no
     /// nivel de baixo. Aqui o lock e pego, o Arc e clonado e o lock e solto na
     /// mesma linha; ninguem espera por ninguem.
-    progresso: Mutex<Option<Arc<dbudll::Progresso>>>,
+    progresso: Mutex<Option<Arc<qdbudll::Progresso>>>,
 }
 
 #[derive(Serialize)]
@@ -122,9 +161,22 @@ struct Resultado {
     bytes: usize,
 }
 
-/// Procura dbudll.dll em locais previsiveis, do mais especifico ao mais generico.
+/// Procura qdbudll.dll em locais previsiveis, do mais especifico ao mais generico.
+///
+/// A ORDEM MUDA ENTRE DEBUG E RELEASE, e o motivo e concreto.
+///
+/// O `resources` do tauri.conf.json faz o build script do tauri-build COPIAR
+/// `bin/qdbudll.dll` para junto do executavel -- inclusive em
+/// `target/i686-pc-windows-msvc/debug/`. Em desenvolvimento essa copia e uma
+/// armadilha: quem roda `make.bat` e depois abre o .exe direto, sem passar pelo
+/// cargo, carregaria a copia VELHA e continuaria vendo o defeito que acabou de
+/// corrigir -- sem nenhum sinal, que e a mesma classe de perda de tempo do
+/// frontend embutido descrita no GUIA-DO-PROJETO.md.
+///
+/// Entao: em DEBUG a fonte (`<raiz>/bin/qdbudll.dll`) vem primeiro; em RELEASE,
+/// e no app instalado, a que esta ao lado do executavel -- que la e a unica.
 fn achar_dll() -> PathBuf {
-    if let Ok(p) = env::var("DBU_DLL") {
+    if let Ok(p) = env::var("QDBU_DLL") {
         let p = PathBuf::from(p);
         if p.is_file() {
             return p;
@@ -133,9 +185,26 @@ fn achar_dll() -> PathBuf {
 
     let mut candidatos: Vec<PathBuf> = Vec::new();
 
+    // A DLL recem-compilada, achada pela raiz do repositorio -- precisa, sem
+    // depender de quantos niveis o perfil de build tem no caminho.
+    let fonte = raiz_projeto().map(|r| r.join("bin").join("qdbudll.dll"));
+    if cfg!(debug_assertions) {
+        candidatos.extend(fonte.clone());
+    }
+
     if let Ok(exe) = env::current_exe() {
         if let Some(dir) = exe.parent() {
-            candidatos.push(dir.join("dbudll.dll"));
+            // App INSTALADO: `bundle.resources` esta na forma de MAPA
+            // (`{ "../../bin/qdbudll.dll": "qdbudll.dll" }`) justamente para cair
+            // aqui. Na forma de LISTA o Tauri reescreve cada `..` como `_up_`
+            // (tauri-utils `resource_relpath()`) e a DLL iria para
+            // `resources/_up_/_up_/bin/qdbudll.dll`, caminho que NENHUM candidato
+            // desta funcao alcanca: o app instalado subia com "FALHOU ao
+            // carregar a DLL" e nada apontava para a causa.
+            candidatos.push(dir.join("qdbudll.dll"));
+            // Cinto e suspensorio: no Windows `resource_dir()` E o diretorio do
+            // exe, mas se alguem voltar a forma de lista sem `..`, e aqui.
+            candidatos.push(dir.join("resources").join("qdbudll.dll"));
             // rodando de target/i686-pc-windows-msvc/debug/ -> sobe ate a raiz
             for n in 1..=5 {
                 let mut up = dir.to_path_buf();
@@ -145,14 +214,18 @@ fn achar_dll() -> PathBuf {
                         None => break,
                     };
                 }
-                candidatos.push(up.join("bin").join("dbudll.dll"));
+                candidatos.push(up.join("bin").join("qdbudll.dll"));
             }
         }
     }
 
+    if !cfg!(debug_assertions) {
+        candidatos.extend(fonte);
+    }
+
     if let Ok(cwd) = env::current_dir() {
-        candidatos.push(cwd.join("bin").join("dbudll.dll"));
-        candidatos.push(cwd.join("dbudll.dll"));
+        candidatos.push(cwd.join("bin").join("qdbudll.dll"));
+        candidatos.push(cwd.join("qdbudll.dll"));
     }
 
     for c in &candidatos {
@@ -161,12 +234,12 @@ fn achar_dll() -> PathBuf {
         }
     }
 
-    candidatos.into_iter().next().unwrap_or_else(|| PathBuf::from("dbudll.dll"))
+    candidatos.into_iter().next().unwrap_or_else(|| PathBuf::from("qdbudll.dll"))
 }
 
 #[tauri::command]
 fn status(estado: State<Estado>) -> StatusDll {
-    log("[dbu] status() chamado pelo frontend");
+    log("[qdbu] status() chamado pelo frontend");
     let hb = estado.hb.lock().unwrap();
     let erro = estado.erro_carga.lock().unwrap().clone();
 
@@ -203,7 +276,7 @@ fn executar(estado: State<Estado>, func: String, arg: String) -> Result<Resultad
             .lock()
             .unwrap()
             .clone()
-            .unwrap_or_else(|| "dbudll.dll nao carregada".to_string())
+            .unwrap_or_else(|| "qdbudll.dll nao carregada".to_string())
     })?;
 
     let t0 = Instant::now();
@@ -260,7 +333,7 @@ fn rpc_sync(
             .lock()
             .unwrap()
             .clone()
-            .unwrap_or_else(|| "dbudll.dll nao carregada".to_string())
+            .unwrap_or_else(|| "qdbudll.dll nao carregada".to_string())
     })?;
 
     let id = format!("r{}", PROXIMO_ID.fetch_add(1, Ordering::Relaxed));
@@ -301,7 +374,7 @@ fn rpc_sync(
 
 /// Estado de uma tarefa longa. `None` quando nao ha nenhuma.
 #[tauri::command]
-async fn andamento(estado: State<'_, Estado>) -> Result<Option<dbudll::Andamento>, String> {
+async fn andamento(estado: State<'_, Estado>) -> Result<Option<qdbudll::Andamento>, String> {
     // Clona o Arc e SOLTA o lock antes de ler: segurar o Mutex durante a
     // leitura reintroduziria a espera que este caminho existe para evitar.
     let p = estado.progresso.lock().unwrap().clone();
@@ -395,7 +468,7 @@ fn selftest() -> i32 {
     saida(&format!(
         "app   : {}",
         if cfg!(target_pointer_width = "32") {
-            "32-bit (i686) - OK para dbudll.dll"
+            "32-bit (i686) - OK para qdbudll.dll"
         } else {
             "64-bit - INCOMPATIVEL, LoadLibrary vai falhar com erro 193"
         }
@@ -417,8 +490,8 @@ fn selftest() -> i32 {
     // --- B0.2/B0.3: a ponte responde ---
     t.igual(
         "meta: Api_Ping ecoa o argumento",
-        hb.exec("Api_Meta_Ping", "dbu").as_deref(),
-        Ok("pong:dbu"),
+        hb.exec("Api_Meta_Ping", "qdbu").as_deref(),
+        Ok("pong:qdbu"),
     );
     t.contem(
         "meta: Api_Version identifica o produto",
@@ -429,6 +502,56 @@ fn selftest() -> i32 {
         "meta: funcao inexistente vira recusa, nao crash",
         hb.exec("Nao_Existe", ""),
         "ERR:",
+    );
+
+    // --- a via crua tem lista fechada (dispatch.prg, PermitidasNaViaCrua) ---
+    //
+    // Sem estas asercoes a guarda e removivel sem que nada falhe -- foi
+    // exatamente esse o apontamento da revisao. Cada caso cobre um motivo de a
+    // lista existir, e o ultimo prova que ela nao fechou demais.
+    //
+    // A ordem importa: `__QUIT` vem PRIMEIRO, e se ele passasse o processo
+    // morreria aqui. As asercoes seguintes so chegam a rodar porque ele foi
+    // recusado -- o teste de "nao derrubou" e o proprio selftest terminar.
+    t.contem(
+        "via crua: __QUIT e recusado (derrubaria o processo sem log)",
+        hb.exec("__QUIT", ""),
+        "ERR:funcao nao liberada",
+    );
+    t.contem(
+        "via crua: OS() e recusado (vazamento de ambiente)",
+        hb.exec("OS", ""),
+        "ERR:funcao nao liberada",
+    );
+    // Esta e a que o prefixo `API_` deixaria passar: existe, comeca com `Api_`,
+    // ESCREVE ARQUIVO, e esta via nao passa por LogOp(). E o caso que prova por
+    // que a guarda e uma lista e nao um prefixo.
+    t.contem(
+        "via crua: Api_Meta_Copyfile e recusado (escreve em disco, sem log)",
+        hb.exec("Api_Meta_Copyfile", "{}"),
+        "ERR:funcao nao liberada",
+    );
+    // Controle no nome: a mensagem de recusa vai para tela e para log, e esta
+    // via nao passa por ConvertDeep(). Sanea() apara antes de ecoar. Byte
+    // INVALIDO em UTF-8 nao cabe num &str -- esse caso so o cliente C consegue
+    // montar, e esta em tests/testload.c.
+    let sujo = format!("Api_{}{}Zzz", char::from(1u8), char::from(127u8));
+    t.contem(
+        "via crua: nome com caractere de controle volta saneado",
+        hb.exec(&sujo, ""),
+        "ERR:funcao nao liberada",
+    );
+    t.ok(
+        "via crua: o eco da recusa nao carrega o controle de volta",
+        !hb.exec(&sujo, "").unwrap_or_default().contains(char::from(1u8)),
+        "o caractere 0x01 atravessou Sanea()",
+    );
+    // A lista nao pode ter fechado demais: as tres liberadas continuam vivas.
+    // (Ping e Version ja foram exercitadas acima; falta Echo.)
+    t.igual(
+        "via crua: Api_Meta_Echo continua liberado",
+        hb.exec("Api_Meta_Echo", "ok").as_deref(),
+        Ok("ok"),
     );
 
     // --- protocolo de buffer: a resposta cresce alem do buffer inicial ---
@@ -449,6 +572,65 @@ fn selftest() -> i32 {
         hb.exec("Api_Meta_Echo", acentos).as_deref(),
         Ok(acentos),
     );
+
+
+    // --- renomeacao para QDBU: a config antiga tem de sobreviver ---
+    //
+    // O que esta em jogo nao e o nome da pasta: e o LOG DE ALTERACOES. Ele
+    // responde "o que este programa fez com o meu arquivo?", e uma resposta que
+    // some porque o produto trocou de nome e pior do que nunca ter existido --
+    // ninguem procura o que nao sabe que sumiu.
+    //
+    // Roda num diretorio descartavel dentro de `.run/`, e nao sobre a raiz de
+    // verdade: a migracao real acontece UMA vez, entao um teste sobre ela
+    // passaria na primeira execucao e ficaria inerte depois.
+    {
+        let campo = dir_run().join("selftest_migra");
+        let _ = std::fs::remove_dir_all(&campo);
+
+        // 1. nada a migrar (instalacao nova)
+        let _ = std::fs::create_dir_all(&campo);
+        t.ok(
+            "migracao: sem .dbu, nao faz nada",
+            migra_config_em(&campo) == Migracao::NadaAMigrar,
+            "esperava NadaAMigrar num diretorio vazio",
+        );
+
+        // 2. o caso real: .dbu com conteudo, .qdbu ausente
+        let antiga = campo.join(".dbu");
+        let _ = std::fs::create_dir_all(antiga.join("log"));
+        let _ = std::fs::write(antiga.join("log").join("20260903.jsonl"), b"{\"m\":\"bulk.pack\"}\n");
+        let _ = std::fs::write(antiga.join("connections.json"), b"[]");
+
+        let r = migra_config_em(&campo);
+        let nova = campo.join(".qdbu");
+        t.ok(
+            "migracao: .dbu vira .qdbu",
+            r == Migracao::Migrou && nova.is_dir() && !antiga.exists(),
+            &format!("resultado {r:?}, .qdbu={} .dbu={}", nova.is_dir(), antiga.exists()),
+        );
+        // O que importa nao e a pasta ter sido criada, e o CONTEUDO ter chegado.
+        let linha = std::fs::read_to_string(nova.join("log").join("20260903.jsonl")).unwrap_or_default();
+        t.ok(
+            "migracao: o log de alteracoes atravessa intacto",
+            linha.contains("bulk.pack") && nova.join("connections.json").is_file(),
+            &format!("log lido: {linha:?}"),
+        );
+
+        // 3. idempotente: rodar de novo nao mexe no que ja esta la
+        let _ = std::fs::create_dir_all(campo.join(".dbu"));
+        let _ = std::fs::write(campo.join(".dbu").join("intruso.json"), b"nao devia vencer");
+        let r2 = migra_config_em(&campo);
+        let ainda = std::fs::read_to_string(nova.join("log").join("20260903.jsonl")).unwrap_or_default();
+        t.ok(
+            "migracao: com .qdbu ja existente, nao sobrescreve",
+            r2 == Migracao::JaExistia && ainda.contains("bulk.pack")
+                && !nova.join("intruso.json").exists(),
+            &format!("resultado {r2:?}"),
+        );
+
+        let _ = std::fs::remove_dir_all(&campo);
+    }
 
     // --- B15.1: o log registra o que foi feito, inclusive o recusado ---
     //
@@ -581,9 +763,12 @@ fn selftest() -> i32 {
     // Roda contra uma fixture do proprio repositorio, e nao contra J:\bases: o
     // selftest precisa funcionar em maquina limpa, e a base de homologacao nao
     // vai junto (nem poderia).
-    let fixture = achar_dll()
-        .parent()
-        .and_then(|p| p.parent())
+    // O caminho sai de `raiz_projeto()`, e NAO de `achar_dll()`. Derivar da DLL
+    // funcionava enquanto ela morava sempre em `<raiz>/bin/`; com o `resources`
+    // do tauri.conf.json a DLL escolhida pode ser a copia em `target/...`, e o
+    // caminho derivado dela nao existe -- o teste passava a ser PULADO em
+    // silencio, que e pior do que falhar.
+    let fixture = raiz_projeto()
         .map(|raiz| raiz.join("tests").join("fixtures").join("TIPOS.DBF"))
         .filter(|p| p.exists());
 
@@ -662,6 +847,868 @@ fn selftest() -> i32 {
                 }
             }
 
+
+        // --- R5: o PACK tem de deixar o INDICE valido, nao so o cursor ---
+        //
+        // O rebindtest acima prova que ordem, filtro e cursor voltam. Nao provava
+        // o que o indice PASSOU A DESCREVER -- e era ali que estava o defeito:
+        // `__dbPack()` rodava numa area exclusiva aberta sem ordem nenhuma, entao
+        // nao reconstruia nada, e `Religar()` reanexava um .NTX do arquivo de
+        // antes. Medido em 03/09/2026: 7 registros com 1 marcado viravam 6 na
+        // ordem fisica e 3 na ordem indexada. Nenhum erro em lugar nenhum.
+        //
+        // Roda sobre uma COPIA em `.run/`: o PACK e destrutivo e a fixture tem de
+        // sobreviver para a proxima execucao. A contagem sai de `data.page` com
+        // uma pagina grande o bastante para caber o arquivo inteiro -- e a
+        // travessia respeita a ordem ativa, que e exatamente o que esta sob teste.
+        let copia = dir_run().join("selftest_pack.dbf");
+        let copia_s = copia.to_string_lossy().replace('\\', "/");
+        let origem_s = dbf.to_string_lossy().replace('\\', "/");
+        let memo_orig = dbf.with_extension("dbt");
+        let memo_copia = copia.with_extension("dbt");
+
+        let _ = std::fs::remove_file(&copia);
+        let _ = std::fs::remove_file(&memo_copia);
+        let copiou = rpc_bruto(
+            &hb,
+            "meta.copyfile",
+            // `shared`: o bloco TA acima ainda tem a fixture aberta nesta mesma
+            // VM, e a leitura exclusiva do copiador esbarraria nela.
+            &format!(r#"{{"source":"{origem_s}","dest":"{copia_s}","shared":true}}"#),
+        )
+        .map(|r| r.contains("\"ok\":true"))
+        .unwrap_or(false);
+        // O memo anda junto: sem ele o arquivo abre, mas ler o campo M falha.
+        if memo_orig.exists() {
+            let _ = std::fs::copy(&memo_orig, &memo_copia);
+        }
+
+        if copiou {
+            let h2 = rpc_bruto(&hb, "file.open", &format!(r#"{{"path":"{copia_s}"}}"#))
+                .ok()
+                .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                .as_ref()
+                .and_then(|v| v.pointer("/result/h"))
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+
+            if let Some(h2) = h2 {
+                let ntx = dir_run().join("selftest_pack.ntx");
+                let ntx_s = ntx.to_string_lossy().replace('\\', "/");
+                let _ = std::fs::remove_file(&ntx);
+
+                let criou = rpc_bruto(
+                    &hb,
+                    "index.create",
+                    &format!(r#"{{"h":"{h2}","key":"TXT","path":"{ntx_s}"}}"#),
+                )
+                .map(|r| r.contains("\"ok\":true"))
+                .unwrap_or(false);
+
+                // `n` conta as linhas que a travessia devolve -- pela ordem ativa.
+                // `anchor`/`count`, e nao `from`/`size`: Api_Data_Page le esses
+                // dois nomes e ignora quaisquer outros -- com os errados a
+                // travessia caia no padrao (100 linhas) sem dizer nada, e um
+                // indice que perdesse registros depois da centesima passaria
+                // batido pela afirmacao que existe justamente para pega-lo.
+                let conta = |h: &str| -> usize {
+                    rpc_bruto(
+                        &hb,
+                        "data.page",
+                        &format!(r#"{{"h":"{h}","anchor":"top","count":500}}"#),
+                    )
+                    .ok()
+                    .map(|r| r.matches("\"recno\"").count())
+                    .unwrap_or(0)
+                };
+
+                // O TESTE MARCA O PROPRIO REGISTRO, em vez de contar com a
+                // fixture ter um. Depender do estado do arquivo em disco fez
+                // este teste falhar por motivo errado assim que um PACK feito
+                // pela UI consumiu o unico registro marcado da fixture: dizia
+                // "removed:0" e acusava a correcao, que estava intacta. Marcar
+                // aqui deixa o teste dizer respeito so ao que ele afirma.
+                //
+                // O escopo e `all` com um `for` sobre o RecNo, e nao
+                // `next n:1`: `conta()` usa `data.page`, que MOVE O PONTEIRO e
+                // para depois da ultima linha (GUIA-DO-PROJETO.md, e o mesmo tropeco da
+                // primeira versao do rebindtest). Um `next` logo apos a
+                // contagem parte do EOF e nao marca nada -- foi o que
+                // aconteceu, e o sintoma foi de novo "removed:0".
+                let antes = conta(&h2);
+                let marcou = rpc_bruto(
+                    &hb,
+                    "mass.delete",
+                    &format!(r#"{{"h":"{h2}","scope":{{"mode":"all","for":"RecNo()==1"}}}}"#),
+                )
+                .map(|r| r.contains("\"ok\":true"))
+                .unwrap_or(false);
+                let pack = rpc_bruto(&hb, "bulk.pack", &format!(r#"{{"h":"{h2}","backup":false}}"#));
+                let depois = conta(&h2);
+
+                t.ok(
+                    "R5: marcar um registro para exclusao antes do PACK",
+                    marcou,
+                    "mass.delete recusou sobre a copia",
+                );
+
+                t.ok(
+                    "R5: o indice sobrevive ao PACK (criar o indice)",
+                    criou,
+                    "index.create recusou sobre a copia",
+                );
+                // Quantos o PACK dis que tirou -- e nao um numero fixo.
+                //
+                // `data.page` DEVOLVE os marcados (a grade os mostra riscados),
+                // entao `antes` conta o arquivo inteiro. Fixar "removed:1"
+                // amarrava o teste a fixture nao trazer nenhum marcado de
+                // fabrica: com o marcado que ela ja tem, o PACK tira DOIS e a
+                // conta batia errado. O teste voltava a falhar por motivo
+                // errado -- a terceira vez que este mesmo teste dependeu de
+                // estado que nao e dele.
+                let removidos = pack
+                    .as_deref()
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(r).ok())
+                    .and_then(|v| v.pointer("/result/removed").and_then(|n| n.as_u64()))
+                    .unwrap_or(0) as usize;
+
+                t.ok(
+                    "R5: PACK removeu pelo menos o registro marcado",
+                    removidos >= 1,
+                    &format!("esperava removed >= 1 em {pack:?}"),
+                );
+                // O nucleo: a travessia INDEXADA depois do PACK tem de ver todos
+                // os registros que sobraram -- nem um a menos. Antes da correcao
+                // dava 3 de 6, porque o .NTX reanexado descrevia o arquivo velho.
+                t.ok(
+                    "R5: a ordem indexada ve todos os registros depois do PACK",
+                    // `saturating_sub` como na mensagem: `antes` vem de
+                    // `conta()`, que devolve 0 quando o rpc falha. Com a
+                    // subtracao crua um data.page recusado fazia o --selftest
+                    // ABORTAR ("attempt to subtract with overflow") em vez de
+                    // imprimir qual afirmacao caiu.
+                    removidos >= 1 && depois == antes.saturating_sub(removidos) && depois > 0,
+                    &format!("antes {antes}, removidos {removidos}, depois {depois} (esperado {})",
+                             antes.saturating_sub(removidos)),
+                );
+
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h2}"}}"#));
+                let _ = std::fs::remove_file(&ntx);
+            } else {
+                t.ok("R5: o indice sobrevive ao PACK", false, "file.open da copia falhou");
+            }
+            let _ = std::fs::remove_file(&copia);
+            let _ = std::fs::remove_file(&memo_copia);
+
+        // --- T8: escrita registro a registro ---
+        //
+        // Sobre uma COPIA da fixture: T8 grava de verdade, e a fixture tem de
+        // sobreviver para a proxima execucao. Mesma razao (e mesmo molde) do
+        // bloco R5 acima.
+        //
+        // O que estas asercoes protegem nao e "gravou": e o CONTRARIO --
+        // que valor que nao cabe no tipo seja RECUSADO em vez de coagido. Um
+        // update que aceita tudo passa em qualquer teste de "gravou" e corrompe
+        // o arquivo do cliente em silencio, que e exatamente o modo de falha
+        // que o filtro guiado ja teve uma vez.
+        let ed = dir_run().join("selftest_t8.dbf");
+        let ed_s = ed.to_string_lossy().replace('\\', "/");
+        let ed_memo = ed.with_extension("dbt");
+        let _ = std::fs::remove_file(&ed);
+        let _ = std::fs::remove_file(&ed_memo);
+
+        let copiou = rpc_bruto(
+            &hb,
+            "meta.copyfile",
+            &format!(r#"{{"source":"{origem_s}","dest":"{ed_s}","shared":true}}"#),
+        )
+        .map(|r| r.contains("\"ok\":true"))
+        .unwrap_or(false);
+        if memo_orig.exists() {
+            let _ = std::fs::copy(&memo_orig, &ed_memo);
+        }
+
+        if copiou {
+            let h3 = rpc_bruto(&hb, "file.open", &format!(r#"{{"path":"{ed_s}"}}"#))
+                .ok()
+                .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                .as_ref()
+                .and_then(|v| v.pointer("/result/h"))
+                .and_then(|v| v.as_str())
+                .map(str::to_string);
+
+            if let Some(h3) = h3 {
+                let up = |corpo: String| rpc_bruto(&hb, "data.update", &corpo);
+
+                // --- o caminho feliz, e a prova de que a resposta traz o FATO ---
+                let r = up(format!(
+                    r#"{{"h":"{h3}","recno":1,"values":{{"TXT":"EDITADO","INT":77}}}}"#
+                ));
+                t.ok(
+                    "T8: update grava e devolve a linha relida do arquivo",
+                    r.as_deref()
+                        .map(|s| s.contains("\"ok\":true") && s.contains("EDITADO") && s.contains("77"))
+                        .unwrap_or(false),
+                    &format!("{r:?}"),
+                );
+
+                // --- as recusas. Cada uma e um jeito conhecido de corromper ---
+                //
+                // TXT e C(40): 60 caracteres seriam truncados pelo RDD sem dizer
+                // nada, e os 20 perdidos so apareceriam no dia em que alguem
+                // conferisse o cadastro.
+                let r = up(format!(
+                    r#"{{"h":"{h3}","values":{{"TXT":"{}"}},"recno":1}}"#,
+                    "X".repeat(60)
+                ));
+                t.ok(
+                    "T8: texto maior que o campo e RECUSADO, nao truncado",
+                    r.as_deref().map(|s| s.contains("ERROR_CELL_TOO_LONG")).unwrap_or(false),
+                    &format!("{r:?}"),
+                );
+
+                // `Val("abc")` e 0, e zero e um valor plausivel: sem a checagem
+                // de caracteres isto gravaria zero e ninguem notaria.
+                let r = up(format!(r#"{{"h":"{h3}","recno":1,"values":{{"INT":"abc"}}}}"#));
+                t.ok(
+                    "T8: texto nao numerico em campo N e RECUSADO, nao vira zero",
+                    r.as_deref().map(|s| s.contains("ERROR_CELL_NOT_NUMBER")).unwrap_or(false),
+                    &format!("{r:?}"),
+                );
+
+                // C2Date devolve data VAZIA para o que nao entende. Numa celula
+                // isso apagaria a data que estava la.
+                let r = up(format!(r#"{{"h":"{h3}","recno":1,"values":{{"DATA":"31/02/2026"}}}}"#));
+                t.ok(
+                    "T8: data impossivel e RECUSADA, nao vira data vazia",
+                    r.as_deref().map(|s| s.contains("ERROR_CELL_NOT_DATE")).unwrap_or(false),
+                    &format!("{r:?}"),
+                );
+
+                let r = up(format!(r#"{{"h":"{h3}","recno":1,"values":{{"NAO_EXISTE":"x"}}}}"#));
+                t.ok(
+                    "T8: campo inexistente e recusado",
+                    r.as_deref().map(|s| s.contains("ERROR_FIELD_NOT_FOUND")).unwrap_or(false),
+                    &format!("{r:?}"),
+                );
+
+                let r = up(format!(r#"{{"h":"{h3}","recno":99999,"values":{{"TXT":"x"}}}}"#));
+                t.ok(
+                    "T8: registro fora da faixa e recusado (dbGoTo iria para EOF)",
+                    r.as_deref().map(|s| s.contains("ERROR_RECORD_OUT_OF_RANGE")).unwrap_or(false),
+                    &format!("{r:?}"),
+                );
+
+                // --- TUDO OU NADA ---
+                //
+                // A asercao que justifica validar antes de gravar: com um campo
+                // bom e um ruim no mesmo lote, o bom NAO pode ter sido gravado.
+                let _ = up(format!(r#"{{"h":"{h3}","recno":2,"values":{{"TXT":"ANTES"}}}}"#));
+                let r = up(format!(
+                    r#"{{"h":"{h3}","recno":2,"values":{{"TXT":"DEPOIS","INT":"lixo"}}}}"#
+                ));
+                let leu = rpc_bruto(&hb, "data.page", &format!(r#"{{"h":"{h3}","anchor":2,"count":1}}"#));
+                t.ok(
+                    "T8: lote com um campo invalido nao grava NENHUM",
+                    r.as_deref().map(|s| s.contains("\"ok\":false")).unwrap_or(false)
+                        && leu.as_deref().map(|s| s.contains("ANTES") && !s.contains("DEPOIS")).unwrap_or(false),
+                    &format!("update {r:?} / leitura {leu:?}"),
+                );
+
+                // --- append ---
+                let antes_n = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h3}"}}"#))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/records").and_then(|n| n.as_u64()))
+                    .unwrap_or(0);
+                let r = rpc_bruto(&hb, "data.append", &format!(r#"{{"h":"{h3}","values":{{"TXT":"NOVO"}}}}"#));
+                let depois_n = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h3}"}}"#))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/records").and_then(|n| n.as_u64()))
+                    .unwrap_or(0);
+                t.ok(
+                    "T8: append cria o registro e o arquivo cresce em um",
+                    r.as_deref().map(|s| s.contains("\"ok\":true") && s.contains("NOVO")).unwrap_or(false)
+                        && depois_n == antes_n + 1,
+                    &format!("antes {antes_n}, depois {depois_n}, {r:?}"),
+                );
+
+                // --- delete / recall: MARCA, e por isso andam em par ---
+                let novo_rec = depois_n;
+                let rd = rpc_bruto(&hb, "data.delete", &format!(r#"{{"h":"{h3}","recno":{novo_rec}}}"#));
+                t.ok(
+                    "T8: delete marca o registro",
+                    rd.as_deref().map(|s| s.contains("\"deleted\":true")).unwrap_or(false),
+                    &format!("{rd:?}"),
+                );
+                let rr = rpc_bruto(&hb, "data.recall", &format!(r#"{{"h":"{h3}","recno":{novo_rec}}}"#));
+                t.ok(
+                    "T8: recall desmarca -- o registro nunca saiu do arquivo",
+                    rr.as_deref().map(|s| s.contains("\"deleted\":false")).unwrap_or(false),
+                    &format!("{rr:?}"),
+                );
+
+                // --- memo: grava por data.update, le pelo raw de data.record ---
+                //
+                // Nao ha `data.memo`: saiu em 04/09/2026, quando o data.record
+                // passou a trazer o texto do memo em `raw` (R8). Um metodo que
+                // ninguem chama e um caminho que envelhece sem ninguem ver.
+                let rm = rpc_bruto(&hb, "data.update",
+                    &format!(r#"{{"h":"{h3}","recno":1,"values":{{"OBS":"memo escrito pela T8"}}}}"#));
+                let rl = rpc_bruto(&hb, "data.record",
+                    &format!(r#"{{"h":"{h3}","recno":1}}"#));
+                t.ok(
+                    "T8: memo grava por data.update e volta no raw de data.record",
+                    rm.as_deref().map(|s| s.contains("\"ok\":true")).unwrap_or(false)
+                        && rl.as_deref().map(|s| s.contains("\"OBS\":\"memo escrito pela T8\"")).unwrap_or(false),
+                    &format!("grava {rm:?} / le {rl:?}"),
+                );
+                let rn = rpc_bruto(&hb, "data.memo",
+                    &format!(r#"{{"h":"{h3}","recno":1,"field":"OBS"}}"#));
+                t.ok(
+                    "T8: data.memo NAO existe mais (metodo desconhecido)",
+                    rn.as_deref().map(|s| s.contains("ERROR_UNKNOWN_METHOD")).unwrap_or(false),
+                    &format!("{rn:?}"),
+                );
+
+                // --- o log ---
+                //
+                // A regra do projeto e que operacao que escreve entra no log no
+                // mesmo commit em que nasce. Aqui ela vira asercao: a leitura de
+                // memo NAO pode aparecer, e as escritas TEM de aparecer.
+                // `days` e uma lista de objetos ({dia, bytes, arquivo}), nao de
+                // strings -- e o dia mais recente vem primeiro.
+                let hoje = rpc_bruto(&hb, "log.days", "{}")
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/days/0/dia").and_then(|d| d.as_str().map(str::to_string)))
+                    .unwrap_or_default();
+                // Filtra pelo nome da copia: o log do dia tem tudo o que este
+                // selftest fez, e sem o filtro as linhas da T8 poderiam ficar
+                // fora do teto de `max`.
+                let linhas = rpc_bruto(
+                    &hb,
+                    "log.read",
+                    &format!(r#"{{"day":"{hoje}","filter":"selftest_t8","max":500}}"#),
+                )
+                .unwrap_or_default();
+                t.ok(
+                    "T8: as quatro escritas entraram no log de alteracoes",
+                    linhas.contains("data.update")
+                        && linhas.contains("data.append")
+                        && linhas.contains("data.delete")
+                        && linhas.contains("data.recall"),
+                    "faltou alguma das quatro no log do dia",
+                );
+                t.ok(
+                    "T8: ler um registro (data.record) NAO gera linha de log",
+                    !linhas.contains("data.record"),
+                    "data.record apareceu no log -- ele so le, nao muda bytes",
+                );
+
+                // --- T9: o que o formulario assume de `data.page` ---
+                //
+                // O formulario navega por `data.page` com `count: 1` e `fields`
+                // explicito. Duas propriedades sustentam isso, e a segunda me
+                // surpreceu ao testar a UI -- por isso viram asercao aqui, e nao
+                // ficam so no comentario de navegarForm().
+                let uma = rpc_bruto(
+                    &hb,
+                    "data.page",
+                    &format!(r#"{{"h":"{h3}","anchor":1,"count":1,"fields":["TXT","OBS"]}}"#),
+                );
+                t.ok(
+                    "T9: `fields` explicito traz os campos pedidos, fora da selecao do handle",
+                    uma.as_deref()
+                        .map(|s| s.contains("\"TXT\"") && s.contains("\"OBS\""))
+                        .unwrap_or(false),
+                    &format!("{uma:?}"),
+                );
+
+                // NO FIM DO ARQUIVO, `offset: 1` DEVOLVE O PROPRIO ULTIMO
+                // REGISTRO com `eof: true` -- `dbSkip(1)` em EOF nao sai do
+                // lugar. Quem detectar o limite por `rows.length == 0` nunca vai
+                // detecta-lo: foi assim que o botao "proximo" do formulario
+                // ficou mudo no fim do arquivo. O que denuncia o limite e o
+                // recno NAO TER MUDADO.
+                let total = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h3}"}}"#))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/records").and_then(|n| n.as_u64()))
+                    .unwrap_or(0);
+                let alem = rpc_bruto(
+                    &hb,
+                    "data.page",
+                    &format!(r#"{{"h":"{h3}","anchor":{total},"offset":1,"count":1}}"#),
+                );
+                let mesmo = alem
+                    .as_deref()
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(r).ok())
+                    .and_then(|v| v.pointer("/result/rows/0/recno").and_then(|n| n.as_u64()));
+                t.ok(
+                    "T9: passar do ultimo devolve o MESMO registro, nao uma pagina vazia",
+                    mesmo == Some(total),
+                    &format!("ultimo {total}, voltou {mesmo:?} -- {alem:?}"),
+                );
+
+
+                // --- R8: o que se edita tem de ser o que esta no disco ---
+                //
+                // docs/10-integridade.md, R8. As oito asercoes abaixo sao o
+                // contrato do `expect`; cada uma fecha um risco listado no
+                // plano. Rodam sobre a mesma copia descartavel da T8 (h3).
+                let rec = |n: u64| {
+                    rpc_bruto(&hb, "data.record", &format!(r#"{{"h":"{h3}","recno":{n}}}"#))
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                };
+                let raw_de = |v: &serde_json::Value, campo: &str| -> String {
+                    v.pointer(&format!("/result/raw/{campo}"))
+                        .and_then(|x| x.as_str())
+                        .unwrap_or("")
+                        .to_string()
+                };
+
+                // 1. data.record devolve row + raw e NAO move o ponteiro
+                let antes_ptr = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h3}"}}"#))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/recno").and_then(|n| n.as_u64()));
+                let r1 = rec(2);
+                let depois_ptr = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h3}"}}"#))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/recno").and_then(|n| n.as_u64()));
+                t.ok(
+                    "R8: data.record devolve row e raw, e deixa o ponteiro no registro lido",
+                    r1.as_ref().map(|v| v.pointer("/result/row/recno").is_some()
+                        && v.pointer("/result/raw/TXT").is_some()).unwrap_or(false)
+                        && depois_ptr == Some(2),
+                    &format!("ptr antes {antes_ptr:?} depois {depois_ptr:?}; {r1:?}"),
+                );
+
+                // 2. expect correto grava
+                let raw_txt = r1.as_ref().map(|v| raw_de(v, "TXT")).unwrap_or_default();
+                let r2 = rpc_bruto(&hb, "data.update", &format!(
+                    r#"{{"h":"{h3}","recno":2,"values":{{"TXT":"COM EXPECT"}},"expect":{{"TXT":{}}}}}"#,
+                    serde_json::to_string(&raw_txt).unwrap()
+                ));
+                t.ok(
+                    "R8: update com expect igual ao disco grava",
+                    r2.as_deref().map(|s| s.contains("\"ok\":true") && s.contains("COM EXPECT")).unwrap_or(false),
+                    &format!("{r2:?}"),
+                );
+
+                // 3. expect velho (o de antes da gravacao acima) e RECUSADO, com actual
+                let r3 = rpc_bruto(&hb, "data.update", &format!(
+                    r#"{{"h":"{h3}","recno":2,"values":{{"TXT":"NAO PODE"}},"expect":{{"TXT":{}}}}}"#,
+                    serde_json::to_string(&raw_txt).unwrap()
+                ));
+                let leu3 = rec(2).map(|v| v.pointer("/result/row/values/0").cloned()).flatten();
+                t.ok(
+                    "R8: expect desatualizado e recusado com ERROR_STALE_VALUE e o valor atual",
+                    r3.as_deref().map(|s| s.contains("ERROR_STALE_VALUE")
+                        && s.contains("\"actual\":\"COM EXPECT\"")).unwrap_or(false)
+                        && leu3 == Some(serde_json::json!("COM EXPECT")),
+                    &format!("{r3:?} / disco {leu3:?}"),
+                );
+
+                // 4. sem expect grava (compatibilidade: append em branco, adocao gradual)
+                let r4 = rpc_bruto(&hb, "data.update",
+                    &format!(r#"{{"h":"{h3}","recno":2,"values":{{"TXT":"SEM EXPECT"}}}}"#));
+                t.ok(
+                    "R8: update sem expect continua gravando",
+                    r4.as_deref().map(|s| s.contains("\"ok\":true")).unwrap_or(false),
+                    &format!("{r4:?}"),
+                );
+
+                // 5. raw DISTINGUE o que FieldGet achata: nunca-preenchido x zero x overflow
+                //
+                // E a razao de o expect ser bytes. Um registro novo nasce com
+                // espacos no campo N; gravar 0 muda os bytes e nao o valor lido.
+                let novo = rpc_bruto(&hb, "data.append", &format!(r#"{{"h":"{h3}"}}"#))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/recno").and_then(|n| n.as_u64()))
+                    .unwrap_or(0);
+                let raw_branco = rec(novo).map(|v| raw_de(&v, "INT")).unwrap_or_default();
+                let _ = rpc_bruto(&hb, "data.update",
+                    &format!(r#"{{"h":"{h3}","recno":{novo},"values":{{"INT":0}}}}"#));
+                let depois_zero = rec(novo);
+                let raw_zero = depois_zero.as_ref().map(|v| raw_de(v, "INT")).unwrap_or_default();
+                let valor_zero = depois_zero.as_ref()
+                    .and_then(|v| v.pointer("/result/row/values/4").cloned());
+                t.ok(
+                    "R8: raw distingue 'nunca preenchido' de 'zero' -- FieldGet nao",
+                    raw_branco.trim().is_empty() && raw_zero.trim() == "0" && raw_branco != raw_zero
+                        && valor_zero == Some(serde_json::json!(0)),
+                    &format!("branco {raw_branco:?} zero {raw_zero:?} valor {valor_zero:?}"),
+                );
+
+                // 6. memo: expect por TEXTO detecta mudanca dentro do mesmo bloco
+                let _ = rpc_bruto(&hb, "data.update",
+                    &format!(r#"{{"h":"{h3}","recno":1,"values":{{"OBS":"memo A"}}}}"#));
+                let raw_memo = rec(1).map(|v| raw_de(&v, "OBS")).unwrap_or_default();
+                let _ = rpc_bruto(&hb, "data.update",
+                    &format!(r#"{{"h":"{h3}","recno":1,"values":{{"OBS":"memo B"}}}}"#));
+                let r6 = rpc_bruto(&hb, "data.update", &format!(
+                    r#"{{"h":"{h3}","recno":1,"values":{{"OBS":"memo C"}},"expect":{{"OBS":{}}}}}"#,
+                    serde_json::to_string(&raw_memo).unwrap()
+                ));
+                t.ok(
+                    "R8: memo -- expect e o TEXTO (o registro so guarda o bloco), e detecta a troca",
+                    raw_memo == "memo A"
+                        && r6.as_deref().map(|s| s.contains("ERROR_STALE_VALUE")
+                            && s.contains("\"actual\":\"memo B\"")).unwrap_or(false),
+                    &format!("raw {raw_memo:?} / {r6:?}"),
+                );
+
+                // 7. os 256 bytes atravessam record -> expect -> comparacao
+                //
+                // Grava um C(40) com bytes 1..255 (0 fica de fora: e o terminador
+                // de string do RDD), le o raw, e usa esse raw como expect. Se um
+                // byte se perdesse no caminho, o expect nao bateria.
+                let todos: String = (1u8..=40).map(|b| char::from(b)).collect();
+                let _ = rpc_bruto(&hb, "data.update", &format!(
+                    r#"{{"h":"{h3}","recno":3,"values":{{"TXT":{}}}}}"#,
+                    serde_json::to_string(&todos).unwrap()
+                ));
+                let raw_bin = rec(3).map(|v| raw_de(&v, "TXT")).unwrap_or_default();
+                let r7 = rpc_bruto(&hb, "data.update", &format!(
+                    r#"{{"h":"{h3}","recno":3,"values":{{"TXT":"limpo"}},"expect":{{"TXT":{}}}}}"#,
+                    serde_json::to_string(&raw_bin).unwrap()
+                ));
+                t.ok(
+                    "R8: bytes de controle atravessam record -> expect e batem",
+                    raw_bin.len() == 40
+                        && r7.as_deref().map(|s| s.contains("\"ok\":true")).unwrap_or(false),
+                    &format!("raw len {} / {r7:?}", raw_bin.len()),
+                );
+
+                // 9. `fields` escolhe as colunas da row -- o formulario manda todas e
+                //    indexa a resposta pela propria lista. raw traz sempre TODOS.
+                let r9 = rpc_bruto(&hb, "data.record",
+                    &format!(r#"{{"h":"{h3}","recno":2,"fields":["INT","TXT"]}}"#))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let n_vals = r9.as_ref().and_then(|v| v.pointer("/result/row/values")
+                    .and_then(|a| a.as_array()).map(|a| a.len()));
+                let n_cols = r9.as_ref().and_then(|v| v.pointer("/result/cols")
+                    .and_then(|a| a.as_array()).map(|a| a.len()));
+                let n_raw = r9.as_ref().and_then(|v| v.pointer("/result/raw")
+                    .and_then(|o| o.as_object()).map(|o| o.len()));
+                let u9 = rpc_bruto(&hb, "data.update",
+                    &format!(r#"{{"h":"{h3}","recno":2,"values":{{"TXT":"FIELDS"}},"fields":["TXT"]}}"#))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let u9_vals = u9.as_ref().and_then(|v| v.pointer("/result/row/values")
+                    .and_then(|a| a.as_array()).cloned());
+                t.ok(
+                    "R8: `fields` escolhe as colunas da row (record e update); raw traz todos",
+                    n_vals == Some(2) && n_cols == Some(2) && n_raw.map(|n| n > 2).unwrap_or(false)
+                        && u9_vals == Some(vec![serde_json::json!("FIELDS")]),
+                    &format!("vals {n_vals:?} cols {n_cols:?} raw {n_raw:?} update {u9_vals:?}"),
+                );
+
+                // 10. expect em delete/recall: quem exclui decide olhando a
+                //     linha; se ela mudou, a marca e recusada do mesmo jeito.
+                let raw_del = rec(2).map(|v| raw_de(&v, "TXT")).unwrap_or_default();
+                let _ = rpc_bruto(&hb, "data.update",
+                    &format!(r#"{{"h":"{h3}","recno":2,"values":{{"TXT":"MUDOU ANTES DO DELETE"}}}}"#));
+                let d_velho = rpc_bruto(&hb, "data.delete", &format!(
+                    r#"{{"h":"{h3}","recno":2,"expect":{{"TXT":{}}}}}"#,
+                    serde_json::to_string(&raw_del).unwrap()
+                ));
+                let ainda = rec(2).and_then(|v| v.pointer("/result/row/deleted").and_then(|b| b.as_bool()));
+                t.ok(
+                    "R8: delete com expect desatualizado e RECUSADO e nao marca",
+                    d_velho.as_deref().map(|s| s.contains("ERROR_STALE_VALUE")).unwrap_or(false)
+                        && ainda == Some(false),
+                    &format!("{d_velho:?} / deleted {ainda:?}"),
+                );
+                let raw_del2 = rec(2).map(|v| raw_de(&v, "TXT")).unwrap_or_default();
+                let d_novo = rpc_bruto(&hb, "data.delete", &format!(
+                    r#"{{"h":"{h3}","recno":2,"expect":{{"TXT":{}}}}}"#,
+                    serde_json::to_string(&raw_del2).unwrap()
+                ));
+                let marcado = rec(2).and_then(|v| v.pointer("/result/row/deleted").and_then(|b| b.as_bool()));
+                t.ok(
+                    "R8: delete com expect atual marca",
+                    d_novo.as_deref().map(|s| s.contains("\"ok\":true")).unwrap_or(false)
+                        && marcado == Some(true),
+                    &format!("{d_novo:?} / deleted {marcado:?}"),
+                );
+                let _ = rpc_bruto(&hb, "data.update",
+                    &format!(r#"{{"h":"{h3}","recno":2,"values":{{"TXT":"MUDOU ANTES DO RECALL"}}}}"#));
+                let r_velho = rpc_bruto(&hb, "data.recall", &format!(
+                    r#"{{"h":"{h3}","recno":2,"expect":{{"TXT":{}}}}}"#,
+                    serde_json::to_string(&raw_del2).unwrap()
+                ));
+                let segue = rec(2).and_then(|v| v.pointer("/result/row/deleted").and_then(|b| b.as_bool()));
+                t.ok(
+                    "R8: recall com expect desatualizado e RECUSADO e nao desmarca",
+                    r_velho.as_deref().map(|s| s.contains("ERROR_STALE_VALUE")).unwrap_or(false)
+                        && segue == Some(true),
+                    &format!("{r_velho:?} / deleted {segue:?}"),
+                );
+                let raw_rec = rec(2).map(|v| raw_de(&v, "TXT")).unwrap_or_default();
+                let r_novo = rpc_bruto(&hb, "data.recall", &format!(
+                    r#"{{"h":"{h3}","recno":2,"expect":{{"TXT":{}}}}}"#,
+                    serde_json::to_string(&raw_rec).unwrap()
+                ));
+                let desmarcado = rec(2).and_then(|v| v.pointer("/result/row/deleted").and_then(|b| b.as_bool()));
+                t.ok(
+                    "R8: recall com expect atual desmarca",
+                    r_novo.as_deref().map(|s| s.contains("\"ok\":true")).unwrap_or(false)
+                        && desmarcado == Some(false),
+                    &format!("{r_novo:?} / deleted {desmarcado:?}"),
+                );
+
+                // 8. data.record nao entra no log (so le)
+                let linhas8 = rpc_bruto(&hb, "log.read",
+                    &format!(r#"{{"day":"{hoje}","filter":"selftest_t8","max":500}}"#)).unwrap_or_default();
+                t.ok(
+                    "R8: data.record NAO gera linha de log -- so le",
+                    !linhas8.contains("data.record"),
+                    "data.record apareceu no log",
+                );
+
+                // --- B3: codepage por arquivo ---
+                //
+                // A lente com que a ponte le/grava os bytes de UM DBF, sem tocar
+                // no disco. A prova e um byte que muda de significado entre
+                // codepages: "e" agudo e 0x82 em CP850 e 0xE9 em CP1252. Gravado
+                // sob PT850, relido sob outra codepage, tem de mudar de glifo --
+                // e voltar ao original ao restaurar a lente.
+
+                // 1. meta.codepages lista o que linkou (o debug mostra a lista)
+                let cps = rpc_bruto(&hb, "meta.codepages", "{}")
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let ids: Vec<String> = cps.as_ref()
+                    .and_then(|v| v.pointer("/result/codepages").and_then(|a| a.as_array()))
+                    .map(|a| a.iter().filter_map(|c| c.pointer("/id").and_then(|x| x.as_str()).map(str::to_string)).collect())
+                    .unwrap_or_default();
+                t.ok(
+                    "B3: meta.codepages lista as disponiveis, com PT850 e default PT850",
+                    ids.iter().any(|x| x == "PT850") && ids.iter().any(|x| x == "ESWIN")
+                        && cps.as_ref().and_then(|v| v.pointer("/result/default").and_then(|d| d.as_str())) == Some("PT850"),
+                    &format!("ids={ids:?}"),
+                );
+
+                // 2. grava "cafe" (com e agudo) sob PT850 e le de volta igual
+                let _ = rpc_bruto(&hb, "data.update",
+                    &format!(r#"{{"h":"{h3}","recno":1,"values":{{"TXT":"caf\u00e9"}}}}"#));
+                let le = |h: &str| -> String {
+                    rpc_bruto(&hb, "data.record", &format!(r#"{{"h":"{h}","recno":1}}"#))
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                        .and_then(|v| v.pointer("/result/row/values/0").and_then(|x| x.as_str()).map(str::to_string))
+                        .unwrap_or_default()
+                };
+                let sob_850 = le(&h3);
+                t.ok(
+                    "B3: grava e le sob PT850 -- round-trip do acento",
+                    sob_850 == "caf\u{e9}",
+                    &format!("leu {sob_850:?}"),
+                );
+
+                // 3. troca a lente para CP1252 (ESWIN): o MESMO byte 0x82 vira
+                //    outro caractere -- prova que a leitura respeita o codepage
+                let troca = rpc_bruto(&hb, "file.setcodepage",
+                    &format!(r#"{{"h":"{h3}","codepage":"ESWIN"}}"#));
+                let sob_1252 = le(&h3);
+                t.ok(
+                    "B3: file.setcodepage muda a lente e a leitura muda de glifo",
+                    troca.as_deref().map(|s| s.contains("\"ok\":true") && s.contains("\"codepage\":\"ESWIN\"")).unwrap_or(false)
+                        && sob_1252 != sob_850 && !sob_1252.is_empty(),
+                    &format!("850={sob_850:?} 1252={sob_1252:?}"),
+                );
+
+                // 4. de volta a PT850: o acento reaparece -- nada foi alterado no disco
+                let _ = rpc_bruto(&hb, "file.setcodepage",
+                    &format!(r#"{{"h":"{h3}","codepage":"PT850"}}"#));
+                t.ok(
+                    "B3: restaurar a lente traz o valor de volta -- o disco nunca mudou",
+                    le(&h3) == "caf\u{e9}",
+                    &format!("voltou {:?}", le(&h3)),
+                );
+
+                // 5. codepage desconhecido e RECUSA de negocio, nao "ERR:"
+                let ruim = rpc_bruto(&hb, "file.setcodepage",
+                    &format!(r#"{{"h":"{h3}","codepage":"KLINGON"}}"#));
+                t.ok(
+                    "B3: codepage invalido recusa com ERROR_UNKNOWN_CODEPAGE",
+                    ruim.as_deref().map(|s| s.contains("ERROR_UNKNOWN_CODEPAGE") && !s.contains("ERR:")).unwrap_or(false),
+                    &format!("{ruim:?}"),
+                );
+
+                // 6. file.info reporta o codepage do arquivo e a pista do cabecalho
+                let inf = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h3}"}}"#))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                t.ok(
+                    "B3: file.info traz codepage e codepageHint",
+                    inf.as_ref().map(|v| v.pointer("/result/codepage").and_then(|x| x.as_str()) == Some("PT850")
+                        && v.pointer("/result/codepageHint").is_some()).unwrap_or(false),
+                    &format!("codepage={:?} hint={:?}",
+                        inf.as_ref().and_then(|v| v.pointer("/result/codepage")),
+                        inf.as_ref().and_then(|v| v.pointer("/result/codepageHint"))),
+                );
+
+                // --- config em tres niveis + cascata + SET EPOCH ---
+                //
+                // Idempotencia: rodadas anteriores deixam o pin de selftest_cfg
+                // em .run/.qdbu/arquivos.json; sem apaga-lo, o teste de heranca
+                // global/conexao acharia origem "file" e falharia na 2a execucao.
+                let _ = std::fs::remove_file(dir_run().join(".qdbu").join("arquivos.json"));
+                //
+                // A codepage resolve por arquivo > conexao > global > PT850, e
+                // escrever e opt-in. Aqui provamos a cascata inteira e o EPOCH
+                // fixo do arranque, sobre uma copia (conjunto DBF+DBT) em .run/.
+                let abre = |arg: &str| -> Option<serde_json::Value> {
+                    rpc_bruto(&hb, "file.open", arg)
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                };
+                let cod = |v: &Option<serde_json::Value>| -> (String, String) {
+                    let g = |k: &str| v.as_ref()
+                        .and_then(|x| x.pointer(&format!("/result/{k}")).and_then(|c| c.as_str()))
+                        .unwrap_or("").to_string();
+                    (g("codepage"), g("codepageOrigin"))
+                };
+                let hde = |v: &Option<serde_json::Value>| v.as_ref()
+                    .and_then(|x| x.pointer("/result/h").and_then(|h| h.as_str())).unwrap_or("").to_string();
+
+                let ed2 = dir_run().join("selftest_cfg.dbf");
+                let ed2_s = ed2.to_string_lossy().replace('\\', "/");
+                let dbt_de = |dbf: &str| dbf.strip_suffix(".dbf").map(|b| format!("{b}.dbt")).unwrap_or_default();
+                // o conjunto: DBF e o DBT do memo -- sem o .dbt, o open recusa
+                let _ = rpc_bruto(&hb, "meta.copyfile",
+                    &format!(r#"{{"source":"{ed_s}","dest":"{ed2_s}","shared":true}}"#));
+                let _ = rpc_bruto(&hb, "meta.copyfile",
+                    &format!(r#"{{"source":"{}","dest":"{}","shared":true}}"#, dbt_de(&ed_s), dbt_de(&ed2_s)));
+
+                // 1. SET EPOCH TO 1979 rodou na init da VM
+                let cfg = rpc_bruto(&hb, "config.get", "{}")
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                t.ok(
+                    "CFG: config.get traz epoch 1979 (SET no arranque) e a lista de codepages",
+                    cfg.as_ref().map(|v| v.pointer("/result/epoch").and_then(|e| e.as_i64()) == Some(1979)
+                        && v.pointer("/result/codepages").and_then(|a| a.as_array()).map(|a| !a.is_empty()).unwrap_or(false)).unwrap_or(false),
+                    &format!("{cfg:?}"),
+                );
+
+                // 2. config.set grava o codepage GLOBAL e o arquivo novo o HERDA
+                let set_g = rpc_bruto(&hb, "config.set", r#"{"codepage":"ESWIN"}"#)
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let hg = abre(&format!(r#"{{"path":"{ed2_s}"}}"#));
+                let (cg, og) = cod(&hg);
+                t.ok(
+                    "CFG: global gravado e HERDADO por arquivo novo (origem=global)",
+                    set_g.as_ref().map(|v| v.pointer("/result/saved").and_then(|b| b.as_bool()) == Some(true)).unwrap_or(false)
+                        && cg == "ESWIN" && og == "global",
+                    &format!("set {set_g:?} / codepage {cg} origem {og}"),
+                );
+
+                // 3. setcodepage sem persist: vale so na sessao (origem=session, saved:false)
+                let hg_h = hde(&hg);
+                let ss = rpc_bruto(&hb, "file.setcodepage",
+                    &format!(r#"{{"h":"{hg_h}","codepage":"PTISO"}}"#))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                t.ok(
+                    "CFG: setcodepage sem persist muda a sessao e NAO grava (saved:false, origem=session)",
+                    ss.as_ref().map(|v| v.pointer("/result/codepage").and_then(|c| c.as_str()) == Some("PTISO")
+                        && v.pointer("/result/saved").and_then(|b| b.as_bool()) == Some(false)
+                        && v.pointer("/result/codepageOrigin").and_then(|o| o.as_str()) == Some("session")).unwrap_or(false),
+                    &format!("{ss:?}"),
+                );
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{hg_h}"}}"#));
+
+                // 4. codepage por CONEXAO -- ANTES de fixar nivel-arquivo em ed2.
+                //    Cadastra cfgconn, atualiza para PTISO, e ed2 aberto por ela herda.
+                let _ = rpc_bruto(&hb, "workspace.add",
+                    &format!(r#"{{"name":"cfgconn","dir":"{}","codepage":"PT860"}}"#, dir_run().to_string_lossy().replace('\\', "/")));
+                let upd = rpc_bruto(&hb, "workspace.update", r#"{"name":"cfgconn","codepage":"PTISO"}"#)
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let hc = abre(&format!(r#"{{"path":"{ed2_s}","connection":"cfgconn"}}"#));
+                let (cc, oc) = cod(&hc);
+                t.ok(
+                    "CFG: workspace.update muda o codepage da conexao, e o arquivo herda (origem=connection)",
+                    upd.as_ref().map(|v| v.pointer("/result/connection/codepage").and_then(|c| c.as_str()) == Some("PTISO")).unwrap_or(false)
+                        && cc == "PTISO" && oc == "connection",
+                    &format!("upd {upd:?} / codepage {cc} origem {oc}"),
+                );
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&hc)));
+                let _ = rpc_bruto(&hb, "workspace.remove", r#"{"name":"cfgconn"}"#);
+
+                // 5. persist:file fixa no .qdbu/ e vence a conexao ao reabrir (origem=file)
+                let hf = abre(&format!(r#"{{"path":"{ed2_s}"}}"#));
+                let sf = rpc_bruto(&hb, "file.setcodepage",
+                    &format!(r#"{{"h":"{}","codepage":"ESWIN","persist":"file"}}"#, hde(&hf)))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&hf)));
+                let re = abre(&format!(r#"{{"path":"{ed2_s}","connection":"cfgconn"}}"#));
+                let (cr, or_) = cod(&re);
+                t.ok(
+                    "CFG: persist:file grava (.qdbu/arquivos.json) e VENCE a conexao ao reabrir (origem=file)",
+                    sf.as_ref().map(|v| v.pointer("/result/saved").and_then(|b| b.as_bool()) == Some(true)).unwrap_or(false)
+                        && cr == "ESWIN" && or_ == "file",
+                    &format!("fix {sf:?} / codepage {cr} origem {or_}"),
+                );
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&re)));
+
+                // devolve o global para PT850, para nao vazar para outros testes
+                let _ = rpc_bruto(&hb, "config.set", r#"{"codepage":"PT850"}"#);
+
+                // 6. codepage invalido no global e recusa de negocio
+                let ruimg = rpc_bruto(&hb, "config.set", r#"{"codepage":"KLINGON"}"#);
+                t.ok(
+                    "CFG: codepage invalido no config.set recusa (ERROR_UNKNOWN_CODEPAGE, nao ERR:)",
+                    ruimg.as_deref().map(|s| s.contains("ERROR_UNKNOWN_CODEPAGE") && !s.contains("ERR:")).unwrap_or(false),
+                    &format!("{ruimg:?}"),
+                );
+
+                // 7. `codepage` NO PEDIDO so escolhe a lente em file.open/
+                //    file.setcodepage. Em workspace.add ele e DADO A GUARDAR --
+                //    honra-lo ali fazia o proprio `name` ser convertido para
+                //    CP1252 na gravacao e relido como PT850 pelo workspace.list,
+                //    devolvendo acento quebrado. Ida e volta com acento e o que
+                //    separa as duas versoes.
+                let nome_ac = "Ação";
+                let _ = rpc_bruto(&hb, "workspace.remove", &format!(r#"{{"name":"{nome_ac}"}}"#));
+                let _ = rpc_bruto(
+                    &hb,
+                    "workspace.add",
+                    &format!(
+                        r#"{{"name":"{nome_ac}","dir":"{}","codepage":"ESWIN"}}"#,
+                        dir_run().to_string_lossy().replace('\\', "/")
+                    ),
+                );
+                let lst = rpc_bruto(&hb, "workspace.list", "{}");
+                t.ok(
+                    "CFG: `codepage` em workspace.add e DADO, nao lente -- o nome acentuado volta inteiro",
+                    lst.as_deref().map(|s| s.contains(nome_ac)).unwrap_or(false),
+                    &format!("esperava '{nome_ac}' em {lst:?}"),
+                );
+                let _ = rpc_bruto(&hb, "workspace.remove", &format!(r#"{{"name":"{nome_ac}"}}"#));
+
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h3}"}}"#));
+            } else {
+                t.ok("T8: abrir a copia para editar", false, "file.open falhou");
+            }
+            let _ = std::fs::remove_file(&ed);
+            let _ = std::fs::remove_file(&ed_memo);
+        } else {
+            t.ok("T8: preparar a copia para editar", false, "meta.copyfile falhou");
+        }
+
+        } else {
+            t.ok("R5: o indice sobrevive ao PACK", false, "meta.copyfile falhou");
+        }
             let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h}"}}"#));
         }
     } else {
@@ -735,7 +1782,7 @@ impl Verificador {
     }
 }
 
-/// Geometria da janela, persistida em `<raiz>/.dbu/janela.json`.
+/// Geometria da janela, persistida em `<raiz>/.qdbu/janela.json`.
 ///
 /// Arquivo, e nao localStorage: o armazenamento do webview e isolado por
 /// ORIGEM, e o app roda ora em `tauri.localhost` (assets embutidos) ora em
@@ -750,13 +1797,8 @@ struct Janela {
 }
 
 fn arquivo_janela() -> PathBuf {
-    let base = raiz_projeto().unwrap_or_else(|| {
-        env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-            .unwrap_or_else(env::temp_dir)
-    });
-    let dir = base.join(".dbu");
+    let base = raiz_projeto().unwrap_or_else(base_instalado);
+    let dir = base.join(".qdbu");
     let _ = std::fs::create_dir_all(&dir);
     dir.join("window.json")
 }
@@ -828,10 +1870,10 @@ fn gravar_janela(w: &tauri::Window) {
     match serde_json::to_string_pretty(&j) {
         Ok(txt) => {
             if let Err(e) = std::fs::write(arquivo_janela(), txt) {
-                log(&format!("[dbu] nao gravou janela.json: {e}"));
+                log(&format!("[qdbu] nao gravou janela.json: {e}"));
             }
         }
-        Err(e) => log(&format!("[dbu] nao serializou a janela: {e}")),
+        Err(e) => log(&format!("[qdbu] nao serializou a janela: {e}")),
     }
 }
 
@@ -877,7 +1919,7 @@ fn posicao_visivel(w: &tauri::WebviewWindow, x: i32, y: i32, lg: u32, al: u32) -
 /// -- o sintoma e "status not allowed. Plugin not found". Servindo por um
 /// scheme proprio, a origem continua local e confiavel.
 ///
-/// Ligado por `DBU_UI_DIR` apontando para a pasta `app/ui`. Ver app/dev.bat.
+/// Ligado por `QDBU_UI_DIR` apontando para a pasta `app/ui`. Ver app/dev.bat.
 fn mime_de(caminho: &str) -> &'static str {
     match caminho.rsplit('.').next().unwrap_or("") {
         "html" => "text/html; charset=utf-8",
@@ -925,7 +1967,7 @@ fn liga_cdp() -> Option<String> {
         return Some(format!("herdado do ambiente: {ja}"));
     }
 
-    let porta = env::var("DBU_CDP_PORT").unwrap_or_else(|_| CDP_PORT_PADRAO.to_string());
+    let porta = env::var("QDBU_CDP_PORT").unwrap_or_else(|_| CDP_PORT_PADRAO.to_string());
     if porta == "0" {
         return None;
     }
@@ -948,15 +1990,15 @@ fn liga_cdp() -> Option<String> {
 /// estava corrigido no disco havia dez minutos.
 ///
 /// Nao depende de qual .bat lancou o app: rodar o .exe direto tem o mesmo
-/// comportamento. `DBU_UI_DIR` continua valendo para apontar outra pasta, e
-/// `DBU_UI_EMBUTIDA=1` forca os assets embutidos para testar o que o usuario
+/// comportamento. `QDBU_UI_DIR` continua valendo para apontar outra pasta, e
+/// `QDBU_UI_EMBUTIDA=1` forca os assets embutidos para testar o que o usuario
 /// final recebe.
 fn dir_da_ui() -> Option<PathBuf> {
-    if let Ok(dir) = env::var("DBU_UI_DIR") {
+    if let Ok(dir) = env::var("QDBU_UI_DIR") {
         return Some(PathBuf::from(dir));
     }
 
-    if !cfg!(debug_assertions) || env::var("DBU_UI_EMBUTIDA").is_ok() {
+    if !cfg!(debug_assertions) || env::var("QDBU_UI_EMBUTIDA").is_ok() {
         return None;
     }
 
@@ -968,6 +2010,93 @@ fn dir_da_ui() -> Option<PathBuf> {
     }
 }
 
+/// Move `<raiz>/.dbu` para `<raiz>/.qdbu`, uma vez, na renomeacao para QDBU.
+///
+/// A pasta guarda o que o usuario nao pode perder: o LOG DE ALTERACOES (a
+/// resposta para "o que este programa fez com o meu arquivo?"), as conexoes
+/// cadastradas, a sessao e a geometria da janela. Trocar o nome da pasta sem
+/// migrar nao apagaria nada, mas some com tudo da tela -- e um log de auditoria
+/// que desaparece e pior do que nunca ter existido, porque ninguem procura o
+/// que nao sabe que sumiu.
+///
+/// MORA AQUI, e nao no Harbour, para haver UMA implementacao. `DirConfigQDbu()`
+/// (`src/util/paths.prg`) resolve a mesma raiz pela mesma marca (`qdbudll.hbp`),
+/// entao quando a DLL for perguntar o caminho a pasta ja esta no lugar novo.
+/// Roda antes do `--selftest` de proposito: os dois caminhos veem o mesmo disco.
+///
+/// Conservadora nos tres casos que nao sao "renomear e seguir":
+///   - `.qdbu` ja existe  -> nao faz nada (migracao ja aconteceu, ou o usuario
+///                           tem as duas; mexer aqui poderia sobrescrever)
+///   - `.dbu` nao existe  -> instalacao nova, nada a fazer
+///   - a renomeacao falha -> registra e SEGUE. Perder a migracao e ruim; nao
+///                           subir o app por causa dela seria pior.
+fn migra_pasta_de_config() {
+    // A MESMA RAIZ QUE `dir_run()` E `arquivo_janela()`, e nao uma parecida.
+    //
+    // Aqui havia `raiz_projeto().or_else(current_exe().parent())`, que so
+    // coincide com o resto quando o exe roda de uma pasta gravavel. Instalado em
+    // `C:\Program Files`, `base_instalado()` cai para
+    // `%LOCALAPPDATA%\dbu-harbour` -- e a migracao ia procurar `.dbu` dentro do
+    // Program Files, nao achava nada, e o log de alteracoes e as conexoes
+    // ficavam para tras exatamente na instalacao para a qual ela foi escrita.
+    migra_config_em(&raiz_projeto().unwrap_or_else(base_instalado));
+}
+
+/// O que a migração fez -- para o teste distinguir "migrou" de "não tinha o que
+/// migrar", dois desfechos que o log já separava e o tipo agora também.
+#[derive(Debug, PartialEq, Eq)]
+enum Migracao {
+    Migrou,
+    JaExistia,
+    NadaAMigrar,
+    Falhou,
+}
+
+/// O corpo da migração, com a raiz por PARÂMETRO.
+///
+/// Separado de `migra_pasta_de_config()` só para poder ser AFIRMADO. A função
+/// de cima depende de `raiz_projeto()`, que aponta para o repositório real: um
+/// teste sobre ela migraria a pasta de verdade uma vez e nunca mais -- passaria
+/// na primeira execução e ficaria inerte em todas as seguintes, que é a
+/// definição de teste que não testa. Com a raiz por parâmetro o selftest monta
+/// os três estados num diretório descartável e confere cada um.
+fn migra_config_em(raiz: &Path) -> Migracao {
+    let antiga = raiz.join(".dbu");
+    let nova = raiz.join(".qdbu");
+
+    // `.qdbu` já existe: ou a migração já aconteceu, ou o usuário tem as duas.
+    // Nos dois casos mexer aqui poderia sobrescrever config boa por config
+    // velha, e isso é pior do que não migrar.
+    if nova.exists() {
+        return Migracao::JaExistia;
+    }
+    if !antiga.is_dir() {
+        return Migracao::NadaAMigrar;
+    }
+
+    match std::fs::rename(&antiga, &nova) {
+        Ok(()) => {
+            log(&format!(
+                "[qdbu] config migrada: {} -> {}",
+                antiga.display(),
+                nova.display()
+            ));
+            Migracao::Migrou
+        }
+        // Registra e SEGUE. Perder a migração é ruim; não subir o app por causa
+        // dela seria pior.
+        Err(e) => {
+            log(&format!(
+                "[qdbu] AVISO: nao consegui migrar {} para {} ({e}). O historico \
+                 anterior nao aparecera na tela de Alteracoes; mova a pasta a mao \
+                 para recupera-lo.",
+                antiga.display(),
+                nova.display()
+            ));
+            Migracao::Falhou
+        }
+    }
+}
 fn main() {
     // O log acumula entre execucoes; marca onde cada sessao comeca.
     log(&format!(
@@ -977,6 +2106,8 @@ fn main() {
             .map(|p| p.display().to_string())
             .unwrap_or_else(|_| "?".into())
     ));
+
+    migra_pasta_de_config();
 
     if env::args().any(|a| a == "--selftest") {
         #[cfg(windows)]
@@ -992,8 +2123,8 @@ fn main() {
     }
 
     match liga_cdp() {
-        Some(p) => log(&format!("[dbu] CDP ativo na porta {p} -- devtools/cdp.bat")),
-        None => log("[dbu] CDP desligado"),
+        Some(p) => log(&format!("[qdbu] CDP ativo na porta {p} -- devtools/cdp.bat")),
+        None => log("[qdbu] CDP desligado"),
     }
 
     let ui_dir = dir_da_ui();
@@ -1018,14 +2149,14 @@ fn main() {
         })
         .setup(move |app| {
             let caminho = achar_dll();
-            log(&format!("[dbu] procurando DLL: {}", caminho.display()));
+            log(&format!("[qdbu] procurando DLL: {}", caminho.display()));
             let (hb, erro) = match Harbour::iniciar(caminho) {
                 Ok(h) => {
-                    log("[dbu] DLL carregada, HbStart ok");
+                    log("[qdbu] DLL carregada, HbStart ok");
                     (Some(h), None)
                 }
                 Err(e) => {
-                    log(&format!("[dbu] FALHOU ao carregar a DLL: {e}"));
+                    log(&format!("[qdbu] FALHOU ao carregar a DLL: {e}"));
                     (None, Some(e))
                 }
             };
@@ -1049,7 +2180,7 @@ fn main() {
                             // Monitor desligado ou arranjo mudou: a janela ficaria
                             // fora da area visivel e o usuario nao teria como
                             // trazer de volta.
-                            log("[dbu] posicao salva esta fora dos monitores atuais; centralizando");
+                            log("[qdbu] posicao salva esta fora dos monitores atuais; centralizando");
                             let _ = w.center();
                         }
 
@@ -1058,10 +2189,10 @@ fn main() {
                         if j.maximizada {
                             let _ = w.maximize();
                         }
-                        log(&format!("[dbu] janela restaurada: {j:?}"));
+                        log(&format!("[qdbu] janela restaurada: {j:?}"));
                         if let Ok(Some(m)) = w.current_monitor() {
                             log(&format!(
-                                "[dbu] monitor: {:?} em {},{} de {}x{}",
+                                "[qdbu] monitor: {:?} em {},{} de {}x{}",
                                 m.name().cloned().unwrap_or_default(),
                                 m.position().x, m.position().y,
                                 m.size().width, m.size().height
@@ -1070,14 +2201,14 @@ fn main() {
                     }
                     None => {
                         let _ = w.maximize();
-                        log("[dbu] sem sessao anterior: janela maximizada");
+                        log("[qdbu] sem sessao anterior: janela maximizada");
                     }
                 }
             }
 
             // `generate_context!()` embute app/ui/ no binario em tempo de
             // compilacao, entao mexer no frontend nao aparece sem recompilar o
-            // Rust. Com DBU_UI_DIR apontando para app/ui, servimos do disco pelo
+            // Rust. Com QDBU_UI_DIR apontando para app/ui, servimos do disco pelo
             // protocolo `dev` e um reload basta.
             if let Some(dir) = &ui_dir {
                 if let Some(w) = app.get_webview_window("main") {
@@ -1086,14 +2217,14 @@ fn main() {
                     } else {
                         "dev://localhost/index.html"
                     };
-                    log(&format!("[dbu] modo dev: servindo {} via {alvo}", dir.display()));
+                    log(&format!("[qdbu] modo dev: servindo {} via {alvo}", dir.display()));
                     match alvo.parse() {
                         Ok(url) => {
                             if let Err(e) = w.navigate(url) {
-                                log(&format!("[dbu] navigate falhou: {e}"));
+                                log(&format!("[qdbu] navigate falhou: {e}"));
                             }
                         }
-                        Err(e) => log(&format!("[dbu] url invalida: {e}")),
+                        Err(e) => log(&format!("[qdbu] url invalida: {e}")),
                     }
                 }
             }
@@ -1140,7 +2271,7 @@ fn main() {
 
                 p.cancelar();
                 api.prevent_close();
-                log("[dbu] fechando com tarefa ativa: aguardando ela parar");
+                log("[qdbu] fechando com tarefa ativa: aguardando ela parar");
 
                 let janela = w.clone();
                 std::thread::spawn(move || {
@@ -1150,7 +2281,7 @@ fn main() {
                     while t0.elapsed() < limite {
                         if !p.ler().ativo {
                             log(&format!(
-                                "[dbu] tarefa parou em {} ms; fechando",
+                                "[qdbu] tarefa parou em {} ms; fechando",
                                 t0.elapsed().as_millis()
                             ));
                             let _ = janela.destroy();
@@ -1160,13 +2291,13 @@ fn main() {
                     }
 
                     /*
-                     * Estourou o prazo: a tarefa nao consulta Dbu_Canceled(), ou
+                     * Estourou o prazo: a tarefa nao consulta QDbu_Canceled(), ou
                      * o intervalo entre consultas e grande demais. Fecha assim
                      * mesmo -- prender o usuario numa janela que nao fecha e
                      * pior --, mas deixa registrado, porque isto e BUG da tarefa
                      * e nao comportamento normal.
                      */
-                    log("[dbu] AVISO: tarefa nao parou em 15s; fechando mesmo assim.                          A rotina em curso nao esta consultando Dbu_Canceled().");
+                    log("[qdbu] AVISO: tarefa nao parou em 15s; fechando mesmo assim.                          A rotina em curso nao esta consultando QDbu_Canceled().");
                     let _ = janela.destroy();
                 });
             }

@@ -77,10 +77,31 @@
    * não do arquivo aberto. Restaurar uma sessão salva em outra máquina não pode
    * trocar a língua da pessoa que está olhando agora.
    */
+  /*
+   * A CHAVE MUDOU DE `dbu.` PARA `qdbu.` na renomeação do produto, e a antiga
+   * ainda é lida uma vez.
+   *
+   * Sem isso, quem já usava o app abriria a versão nova em português quando
+   * tinha escolhido inglês — e a escolha não estaria "perdida", estaria
+   * ignorada num `localStorage` que ninguém vai abrir para conferir. O custo de
+   * ler a chave velha é uma linha; o de não ler é uma preferência que some sem
+   * explicação.
+   *
+   * Migra ao ler: grava sob o nome novo e apaga o antigo, então isto acontece
+   * uma vez por navegador e depois o ramo fica inerte.
+   */
   function guardado() {
     try {
-      const v = localStorage.getItem("dbu.idioma");
-      return v && DIC[v] ? v : null;
+      const v = localStorage.getItem("qdbu.idioma");
+      if (v) return DIC[v] ? v : null;
+
+      const antigo = localStorage.getItem("dbu.idioma");
+      if (antigo && DIC[antigo]) {
+        localStorage.setItem("qdbu.idioma", antigo);
+        localStorage.removeItem("dbu.idioma");
+        return antigo;
+      }
+      return null;
     } catch (e) {
       return null; // modo privado, storage bloqueado — segue com o do navegador
     }
@@ -98,7 +119,7 @@
     if (!DIC[cod]) return false;
     atual = cod;
     try {
-      localStorage.setItem("dbu.idioma", cod);
+      localStorage.setItem("qdbu.idioma", cod);
     } catch (e) {
       /* sem storage: vale só para esta execução */
     }

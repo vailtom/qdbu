@@ -210,7 +210,7 @@ STATIC FUNCTION MontaChecklist( cH, cCaminhoDestino, lParaOperacao )
     * O aviso e sobre a OPERACAO SEGUINTE, nunca sobre a copia.
     *
     * Copiar nunca exigiu exclusivo -- CopiaArquivo() le com FO_READ+FO_SHARED,
-    * e no DBU sempre foi assim: com o arquivo aberto, e so copiar. Numa copia
+    * e no DBU original sempre foi assim: com o arquivo aberto, e so copiar. Numa copia
     * avulsa nao ha operacao seguinte, e o aviso seria ruido. Ruido num checklist
     * e pior que silencio: ensina a ignorar a lista.
     */
@@ -369,7 +369,7 @@ FUNCTION Api_Backup_Run( hP )
    /* SessSelect() ja rodou e nos deixou na area deste handle. */
    lAberto := ! Empty( Alias() )
 
-   Dbu_JobBegin( JobMsg( iif( lZip, "UI_JOB_ZIP", "UI_JOB_BACKUP" ), ;
+   QDbu_JobBegin( JobMsg( iif( lZip, "UI_JOB_ZIP", "UI_JOB_BACKUP" ), ;
                          hRel[ "file" ] ), nTotal )
 
    /*
@@ -389,9 +389,9 @@ FUNCTION Api_Backup_Run( hP )
 
       xErro := ZipDoArquivo( SessHandle( cH )[ "path" ], ;
                              cZip, hRel[ "file" ], ;
-                             {| n, t | HB_SYMBOL_UNUSED( t ), Dbu_Progress( n ) }, ;
+                             {| n, t | HB_SYMBOL_UNUSED( t ), QDbu_Progress( n ) }, ;
                              @cModoZip )
-      Dbu_JobEnd()
+      QDbu_JobEnd()
 
       IF xErro != NIL
          RETURN xErro
@@ -429,23 +429,57 @@ FUNCTION Api_Backup_Run( hP )
     */
    IF lAberto
       xErro := CopiaPorRegistro( hRel[ "target" ], ;
-                                 {| n, t | HB_SYMBOL_UNUSED( t ), Dbu_Progress( n ) } )
-      Dbu_JobEnd()
+                                 {| n, t | HB_SYMBOL_UNUSED( t ), QDbu_Progress( n ) } )
+      QDbu_JobEnd()
 
       IF xErro != NIL
          RETURN xErro
       ENDIF
 
+      /*
+       * O RELATORIO TEM DE DESCREVER O CONJUNTO, e nao so o .DBF.
+       *
+       * `CopiaPorRegistro()` cria o .DBT JUNTO quando ha campo memo -- esta
+       * escrito no comentario acima -- mas o resultado listava uma entrada so,
+       * com o tamanho so do .DBF. Na tela isso saia como uma contradicao que a
+       * pessoa le em um segundo, e foi assim que apareceu (03/09/2026, fixture
+       * TIPOS.DBF):
+       *
+       *     Arquivos que serao copiados    2 arquivos, 3,3 KB
+       *     1 arquivo copiado              tipos_20260903_224521.dbf   1,2 KB
+       *
+       * Prometeu dois, relatou um, e os dois estavam no disco. O backup estava
+       * CERTO; quem mentia era o relato -- e mentia justamente sobre o memo, que
+       * e o arquivo que some junto e leva o conteudo com ele. Quem lesse "1
+       * arquivo copiado" concluiria que o .DBT ficou de fora.
+       *
+       * O `bytes` sofria do mesmo: 1.271 registrados no log para uma operacao
+       * que escreveu 3.338.
+       *
+       * A montagem agora sai do conjunto de origem (`set`) passando por
+       * `DestinoDoMembro()`, que e exatamente o que a via por bytes faz mais
+       * abaixo -- as duas vias descrevem o resultado do mesmo jeito, e o
+       * tamanho vem do arquivo que ficou no disco, nao do que se esperava dele.
+       */
+      FOR EACH hArq IN hRel[ "set" ]
+         cDestino := DestinoDoMembro( hArq[ "path" ], hRel[ "target" ], hArq[ "role" ] )
+         IF hb_FileExists( cDestino )
+            nEste := Max( 0, hb_FSize( cDestino ) )
+            nFeito += nEste
+            AAdd( aCopias, { "source" => hb_FNameNameExt( hArq[ "path" ] ), ;
+                             "backup" => hb_FNameNameExt( cDestino ), ;
+                             "bytes"  => nEste, ;
+                             "role"   => hArq[ "role" ] } )
+         ENDIF
+      NEXT
+
       RETURN Ok( { ;
          "file"    => hRel[ "file" ], ;
          "stamp"   => cSelo, ;
          "dir"     => hRel[ "dir" ], ;
-         "bytes"   => Max( 0, hb_FSize( hRel[ "target" ] ) ), ;
+         "bytes"   => nFeito, ;
          "mode"    => "record", ;
-         "files"   => { { "source" => hRel[ "file" ], ;
-                          "backup" => hb_FNameNameExt( hRel[ "target" ] ), ;
-                          "bytes"  => Max( 0, hb_FSize( hRel[ "target" ] ) ), ;
-                          "role"   => "data" } }, ;
+         "files"   => aCopias, ;
          "indexes" => hRel[ "indexes" ], ;
          "checks"  => hRel[ "checks" ] } )
    ENDIF
@@ -455,7 +489,7 @@ FUNCTION Api_Backup_Run( hP )
 
       xErro := CopiaArquivo( hArq[ "path" ], cDestino, nFeito, nTotal, @nEste )
       IF xErro != NIL
-         Dbu_JobEnd()
+         QDbu_JobEnd()
          DesfazParciais( aFeitos )
          RETURN xErro
       ENDIF
@@ -465,7 +499,7 @@ FUNCTION Api_Backup_Run( hP )
          arquivo truncado, e um backup truncado e pior que backup nenhum. */
       xErro := BackupConfere( cDestino, nEste )
       IF xErro != NIL
-         Dbu_JobEnd()
+         QDbu_JobEnd()
          AAdd( aFeitos, cDestino )
          DesfazParciais( aFeitos )
          RETURN xErro
@@ -481,7 +515,7 @@ FUNCTION Api_Backup_Run( hP )
       AAdd( aCopias, hCopia )
    NEXT
 
-   Dbu_JobEnd()
+   QDbu_JobEnd()
 
    RETURN Ok( { ;
       "file"    => hRel[ "file" ], ;

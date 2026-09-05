@@ -2,34 +2,41 @@
  * paths.prg - onde o app guarda a propria configuracao.
  *
  * O projeto e autocontido (ver GUIA-DO-PROJETO.md): tudo que ele gera fica sob a raiz.
- * A raiz e achada subindo a partir do executavel ate encontrar `dbudll.hbp` --
+ * A raiz e achada subindo a partir do executavel ate encontrar `qdbudll.hbp` --
  * a mesma marca que o Rust usa em raiz_projeto().
  *
- * Convencao `.dbu/` repetida de proposito: a config do app fica em
- * <raiz>/.dbu/, e os perfis de cada conexao em <pasta do cliente>/.dbu/.
+ * Convencao `.qdbu/` repetida de proposito: a config do app fica em
+ * <raiz>/.qdbu/, e os perfis de cada conexao em <pasta do cliente>/.qdbu/.
  * Uma convencao so, dois lugares.
+ *
+ * A PASTA CHAMAVA `.dbu/` antes da renomeacao para QDBU, e quem migra e o Rust
+ * -- `migra_pasta_de_config()` em app/src-tauri/src/main.rs, que roda no inicio
+ * do main(), antes de qualquer coisa perguntar o caminho. NAO escreva outra
+ * migracao aqui: duas implementacoes da mesma regra divergem no dia em que uma
+ * delas mudar, e esta em particular so pode acontecer UMA vez -- rodada duas,
+ * com as duas pastas existindo, a segunda teria de decidir qual conteudo vale.
  */
 
-FUNCTION DirConfigDbu()
+FUNCTION DirConfigQDbu()
 
    LOCAL cDir := hb_DirBase()
    LOCAL i
 
    FOR i := 1 TO 8
-      IF hb_FileExists( hb_DirSepAdd( cDir ) + "dbudll.hbp" )
-         RETURN hb_DirSepAdd( cDir ) + ".dbu"
+      IF hb_FileExists( hb_DirSepAdd( cDir ) + "qdbudll.hbp" )
+         RETURN hb_DirSepAdd( cDir ) + ".qdbu"
       ENDIF
       cDir := hb_PathNormalize( hb_DirSepAdd( cDir ) + ".." )
    NEXT
 
    /* Fora da arvore do projeto (app instalado): ao lado do executavel. */
-   RETURN hb_DirSepAdd( hb_DirBase() ) + ".dbu"
+   RETURN hb_DirSepAdd( hb_DirBase() ) + ".qdbu"
 
 /*
  * <raiz>/.run -- o que o app produz em tempo de execucao: log, cache do
  * WebView2, temporarios da geracao de XLSX.
  *
- * Separado de `.dbu/` de proposito: `.dbu/` e configuracao que o usuario quer
+ * Separado de `.qdbu/` de proposito: `.qdbu/` e configuracao que o usuario quer
  * manter, `.run/` e descartavel. Apagar `.run/` nunca perde escolha nenhuma.
  */
 FUNCTION DirRun()
@@ -38,7 +45,7 @@ FUNCTION DirRun()
    LOCAL i
 
    FOR i := 1 TO 8
-      IF hb_FileExists( hb_DirSepAdd( cDir ) + "dbudll.hbp" )
+      IF hb_FileExists( hb_DirSepAdd( cDir ) + "qdbudll.hbp" )
          RETURN hb_DirSepAdd( cDir ) + ".run"
       ENDIF
       cDir := hb_PathNormalize( hb_DirSepAdd( cDir ) + ".." )

@@ -1,5 +1,8 @@
 /*
- * api_data.prg - reading records: pagination.
+ * api_data.prg - records: pagination (reading) and single-record writing (T8).
+ *
+ * A primeira metade LE, a segunda ESCREVE. A fronteira esta marcada por um
+ * cabecalho la embaixo, e as regras da escrita moram nele.
  *
  * ANCHOR + OFFSET, NEVER AN ABSOLUTE OFFSET. The page is asked for as
  * "starting at record N, skip K, give me C records", and is served with
@@ -17,10 +20,11 @@
  */
 
 #include "dbstruct.ch"
+#include "dbinfo.ch"
 
 /* Response ceiling. A page of 500 x 366 fields is already a few MB of JSON;
    above that the fault is in the request, not in the file. */
-#define DBU_MAX_PAGE  500
+#define QDBU_MAX_PAGE  500
 
 /*
  * data.page {"h":"h7","anchor":"top","count":200}
@@ -29,7 +33,7 @@
  *   anchor  "top" | "bottom" | recno
  *   offset  how many to skip from the anchor before collecting (may be
  *           negative -- that is how the previous page is asked for)
- *   count   how many records; ceiling DBU_MAX_PAGE
+ *   count   how many records; ceiling QDBU_MAX_PAGE
  *   fields  (optional) field names to read; default all of them
  *
  * -> {"rows":[{"recno":1,"deleted":false,"values":[...]}, ...],
@@ -56,9 +60,9 @@ FUNCTION Api_Data_Page( hP )
                   { "param" => "count", "min" => 1 } )
    ENDIF
 
-   IF nQtd > DBU_MAX_PAGE
+   IF nQtd > QDBU_MAX_PAGE
       RETURN Err( "ERROR_PARAM_TOO_BIG", "count above the page limit", "count", ;
-                  { "param" => "count", "value" => nQtd, "max" => DBU_MAX_PAGE } )
+                  { "param" => "count", "value" => nQtd, "max" => QDBU_MAX_PAGE } )
    ENDIF
 
    /* Sem `fields` explicito vale a selecao guardada no handle (T4). Assim a
@@ -331,7 +335,7 @@ FUNCTION Api_Data_Locate( hP )
    /* SEM TETO desde a T12: a varredura roda como tarefa, com progresso e
       cancelamento por fora da VM. O que impedia percorrer 421 mil registros nao
       era o tempo, e sim a UI ficar sem resposta e sem saida. */
-   Dbu_JobBegin( JobMsg( "UI_JOB_SEARCHING" ), LastRec() )
+   QDbu_JobBegin( JobMsg( "UI_JOB_SEARCHING" ), LastRec() )
 
    DO WHILE ! Eof()
       nLidos++
@@ -340,14 +344,14 @@ FUNCTION Api_Data_Locate( hP )
       /* Registro em que a expressao estoura nao casa -- e nao interrompe a
          busca. Uma linha com dado ruim nao pode abortar a varredura inteira. */
       IF ! lFalhou .AND. HB_ISLOGICAL( xVal ) .AND. xVal
-         Dbu_JobEnd()
+         QDbu_JobEnd()
          RETURN Ok( hb_HMerge( Posicao( cH ), { ;
             "found" => .T., "scanned" => nLidos, "canceled" => .F. } ) )
       ENDIF
 
       IF nLidos % 500 == 0
-         Dbu_Progress( nLidos )
-         IF Dbu_Canceled()
+         QDbu_Progress( nLidos )
+         IF QDbu_Canceled()
             EXIT
          ENDIF
       ENDIF
@@ -355,8 +359,8 @@ FUNCTION Api_Data_Locate( hP )
       dbSkip( 1 )
    ENDDO
 
-   lParou := Dbu_Canceled()   /* antes do JobEnd, que zera o sinalizador */
-   Dbu_JobEnd()
+   lParou := QDbu_Canceled()   /* antes do JobEnd, que zera o sinalizador */
+   QDbu_JobEnd()
 
    /* Nao achou: devolve o cursor. Deixar o usuario no fim do arquivo depois de
       uma busca frustrada perde o lugar em que ele estava. */
@@ -585,3 +589,751 @@ STATIC FUNCTION ParArr( hP, cChave )
    ENDIF
 
    RETURN iif( HB_ISARRAY( hP[ cChave ] ), hP[ cChave ], {} )
+
+/* Hash vazio quando falta ou nao e hash. Quem exige o parametro confere o
+   Empty() e monta a propria recusa -- aqui nao da para saber se a ausencia e
+   erro (data.update sem `values`) ou o caso normal (data.append em branco). */
+STATIC FUNCTION ParHash( hP, cChave )
+
+   IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave ) .OR. ;
+      ! HB_ISHASH( hP[ cChave ] )
+      RETURN { => }
+   ENDIF
+
+   RETURN hP[ cChave ]
+
+
+/* =====================================================================
+ * T8 -- ESCRITA REGISTRO A REGISTRO
+ *
+ * O resto deste arquivo LE. Daqui para baixo ESCREVE, e a diferenca de risco e
+ * de natureza: T10/T13/T14 alteram em bloco, fora do lugar, com backup e
+ * pre-voo; aqui a pessoa digita um valor e ele vai para o arquivo do cliente
+ * agora. Nao ha "entre registros completos" onde parar -- cada gravacao e
+ * atomica por si.
+ *
+ * Tres regras que valem para tudo abaixo:
+ *
+ * 1. TRAVA POR REGISTRO, e nao pelo arquivo. `EmMassa()` usa FLock() porque
+ *    percorre o arquivo, e uma escrita alheia no meio do caminho invalidaria o
+ *    que ele acabou de ler. Aqui e o oposto: uma celula, um registro -- travar
+ *    o arquivo inteiro para isso bloquearia todo mundo por causa de uma tecla.
+ *
+ * 2. VALOR QUE NAO CABE NO TIPO E RECUSADO, NUNCA CONVERTIDO. Mesma regra do
+ *    filtro guiado, e aqui ela pesa mais: la um valor coagido dava resultado
+ *    errado na tela, reversivel fechando a aba; aqui vira byte no disco.
+ *    `C2Date()` devolve data vazia quando nao entende -- generosidade correta
+ *    para importar um lote de milhares de linhas, e errada para uma celula,
+ *    onde "nao entendi" tem de chegar a quem acabou de digitar.
+ *
+ * 3. O QUE NAO CABE NO CAMPO NAO E TRUNCADO EM SILENCIO. Um C(10) que recebe 15
+ *    caracteres devolve recusa dizendo o tamanho. Gravar os 10 primeiros e
+ *    perder os 5 seguintes sem avisar e a forma mais barata de corromper dado.
+ * ===================================================================== */
+
+/*
+ * A coluna pelo nome, com a estrutura que a validacao precisa.
+ * Devolve NIL quando o campo nao existe -- quem chama monta a recusa.
+ */
+STATIC FUNCTION ColunaPorNome( cNome )
+
+   LOCAL aEstru, nPos
+
+   cNome := NomeSimples( hb_defaultValue( cNome, "" ) )
+   nPos := FieldPos( cNome )
+
+   IF nPos == 0
+      RETURN NIL
+   ENDIF
+
+   aEstru := dbStruct()
+
+   RETURN DescreveColuna( Alias(), aEstru[ nPos ], nPos )
+
+/*
+ * So digitos, sinal, ponto e virgula -- o que C2Num sabe ler.
+ *
+ * Existe porque `Val()` nao distingue "0" de "abc": os dois devolvem 0. Sem
+ * esta checagem, digitar "abc" num campo numerico gravaria zero em silencio, e
+ * zero e um valor plausivel -- ninguem descobriria olhando a tela.
+ */
+STATIC FUNCTION ENumerico( cTxt )
+
+   LOCAL i, c
+   LOCAL lDigito := .F.
+
+   FOR i := 1 TO Len( cTxt )
+      c := SubStr( cTxt, i, 1 )
+      DO CASE
+      CASE c >= "0" .AND. c <= "9"
+         lDigito := .T.
+      CASE c $ ".,"
+      CASE ( c == "+" .OR. c == "-" ) .AND. i == 1
+      OTHERWISE
+         RETURN .F.
+      ENDCASE
+   NEXT
+
+   RETURN lDigito
+
+/*
+ * Converte o valor vindo do JSON para o tipo do campo, ou RECUSA.
+ *
+ * O JSON ja chega tipado (numero e numero, booleano e booleano), entao o caso
+ * comum nem converte. Texto e aceito para todos os tipos porque e o que um
+ * campo de edicao produz -- e ai valem as funcoes de conv.prg, com a diferenca
+ * de que aqui o "nao entendi" volta como erro em vez de valor vazio.
+ *
+ * `xConv` sai com o valor pronto para o FieldPut.
+ */
+STATIC FUNCTION ValidaValor( hCol, xVal, xConv )
+
+   LOCAL cTipo := hCol[ "type" ]
+   LOCAL cTxt, cFmt
+
+   xConv := NIL
+
+   DO CASE
+   CASE cTipo == "C"
+      DO CASE
+      CASE HB_ISSTRING( xVal )  ; cTxt := xVal
+      CASE HB_ISNUMERIC( xVal ) ; cTxt := AllTrim( Str( xVal ) )
+      CASE HB_ISLOGICAL( xVal ) ; cTxt := Bool2C( xVal )
+      CASE HB_ISDATE( xVal )    ; cTxt := DToS( xVal )
+      CASE xVal == NIL          ; cTxt := ""
+      OTHERWISE
+         RETURN Err( "ERROR_CELL_TYPE", "value does not fit the field type", "value", ;
+                     { "field" => hCol[ "name" ], "type" => cTipo } )
+      ENDCASE
+
+      /* O tamanho e conferido AQUI e nao no FieldPut: o RDD trunca calado. */
+      IF Len( cTxt ) > hCol[ "len" ]
+         RETURN Err( "ERROR_CELL_TOO_LONG", "value longer than the field", "value", ;
+                     { "field" => hCol[ "name" ], "len" => hCol[ "len" ], ;
+                       "size" => Len( cTxt ) } )
+      ENDIF
+
+      xConv := cTxt
+
+   CASE cTipo == "N"
+      DO CASE
+      CASE HB_ISNUMERIC( xVal )
+         xConv := xVal
+      CASE HB_ISSTRING( xVal )
+         cTxt := AllTrim( xVal )
+         IF Empty( cTxt )
+            xConv := 0
+         ELSE
+            IF ! ENumerico( cTxt )
+               RETURN Err( "ERROR_CELL_NOT_NUMBER", "not a number", "value", ;
+                           { "field" => hCol[ "name" ], "value" => cTxt } )
+            ENDIF
+            xConv := C2Num( cTxt )
+         ENDIF
+      CASE xVal == NIL
+         xConv := 0
+      OTHERWISE
+         RETURN Err( "ERROR_CELL_TYPE", "value does not fit the field type", "value", ;
+                     { "field" => hCol[ "name" ], "type" => cTipo } )
+      ENDCASE
+
+      /* Nao cabe na largura: o RDD gravaria o campo cheio de asteriscos, que e
+         perda silenciosa do numero que a pessoa digitou. */
+      cFmt := Str( xConv, hCol[ "len" ], hCol[ "dec" ] )
+      IF "*" $ cFmt
+         RETURN Err( "ERROR_CELL_TOO_LONG", "number does not fit the field", "value", ;
+                     { "field" => hCol[ "name" ], "len" => hCol[ "len" ], ;
+                       "size" => Len( AllTrim( Str( xConv ) ) ) } )
+      ENDIF
+
+   CASE cTipo == "D"
+      DO CASE
+      CASE HB_ISDATE( xVal )
+         xConv := xVal
+      CASE HB_ISSTRING( xVal )
+         cTxt := AllTrim( xVal )
+         IF Empty( cTxt )
+            xConv := hb_SToD( "" )
+         ELSE
+            xConv := C2Date( cTxt )
+            /* C2Date devolve vazia quando nao entende. Numa celula isso tem de
+               virar recusa: gravar vazio no lugar de "31/02/2026" apagaria a
+               data que estava la sem ninguem ter pedido. */
+            IF Empty( xConv )
+               RETURN Err( "ERROR_CELL_NOT_DATE", "not a date", "value", ;
+                           { "field" => hCol[ "name" ], "value" => cTxt } )
+            ENDIF
+         ENDIF
+      CASE xVal == NIL
+         xConv := hb_SToD( "" )
+      OTHERWISE
+         RETURN Err( "ERROR_CELL_TYPE", "value does not fit the field type", "value", ;
+                     { "field" => hCol[ "name" ], "type" => cTipo } )
+      ENDCASE
+
+   CASE cTipo == "L"
+      DO CASE
+      CASE HB_ISLOGICAL( xVal ) ; xConv := xVal
+      CASE HB_ISSTRING( xVal )  ; xConv := C2Bool( xVal )
+      CASE HB_ISNUMERIC( xVal ) ; xConv := ( xVal != 0 )
+      CASE xVal == NIL          ; xConv := .F.
+      OTHERWISE
+         RETURN Err( "ERROR_CELL_TYPE", "value does not fit the field type", "value", ;
+                     { "field" => hCol[ "name" ], "type" => cTipo } )
+      ENDCASE
+
+   CASE cTipo $ "MP"
+      DO CASE
+      CASE HB_ISSTRING( xVal ) ; xConv := xVal
+      CASE xVal == NIL         ; xConv := ""
+      OTHERWISE
+         RETURN Err( "ERROR_CELL_TYPE", "value does not fit the field type", "value", ;
+                     { "field" => hCol[ "name" ], "type" => cTipo } )
+      ENDCASE
+
+   OTHERWISE
+      RETURN Err( "ERROR_FIELD_TYPE_UNSUPPORTED", "field type cannot be edited", "value", ;
+                  { "field" => hCol[ "name" ], "type" => cTipo } )
+   ENDCASE
+
+   RETURN NIL
+
+/*
+ * Trava o registro corrente para escrita, ou devolve a recusa.
+ *
+ * Em modo EXCLUSIVO o RDD dispensa a trava e `RLock()` devolve .T. de graca; em
+ * compartilhado ele conversa com o sistema de arquivos. Nos dois casos a
+ * chamada e a mesma -- e por isso nao ha `IF exclusivo` aqui.
+ *
+ * A recusa nomeia o REGISTRO, e nao so o arquivo: "outro usuario esta com este
+ * arquivo" manda a pessoa procurar quem fechou o programa; "o registro 4.312
+ * esta travado" diz que e so esperar um instante e repetir.
+ */
+STATIC FUNCTION TravaRegistro( cH )
+
+   IF RLock()
+      RETURN NIL
+   ENDIF
+
+   RETURN Err( "ERROR_CANNOT_LOCK_RECORD", "another user is holding this record", "h", ;
+               { "file"  => hb_FNameNameExt( SessHandle( cH )[ "path" ] ), ;
+                 "recno" => RecNo() } )
+
+/*
+ * Posiciona no registro pedido, conferindo que ele existe.
+ *
+ * `dbGoTo()` num numero fora da faixa nao estoura: ele leva para EOF, e uma
+ * gravacao a partir dali escreveria no lugar errado sem aviso nenhum.
+ */
+STATIC FUNCTION VaiParaRegistro( nRec )
+
+   IF ! HB_ISNUMERIC( nRec ) .OR. nRec < 1 .OR. nRec > LastRec()
+      RETURN Err( "ERROR_RECORD_OUT_OF_RANGE", "record does not exist", "recno", ;
+                  { "recno" => hb_defaultValue( nRec, 0 ), "max" => LastRec() } )
+   ENDIF
+
+   dbGoTo( nRec )
+
+   IF Eof()
+      RETURN Err( "ERROR_RECORD_OUT_OF_RANGE", "record does not exist", "recno", ;
+                  { "recno" => nRec, "max" => LastRec() } )
+   ENDIF
+
+   RETURN NIL
+
+/*
+ * data.update {"h":"h7","recno":42,"values":{"CLI_NOME":"JOAO","CLI_LIM":1500}}
+ *
+ * -> {"h":"h7","recno":42,"changed":["CLI_NOME","CLI_LIM"],"row":{...}}
+ *
+ * TUDO OU NADA. Os valores sao validados ANTES de qualquer FieldPut: um lote
+ * com tres campos certos e um errado nao grava os tres. Sem isto, corrigir a
+ * recusa e reenviar gravaria os certos duas vezes -- inofensivo para texto,
+ * mas nao para quem estivesse contando com a primeira tentativa nao ter valido.
+ *
+ * A LINHA VOLTA NA RESPOSTA (`row`), relida do arquivo depois de gravar. A UI
+ * poderia repintar com o que digitou, e estaria repintando a INTENCAO em vez do
+ * FATO: um C(10) que recebeu 10 caracteres exatos, um N(5,2) arredondado pelo
+ * RDD, uma data normalizada -- todos voltam diferentes do que entrou. Mostrar o
+ * que ficou no disco e o unico jeito de a tela nao mentir.
+ */
+FUNCTION Api_Data_Update( hP )
+
+   LOCAL cH      := ParStr( hP, "h" )
+   LOCAL nRec    := ParNum( hP, "recno", 0 )
+   LOCAL hVals   := ParHash( hP, "values" )
+   LOCAL hExpect := ParHash( hP, "expect" )
+   LOCAL xErro, hCol, cNome, xConv
+   LOCAL aPares := {}, aNomes := {}, i
+
+   IF ( xErro := SessSelect( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   IF Empty( hVals )
+      RETURN Err( "ERROR_PARAM_REQUIRED", "values is required", "values", ;
+                  { "param" => "values" } )
+   ENDIF
+
+   IF ( xErro := VaiParaRegistro( nRec ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   /* --- 1. valida TUDO antes de gravar QUALQUER COISA --- */
+   FOR i := 1 TO Len( hVals )
+      cNome := hb_HKeyAt( hVals, i )
+      hCol := ColunaPorNome( cNome )
+
+      IF hCol == NIL
+         RETURN Err( "ERROR_FIELD_NOT_FOUND", "field not found", "values", ;
+                     { "field" => cNome, "alias" => Alias() } )
+      ENDIF
+
+      IF ( xErro := ValidaValor( hCol, hb_HValueAt( hVals, i ), @xConv ) ) != NIL
+         RETURN xErro
+      ENDIF
+
+      AAdd( aPares, { hCol[ "pos" ], xConv } )
+      AAdd( aNomes, hCol[ "name" ] )
+   NEXT
+
+   /* --- 2. trava, CONFERE, grava, solta --- */
+   IF ( xErro := TravaRegistro( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   /*
+    * R8: o `expect` e conferido AQUI, com o registro travado. Antes do lock
+    * ainda caberia uma escrita alheia entre conferir e gravar. Opcional: sem
+    * `expect`, grava como sempre -- e o caso do append em branco, e o que
+    * permite a grade adotar primeiro e o formulario depois.
+    */
+   IF ! Empty( hExpect ) .AND. ( xErro := ConfereExpect( hExpect ) ) != NIL
+      dbUnlock()
+      RETURN xErro
+   ENDIF
+
+   BEGIN SEQUENCE WITH {| e | Break( e ) }
+      FOR i := 1 TO Len( aPares )
+         FieldPut( aPares[ i ][ 1 ], aPares[ i ][ 2 ] )
+      NEXT
+      dbCommit()
+   RECOVER USING xErro
+      dbUnlock()
+      RETURN Err( "ERROR_WRITE_FAILED", "could not write the record", "h", ;
+                  { "file"   => hb_FNameNameExt( SessHandle( cH )[ "path" ] ), ;
+                    "recno"  => nRec, ;
+                    "reason" => ErroTexto( xErro ) } )
+   END SEQUENCE
+
+   dbUnlock()
+   SessBump()
+
+   RETURN Ok( { "h"       => cH, ;
+                "recno"   => nRec, ;
+                "changed" => aNomes, ;
+                "raw"     => RawDoRegistro(), ;
+                "row"     => LinhaPedida( hP, cH ) } )
+
+/*
+ * data.append {"h":"h7","values":{"CLI_NOME":"NOVO"}}
+ *
+ * -> {"h":"h7","recno":1197,"row":{...},"records":1197}
+ *
+ * `values` e OPCIONAL: um registro em branco e um pedido legitimo -- o DBU
+ * original insere vazio e deixa a pessoa preencher na grade.
+ *
+ * O registro nasce e SO DEPOIS recebe os valores, porque `dbAppend()` ja
+ * devolve o registro travado. Se a validacao recusasse aqui, o registro em
+ * branco ja estaria no arquivo -- por isso ela roda ANTES do append, como no
+ * update.
+ */
+FUNCTION Api_Data_Append( hP )
+
+   LOCAL cH    := ParStr( hP, "h" )
+   LOCAL hVals := ParHash( hP, "values" )
+   LOCAL xErro, hCol, cNome, xConv
+   LOCAL aPares := {}, i, nRec
+
+   IF ( xErro := SessSelect( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   IF ! Empty( hVals )
+      FOR i := 1 TO Len( hVals )
+         cNome := hb_HKeyAt( hVals, i )
+         hCol := ColunaPorNome( cNome )
+
+         IF hCol == NIL
+            RETURN Err( "ERROR_FIELD_NOT_FOUND", "field not found", "values", ;
+                        { "field" => cNome, "alias" => Alias() } )
+         ENDIF
+
+         IF ( xErro := ValidaValor( hCol, hb_HValueAt( hVals, i ), @xConv ) ) != NIL
+            RETURN xErro
+         ENDIF
+
+         AAdd( aPares, { hCol[ "pos" ], xConv } )
+      NEXT
+   ENDIF
+
+   BEGIN SEQUENCE WITH {| e | Break( e ) }
+      dbAppend()
+
+      /* `NetErr()` depois do append e como o xBase avisa que nao conseguiu o
+         lock do registro novo -- em rede, dois appends simultaneos disputam a
+         mesma posicao. Sem esta checagem o FieldPut escreveria num registro que
+         nao e nosso. */
+      IF NetErr()
+         Break( NIL )
+      ENDIF
+
+      FOR i := 1 TO Len( aPares )
+         FieldPut( aPares[ i ][ 1 ], aPares[ i ][ 2 ] )
+      NEXT
+      dbCommit()
+   RECOVER USING xErro
+      dbUnlock()
+      RETURN Err( "ERROR_APPEND_FAILED", "could not add the record", "h", ;
+                  { "file"   => hb_FNameNameExt( SessHandle( cH )[ "path" ] ), ;
+                    "reason" => iif( xErro == NIL, "", ErroTexto( xErro ) ) } )
+   END SEQUENCE
+
+   nRec := RecNo()
+   dbUnlock()
+   SessBump()
+
+   RETURN Ok( { "h"       => cH, ;
+                "recno"   => nRec, ;
+                "row"     => LinhaPedida( hP, cH ), ;
+                "records" => LastRec() } )
+
+/*
+ * data.delete {"h":"h7","recno":42,"expect":{...}}   marca
+ * data.recall {"h":"h7","recno":42,"expect":{...}}   desmarca
+ *
+ * `expect` e opcional e tem o contrato do data.update (R8): os bytes crus que
+ * `data.record` devolveu em `raw`; qualquer campo diferente no disco recusa
+ * com ERROR_STALE_VALUE.
+ *
+ * MARCA, nao remocao -- e o motivo de os dois existirem em par. No xBase o
+ * registro excluido continua no arquivo ate um PACK; a grade mostra tachado.
+ * Chamar isto de "excluir" na tela e correto, desde que "recuperar" esteja do
+ * lado -- o que o DBU original ja fazia.
+ */
+FUNCTION Api_Data_Delete( hP )
+   RETURN MarcaRegistro( hP, .T. )
+
+FUNCTION Api_Data_Recall( hP )
+   RETURN MarcaRegistro( hP, .F. )
+
+STATIC FUNCTION MarcaRegistro( hP, lExcluir )
+
+   LOCAL cH      := ParStr( hP, "h" )
+   LOCAL nRec    := ParNum( hP, "recno", 0 )
+   LOCAL hExpect := ParHash( hP, "expect" )
+   LOCAL xErro
+
+   IF ( xErro := SessSelect( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   IF ( xErro := VaiParaRegistro( nRec ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   IF ( xErro := TravaRegistro( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   /* R8 tambem aqui: quem exclui decide olhando a linha. Se o registro mudou
+      depois que a tela o leu, a decisao foi tomada sobre outro registro --
+      e a marca so entra se o disco ainda for o que a pessoa viu. */
+   IF ! Empty( hExpect ) .AND. ( xErro := ConfereExpect( hExpect ) ) != NIL
+      dbUnlock()
+      RETURN xErro
+   ENDIF
+
+   BEGIN SEQUENCE WITH {| e | Break( e ) }
+      IF lExcluir
+         dbDelete()
+      ELSE
+         dbRecall()
+      ENDIF
+      dbCommit()
+   RECOVER USING xErro
+      dbUnlock()
+      RETURN Err( "ERROR_WRITE_FAILED", "could not write the record", "h", ;
+                  { "file"   => hb_FNameNameExt( SessHandle( cH )[ "path" ] ), ;
+                    "recno"  => nRec, ;
+                    "reason" => ErroTexto( xErro ) } )
+   END SEQUENCE
+
+   dbUnlock()
+   SessBump()
+
+   RETURN Ok( { "h"       => cH, ;
+                "recno"   => nRec, ;
+                "deleted" => Deleted(), ;
+                "row"     => LinhaPedida( hP, cH ) } )
+
+/*
+ * NAO HA `data.memo`. Houve -- so leitura, para o editor pedir o conteudo de UM
+ * memo, ja que `data.page` manda so o tamanho. Saiu em 04/09/2026 quando o
+ * `data.record` (R8, abaixo) passou a trazer o texto do memo em `raw`, na
+ * MESMA leitura que traz o registro: um metodo que ninguem chama e um caminho
+ * que envelhece sem ninguem ver.
+ *
+ * GRAVAR memo continua sendo `data.update` com o campo memo em `values` --
+ * `ValidaValor()` ja trata "M". Duas razoes para nao existir outro caminho:
+ *
+ *   - O log registra por METODO, no gancho do dispatcher. Um metodo que ora le
+ *     ora escreve poria uma linha em `.qdbu/log` toda vez que alguem ABRISSE um
+ *     memo para olhar, e "so entra o que muda bytes" e o criterio que faz esse
+ *     log ser lido. Foi por gerar linha a toa que `file.open` saiu da lista.
+ *   - Um caminho de escrita so. `data.update` ja valida, trava, grava e devolve
+ *     a linha relida; um segundo caminho para o mesmo fim teria de repetir isso
+ *     e envelheceria em separado.
+ */
+
+/* =====================================================================
+ * R8 -- O QUE SE EDITA TEM DE SER O QUE ESTA NO DISCO
+ *
+ * Duas pecas, e a regra que as une esta em docs/10-integridade.md, R8:
+ *
+ *   data.record  -> le UM registro AGORA, e devolve alem dos valores os BYTES
+ *                   CRUS de cada campo. E o que a UI chama ao abrir o editor.
+ *   expect       -> o data.update recebe esses bytes de volta e so grava se o
+ *                   disco ainda for igual a eles -- conferido DENTRO do RLock.
+ *
+ * POR QUE BYTES E NAO VALORES. FieldGet() achata estados diferentes do disco:
+ * num N(12,2), "nunca preenchido" (espacos), "zero" (0.00) e "nao coube"
+ * (asteriscos) sao tres bytes distintos que voltam todos como 0.00 -- e o RDD
+ * produz os tres com APPEND BLANK e REPLACE, sem ninguem escrever byte a byte.
+ * Um expect por valor deixaria passar a mudanca entre eles. Os bytes nao.
+ *
+ * TUDO PELO RDD. `dbRecordInfo( DBRI_RAWRECORD )` e API do RDD, da mesma
+ * familia de dbInfo(): devolve o buffer do registro como o RDD o mantem. Nao
+ * ha FSeek/FRead em lugar nenhum. Medido em 04/09/2026 em modo COMPARTILHADO:
+ * depois de outra area gravar, dbGoTo + RAWRECORD traz os bytes novos.
+ *
+ * MEMO vem de FieldGet(). No registro, o campo M guarda so o NUMERO DO BLOCO no
+ * .DBT -- e assim que o xBase funciona. Reescrever o texto dentro do mesmo
+ * bloco nao muda esses 10 bytes, entao os bytes crus nao servem; o texto que
+ * FieldGet() traz pelo RDD serve, e memo e texto, que nao achata.
+ * ===================================================================== */
+
+/*
+ * Posicao do campo dentro do buffer do registro: 1 e a marca de exclusao, e
+ * cada campo comeca onde o anterior terminou. Vem da estrutura, nao de conta
+ * feita a mao -- e por isso vale para qualquer arquivo.
+ */
+STATIC FUNCTION OffsetDoCampo( nPos, aEstru )
+
+   LOCAL nOff := 2, i
+
+   /* `aEstru` vem de quem ja tem a estrutura em maos. `dbStruct()` MONTA um
+      array novo a cada chamada -- num NETEST.DBF de 126 colunas sao 126 arrays
+      de 126 elementos por registro lido, e data.record roda a cada editor
+      aberto e a cada ciclo do refresh automatico. */
+   IF aEstru == NIL
+      aEstru := dbStruct()
+   ENDIF
+
+   FOR i := 1 TO nPos - 1
+      nOff += aEstru[ i ][ DBS_LEN ]
+   NEXT
+
+   RETURN nOff
+
+/*
+ * Os bytes crus do campo, como estao no disco, OU o texto quando e memo.
+ * `cRaw` e o buffer do registro ja lido -- quem chama le uma vez e reusa.
+ * `aEstru` idem: opcional, so para nao remontar a estrutura por campo.
+ */
+STATIC FUNCTION BytesDoCampo( hCol, cRaw, aEstru )
+
+   IF hCol[ "type" ] $ "MP"
+      RETURN hb_defaultValue( FieldGet( hCol[ "pos" ] ), "" )
+   ENDIF
+
+   RETURN SubStr( cRaw, OffsetDoCampo( hCol[ "pos" ], aEstru ), hCol[ "len" ] )
+
+/*
+ * Os bytes de TODOS os campos do registro corrente, por nome.
+ * Todos, e nao so os visiveis: o formulario mostra todos, e o custo e o
+ * tamanho do registro -- que ja esta em memoria.
+ */
+STATIC FUNCTION RawDoRegistro()
+
+   LOCAL cRaw := dbRecordInfo( DBRI_RAWRECORD )
+   LOCAL aEstru := dbStruct()
+   LOCAL hRaw := { => }
+   LOCAL i, hCol
+
+   hb_HKeepOrder( hRaw, .T. )
+
+   FOR i := 1 TO Len( aEstru )
+      hCol := DescreveColuna( Alias(), aEstru[ i ], i )
+      hRaw[ hCol[ "name" ] ] := BytesDoCampo( hCol, cRaw, aEstru )
+   NEXT
+
+   RETURN hRaw
+
+/*
+ * data.record {"h":"h7","recno":42,"fields":[...]}
+ *
+ * -> {"h":"h7","recno":42,"row":{...},"cols":[...],"records":421714,
+ *     "raw":{"TXT":"JOAO      ","NUM":"        0.00",...}}
+ *
+ * Le UM registro AGORA. E o que a UI chama ao abrir o editor: o que se edita
+ * tem de vir do disco, nao da pagina em memoria -- que pode ter envelhecido
+ * enquanto outro usuario gravava.
+ *
+ * NAO usa dbSkip. `data.page` para DEPOIS da ultima linha (e o comportamento
+ * documentado dele, e o motivo de nao servir como sonda); este posiciona com
+ * dbGoTo e fica ali, porque o registro corrente e o que Excluir/Recuperar vao
+ * usar em seguida.
+ *
+ * `row` vem no formato de `data.page`, com as colunas VISIVEIS -- e o que a
+ * grade repinta. `raw` traz TODOS os campos, porque e o que vai voltar como
+ * `expect`, e o formulario edita qualquer um.
+ */
+FUNCTION Api_Data_Record( hP )
+
+   LOCAL cH      := ParStr( hP, "h" )
+   LOCAL nRec    := ParNum( hP, "recno", 0 )
+   LOCAL aCampos := ParArr( hP, "fields" )
+   LOCAL xErro, aCols
+
+   IF ( xErro := SessSelect( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   /* Mesma regra do data.page: sem `fields`, as visiveis. */
+   IF Empty( aCampos )
+      aCampos := Visiveis( SessHandle( cH ) )
+   ENDIF
+
+   IF ( xErro := SelecionaColunas( aCampos, @aCols ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   IF ( xErro := VaiParaRegistro( nRec ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   /* `cols` e `records` vem junto para o formulario poder viver so disto,
+      sem um data.page ao lado -- row e raw tem de sair da MESMA leitura. */
+   RETURN Ok( { "h"       => cH, ;
+                "recno"   => nRec, ;
+                "row"     => LinhaDe( aCols ), ;
+                "cols"    => aCols, ;
+                "records" => LastRec(), ;
+                "raw"     => RawDoRegistro() } )
+
+/*
+ * Confere o `expect` contra o disco. Chamada DENTRO do RLock, antes do
+ * FieldPut: fora dele ainda caberia uma escrita alheia entre conferir e gravar,
+ * que e exatamente a corrida que se quer fechar.
+ *
+ * Devolve NIL se tudo bate, ou a recusa com os DOIS lados -- `expected` e
+ * `actual` como a tela mostra, e `raw` para a UI poder reenviar se a pessoa
+ * decidir gravar por cima sabendo do que se trata.
+ *
+ * Os dois lados saem de ValorDeBytes(), e nao um de ValorDoCampo(): para memo
+ * este devolve {memo,len} -- e a pergunta mostrava "[object Object]" no lugar
+ * do texto (visto no CDP em 04/09/2026).
+ */
+STATIC FUNCTION ConfereExpect( hExpect )
+
+   LOCAL cRaw := dbRecordInfo( DBRI_RAWRECORD )
+   LOCAL aEstru := dbStruct()
+   LOCAL i, cNome, hCol, cEsperado, cAtual
+
+   FOR i := 1 TO Len( hExpect )
+      cNome := hb_HKeyAt( hExpect, i )
+      hCol := ColunaPorNome( cNome )
+
+      IF hCol == NIL
+         RETURN Err( "ERROR_FIELD_NOT_FOUND", "field not found", "expect", ;
+                     { "field" => cNome, "alias" => Alias() } )
+      ENDIF
+
+      cEsperado := hb_HValueAt( hExpect, i )
+      IF ! HB_ISSTRING( cEsperado )
+         RETURN Err( "ERROR_PARAM_MUST_BE_STRING", "expect must carry raw bytes", "expect", ;
+                     { "param" => "expect", "field" => cNome } )
+      ENDIF
+
+      cAtual := BytesDoCampo( hCol, cRaw, aEstru )
+
+      IF ! ( cAtual == cEsperado )
+         RETURN Err( "ERROR_STALE_VALUE", "the field changed since it was read", "value", ;
+                     { "field"    => hCol[ "name" ], ;
+                       "expected" => ValorDeBytes( hCol, cEsperado ), ;
+                       "actual"   => ValorDeBytes( hCol, cAtual ), ;
+                       "raw"      => cAtual } )
+      ENDIF
+   NEXT
+
+   RETURN NIL
+
+/*
+ * O valor que a tela mostraria para uns bytes crus -- para a recusa poder
+ * dizer "era X, agora e Y" com os dois lados no mesmo formato. Memo ja e o
+ * texto; os outros passam pela mesma normalizacao de ValorDoCampo(), so que
+ * sobre os bytes recebidos em vez do FieldGet.
+ */
+STATIC FUNCTION ValorDeBytes( hCol, cBytes )
+
+   DO CASE
+   CASE hCol[ "type" ] $ "MP" ; RETURN cBytes
+   CASE hCol[ "type" ] == "N" ; RETURN Val( cBytes )
+   CASE hCol[ "type" ] == "D" ; RETURN iif( Empty( hb_SToD( cBytes ) ), "", ;
+                                       hb_DToC( hb_SToD( cBytes ), "YYYY-MM-DD" ) )
+   CASE hCol[ "type" ] == "L" ; RETURN Upper( cBytes ) $ "TY"
+   ENDCASE
+
+   RETURN RTrim( cBytes )
+
+/*
+ * A linha corrente no mesmo formato de `data.page`, para a UI repintar sem
+ * pedir a pagina inteira de volta.
+ *
+ * Respeita a selecao de colunas do handle: devolver campos escondidos faria a
+ * linha nova ter mais celulas que as vizinhas.
+ */
+/*
+ * A linha como quem chamou a QUER: com as colunas de `fields` quando o
+ * parametro veio, senao as visiveis -- a mesma regra do data.page.
+ *
+ * O formulario manda TODOS os campos e indexa a resposta pela propria lista;
+ * uma linha so com as visiveis o faria ler a coluna errada assim que alguem
+ * escondesse uma na grade. A grade nao manda nada e recebe as visiveis.
+ */
+STATIC FUNCTION LinhaPedida( hP, cH )
+
+   LOCAL aCampos := ParArr( hP, "fields" )
+   LOCAL aCols
+
+   IF Empty( aCampos )
+      aCampos := Visiveis( SessHandle( cH ) )
+   ENDIF
+
+   IF SelecionaColunas( aCampos, @aCols ) != NIL
+      RETURN NIL
+   ENDIF
+
+   RETURN LinhaDe( aCols )
+
+STATIC FUNCTION LinhaDe( aCols )
+
+   LOCAL aValores := {}
+   LOCAL hCol
+
+   FOR EACH hCol IN aCols
+      AAdd( aValores, ValorDoCampo( hCol ) )
+   NEXT
+
+   RETURN { "recno" => RecNo(), "deleted" => Deleted(), "values" => aValores }

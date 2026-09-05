@@ -24,11 +24,26 @@ FUNCTION Api_File_Open( hP )
    LOCAL cArq  := ParStr( hP, "path" )
    LOCAL lExcl := ParLog( hP, "exclusive", .F. )
    LOCAL cConn := ParStr( hP, "connection" )
-   LOCAL cAlias, cH, hJa, nArea, cMotivo, oErr
+   LOCAL cCdp  := ParStr( hP, "codepage" )
+   LOCAL cAlias, cH, hJa, nArea, cMotivo, oErr, cOrigem
 
    IF Empty( cArq )
       RETURN Err( "ERROR_PARAM_REQUIRED", "file path is required", "path", ;
                   { "param" => "path" } )
+   ENDIF
+
+   /* Codepage: se veio explicito no pedido, tem de ser valido e vence tudo.
+      Senao, a CASCATA decide -- arquivo > conexao > global > PT850 (config.prg).
+      A pista do cabecalho vai junto no FileState, para a tela sugerir sem
+      adivinhar por conta propria. */
+   IF ! Empty( cCdp )
+      IF ! CdpValida( cCdp )
+         RETURN Err( "ERROR_UNKNOWN_CODEPAGE", "unknown codepage", "codepage", ;
+                     { "codepage" => cCdp } )
+      ENDIF
+      cOrigem := "request"
+   ELSE
+      cCdp := CodepageResolvido( CaminhoOS( cArq ), cConn, @cOrigem )
    ENDIF
 
    cArq := CaminhoOS( cArq )
@@ -89,6 +104,8 @@ FUNCTION Api_File_Open( hP )
       "connection" => cConn, ;
       "indexes"    => {}, ;
       "visible"    => {}, ;   /* colunas visiveis; vazio = todas (T4) */
+      "codepage"   => cCdp, ;
+      "codepageOrigin" => cOrigem, ;
       "filter"     => "" } )
 
    RETURN Ok( FileState( cH, .T. ) )
@@ -109,6 +126,101 @@ FUNCTION Api_File_Close( hP )
    SessClose( cH, "file.close" )
 
    RETURN Ok( { "h" => cH, "closed" => .T. } )
+
+/* ------------------------------------------------------------- codepage */
+
+/*
+ * file.setcodepage {"h":"h7","codepage":"ESWIN"[,"persist":"file"]} -> FileState
+ *
+ * Troca a lente do arquivo SEM fechar/reabrir e SEM tocar no disco de dados --
+ * so muda como os bytes daquele DBF viram texto. O `rev` sobe (SessBump), a UI
+ * rele a pagina e ve o acento certo. Reversivel: e so trocar de novo.
+ *
+ * `persist` e OPT-IN e decide se a escolha sobrevive ao fechamento:
+ *   ausente  -> vale so nesta sessao (nada e escrito em disco)
+ *   "file"   -> fixa em <pasta>/.qdbu/arquivos.json (o nivel mais especifico)
+ *
+ * Fixar e BEST-EFFORT: pasta do cliente read-only ou de rede nao derruba nada
+ * -- a lente vale igual, e `saved` volta .F. para a UI avisar. Nunca "ERR:".
+ * Conexao e global se fixam noutros lugares (workspace.update, config.set).
+ */
+FUNCTION Api_File_SetCodepage( hP )
+
+   LOCAL cH      := ParStr( hP, "h" )
+   LOCAL cCdp    := ParStr( hP, "codepage" )
+   LOCAL cPers   := ParStr( hP, "persist" )
+   LOCAL xErro := SessSelect( cH )
+   LOCAL hInfo, hRet, lSalvou := .F.
+
+   IF xErro != NIL
+      RETURN xErro
+   ENDIF
+
+   IF ! CdpValida( cCdp )
+      RETURN Err( "ERROR_UNKNOWN_CODEPAGE", "unknown codepage", "codepage", ;
+                  { "codepage" => cCdp } )
+   ENDIF
+
+   /* Hash do handle e por referencia: alterar aqui altera o guardado. */
+   hInfo := SessHandle( cH )
+   hInfo[ "codepage" ] := cCdp
+
+   IF cPers == "file"
+      lSalvou := SalvaCodepageArquivo( hInfo[ "path" ], cCdp )
+   ENDIF
+
+   /*
+    * A ORIGEM SO E "file" SE O DISCO ACEITOU.
+    *
+    * Fixar e best-effort: pasta de cliente read-only ou de rede devolve
+    * .F. e a lente vale so nesta sessao. Carimbar "file" antes de saber
+    * acendia o 📌 e punha o title "fixado neste arquivo" enquanto a barra
+    * avisava que NAO tinha gravado -- duas afirmacoes opostas na mesma tela,
+    * e a que a pessoa acredita e a do botao. Reabrir o arquivo cairia na
+    * cascata e a escolha teria sumido sem ninguem ver.
+    */
+   hInfo[ "codepageOrigin" ] := iif( lSalvou, "file", "session" )
+
+   SessBump()
+
+   hRet := FileState( cH, .F. )
+   hRet[ "persisted" ] := cPers
+   hRet[ "saved" ]     := lSalvou
+
+   RETURN Ok( hRet )
+
+/*
+ * Pista de codepage vinda do CABECALHO -- o byte do "language driver" (offset
+ * 29). E so PISTA: a maioria dos DBFs Clipper grava 0x00 (nao especificado), e
+ * um valor errado ali nao pode calar a escolha da pessoa. Devolve o id
+ * sugerido quando o byte e reconhecido E a codepage esta disponivel, senao "".
+ *
+ * Le com hb_vfOpen/hb_BPeek, como EhDbfValido e TemFlagMemo -- cabecalho cru,
+ * antes de qualquer work area. Nao e FRead sobre dado de registro (o que o R8
+ * proibe): e a mesma leitura de 32 bytes que valida o arquivo ao abrir.
+ */
+STATIC FUNCTION CdpDoCabecalho( cArq )
+
+   LOCAL hFile := hb_vfOpen( cArq, FO_READ + FO_SHARED )
+   LOCAL cBuf := Space( 32 )
+   LOCAL nLng, cId := ""
+
+   IF hFile == NIL
+      RETURN ""
+   ENDIF
+
+   IF hb_vfRead( hFile, @cBuf, 32 ) >= 30
+      nLng := hb_BPeek( cBuf, 30 )   /* offset 29, 1-based no hb_BPeek */
+      DO CASE
+      CASE nLng == 0x02 ; cId := "PT850"   /* DOS 850 (multilingue) */
+      CASE nLng == 0x03 ; cId := "ESWIN"   /* Windows-1252 (ANSI)   */
+      CASE nLng == 0xC9 ; cId := "ESWIN"   /* Windows-1252 (VFP)    */
+      ENDCASE
+   ENDIF
+
+   hb_vfClose( hFile )
+
+   RETURN iif( CdpValida( cId ), cId, "" )
 
 /* file.close_all */
 FUNCTION Api_File_Close_All( hP )
@@ -433,7 +545,17 @@ FUNCTION FileState( cH, lWithFields )
     */
    hRet[ "lastUpdate" ] := dbInfo( DBI_LASTUPDATE )
    hRet[ "headerSize" ] := Max( 0, dbInfo( DBI_GETHEADERSIZE ) )
-   hRet[ "codepage" ]   := CdpNativa()
+   /* O codepage E do arquivo (guardado no handle), nao mais um global. E a
+      pista que o cabecalho carrega no byte do language driver anda junto: ""
+      quando o DBF nao declara, o id sugerido quando declara e esta disponivel. */
+   hRet[ "codepage" ]     := iif( hb_HHasKey( hInfo, "codepage" ) .AND. ;
+                                  ! Empty( hInfo[ "codepage" ] ), ;
+                                  hInfo[ "codepage" ], CdpPadrao() )
+   /* De onde a lente veio: file/connection/global/default/request/session.
+      A UI usa para dizer "herdado da conexao" e nao destacar o que nao mudou. */
+   hRet[ "codepageOrigin" ] := iif( hb_HHasKey( hInfo, "codepageOrigin" ), ;
+                                    hInfo[ "codepageOrigin" ], "default" )
+   hRet[ "codepageHint" ] := CdpDoCabecalho( hInfo[ "path" ] )
    hRet[ "bytes" ]      := Max( 0, hb_FSize( hInfo[ "path" ] ) )
 
    /*

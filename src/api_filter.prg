@@ -19,8 +19,8 @@
 /* Quantos valores distintos o "Suggested Values" oferece, e quantos registros
    ele varre para achar. Ler o arquivo inteiro para popular um combo seria
    trocar uma comodidade por um congelamento. */
-#define DBU_SUG_VALORES    50
-#define DBU_SUG_VARREDURA  5000
+#define QDBU_SUG_VALORES    50
+#define QDBU_SUG_VARREDURA  5000
 
 /* ------------------------------------------------------------------ aplicar */
 
@@ -196,11 +196,11 @@ FUNCTION Api_Filter_Count( hP )
     * tempo em si, e sim nao haver como mostrar progresso nem parar no meio --
     * a UI ficava sem resposta e sem explicacao.
     *
-    * Dbu_JobBegin/Progress/Canceled escrevem e leem memoria C fora da VM
+    * QDbu_JobBegin/Progress/Canceled escrevem e leem memoria C fora da VM
     * (src/bridge/progress.c), entao o Rust acompanha por outra thread enquanto
     * este laco roda.
     */
-   Dbu_JobBegin( JobMsg( "UI_JOB_COUNTING" ), nTotal )
+   QDbu_JobBegin( JobMsg( "UI_JOB_COUNTING" ), nTotal )
 
    dbGoTop()
    DO WHILE ! Eof()
@@ -210,8 +210,8 @@ FUNCTION Api_Filter_Count( hP )
          CRITICAL_SECTION, e fazer isso por registro pesaria mais que o trabalho
          util. 500 mantem a barra fluida e o cancelamento com resposta rapida. */
       IF nQtd % 500 == 0
-         Dbu_Progress( nQtd )
-         IF Dbu_Canceled()
+         QDbu_Progress( nQtd )
+         IF QDbu_Canceled()
             EXIT
          ENDIF
       ENDIF
@@ -221,9 +221,9 @@ FUNCTION Api_Filter_Count( hP )
 
    /* ANTES do JobEnd: ele zera o sinalizador, e perguntar depois responderia
       sempre .F. -- a contagem parcial passaria por completa. */
-   lParou := Dbu_Canceled()
+   lParou := QDbu_Canceled()
 
-   Dbu_JobEnd()
+   QDbu_JobEnd()
    dbGoTo( nRec )
 
    /* Cancelado devolve o que deu tempo de contar, marcado como PARCIAL. Sem a
@@ -242,7 +242,7 @@ FUNCTION Api_Filter_Count( hP )
  * em vez de digitar 'SP' na mao e errar o acento ou o espaco, escolhe-se de uma
  * lista do que EXISTE no arquivo.
  *
- * Varre no maximo DBU_SUG_VARREDURA registros. Uma lista de sugestoes nao vale
+ * Varre no maximo QDBU_SUG_VARREDURA registros. Uma lista de sugestoes nao vale
  * ler 421 mil linhas, e `partial` avisa quando a lista pode estar incompleta --
  * melhor uma sugestao honestamente parcial que uma espera de meio minuto.
  *
@@ -275,7 +275,7 @@ FUNCTION Api_Filter_Values( hP )
    dbClearFilter()
    dbGoTop()
 
-   DO WHILE ! Eof() .AND. nLidos < DBU_SUG_VARREDURA .AND. Len( aVals ) < DBU_SUG_VALORES
+   DO WHILE ! Eof() .AND. nLidos < QDBU_SUG_VARREDURA .AND. Len( aVals ) < QDBU_SUG_VALORES
       nLidos++
       xVal := FieldGet( nPos )
       cTxt := ParaTexto( xVal )
@@ -297,8 +297,8 @@ FUNCTION Api_Filter_Values( hP )
 
    RETURN Ok( { "field" => cCampo, "values" => aVals, ;
                 "scanned" => nLidos, ;
-                "partial" => ( nLidos >= DBU_SUG_VARREDURA .OR. ;
-                               Len( aVals ) >= DBU_SUG_VALORES ) } )
+                "partial" => ( nLidos >= QDBU_SUG_VARREDURA .OR. ;
+                               Len( aVals ) >= QDBU_SUG_VALORES ) } )
 
 /* ---------------------------------------------------------------- helpers */
 

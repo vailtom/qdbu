@@ -19,14 +19,14 @@
 #include <windows.h>   /* GetCurrentThreadId -- ver o guarda de thread abaixo */
 #include <string.h>
 
-#define DBU_API __declspec( dllexport )
+#define QDBU_API __declspec( dllexport )
 
 /* codigos de retorno */
-#define DBU_ERR_NOTINIT   -1
-#define DBU_ERR_NODISP    -2
-#define DBU_ERR_BADARG    -3
-#define DBU_ERR_TRUNC     -4
-#define DBU_ERR_THREAD    -5
+#define QDBU_ERR_NOTINIT   -1
+#define QDBU_ERR_NODISP    -2
+#define QDBU_ERR_BADARG    -3
+#define QDBU_ERR_TRUNC     -4
+#define QDBU_ERR_THREAD    -5
 
 /*
  * A VM PERTENCE A UMA THREAD, e a partir daqui isto e verificado.
@@ -36,17 +36,17 @@
  * nunca era registrada na VM e a primeira HbCall estourava, longe da causa.
  *
  * Guardar QUEM inicializou transforma isso num "nao" imediato. O lado Rust ja
- * confina a DLL numa thread so (dbudll.rs) e agora espera ela morrer antes de
+ * confina a DLL numa thread so (qdbudll.rs) e agora espera ela morrer antes de
  * subir outra; este guarda existe para o dia em que alguem esquecer a regra --
  * falhar alto na chamada errada e melhor que corromper na chamada seguinte.
  */
 static HB_BOOL s_fInit  = HB_FALSE;
 static DWORD   s_dwDona = 0;
 
-static char   s_szProgName[] = "dbudll";
+static char   s_szProgName[] = "qdbudll";
 static char * s_argv[] = { s_szProgName, NULL };
 
-DBU_API int __stdcall HbStart( void )
+QDBU_API int __stdcall HbStart( void )
 {
    if( ! s_fInit )
    {
@@ -61,7 +61,7 @@ DBU_API int __stdcall HbStart( void )
    return ( GetCurrentThreadId() == s_dwDona ) ? 1 : 0;
 }
 
-DBU_API int __stdcall HbStop( void )
+QDBU_API int __stdcall HbStop( void )
 {
    if( ! s_fInit )
       return 1;
@@ -79,12 +79,12 @@ DBU_API int __stdcall HbStop( void )
 
 /*
  * Chama DllDispatch( cFunc, cArg ) no lado PRG.
- * Retorna: >= 0 tamanho do resultado copiado, ou codigo DBU_ERR_*.
- * DBU_ERR_THREAD sai quando a chamada vem de uma thread que nao e a dona.
- * Se o buffer for pequeno demais retorna DBU_ERR_TRUNC e grava em
+ * Retorna: >= 0 tamanho do resultado copiado, ou codigo QDBU_ERR_*.
+ * QDBU_ERR_THREAD sai quando a chamada vem de uma thread que nao e a dona.
+ * Se o buffer for pequeno demais retorna QDBU_ERR_TRUNC e grava em
  * pnNeeded o tamanho necessario (sem o NUL final).
  */
-DBU_API int __stdcall HbCall( const char * szFunc,
+QDBU_API int __stdcall HbCall( const char * szFunc,
                                 const char * szArg,
                                 char * pBuffer,
                                 int    nBufLen,
@@ -96,20 +96,20 @@ DBU_API int __stdcall HbCall( const char * szFunc,
    HB_SIZE nLen;
 
    if( ! s_fInit )
-      return DBU_ERR_NOTINIT;
+      return QDBU_ERR_NOTINIT;
 
    /* Chamar a VM de outra thread e o erro que este binario nao consegue
       sobreviver -- hb_vmPushDynSym numa thread sem pilha Harbour derruba o
       processo. Recusar e a unica saida util. */
    if( GetCurrentThreadId() != s_dwDona )
-      return DBU_ERR_THREAD;
+      return QDBU_ERR_THREAD;
 
    if( szFunc == NULL || pBuffer == NULL || nBufLen <= 0 )
-      return DBU_ERR_BADARG;
+      return QDBU_ERR_BADARG;
 
    pDyn = hb_dynsymFindName( "DLLDISPATCH" );
    if( pDyn == NULL || ! hb_dynsymIsFunction( pDyn ) )
-      return DBU_ERR_NODISP;
+      return QDBU_ERR_NODISP;
 
    hb_vmPushDynSym( pDyn );
    hb_vmPushNil();
@@ -129,7 +129,7 @@ DBU_API int __stdcall HbCall( const char * szFunc,
       /* copia o que cabe, ainda termina em NUL */
       memcpy( pBuffer, pszRet, ( size_t ) nBufLen - 1 );
       pBuffer[ nBufLen - 1 ] = '\0';
-      return DBU_ERR_TRUNC;
+      return QDBU_ERR_TRUNC;
    }
 
    memcpy( pBuffer, pszRet, ( size_t ) nLen );

@@ -5,8 +5,8 @@
  *
  * A tentacao e tratar seguranca como motivo para nao fazer -- adiar a tela que
  * escreve, so oferecer leitura, "nao arriscar arquivo real". Isso nao e
- * seguranca: e uma ferramenta que nao serve. O DBU existe para PACK, ZAP e
- * alterar estrutura; recusar-se a faze-los e recusar-se a ser o DBU.
+ * seguranca: e uma ferramenta que nao serve. O QDBU existe para PACK, ZAP e
+ * alterar estrutura; recusar-se a faze-los e recusar-se a ser o QDBU.
  *
  * Seguranca de verdade e um checklist que RODA e que APARECE. O usuario ve cada
  * conferencia, ve o resultado de cada uma, e confirma. Quem confirma sabendo o
@@ -137,7 +137,7 @@ FUNCTION EspacoLivre( cCaminho )
  *
  * SEM `.bak`, e isso foi uma correcao de rumo. A primeira versao gerava
  * `NETCLI_20260902_113446.DBF.bak`, e um backup que nao se consegue ABRIR e um
- * backup que nao se consegue CONFERIR: a lista de arquivos do DBU so mostra
+ * backup que nao se consegue CONFERIR: a lista de arquivos do QDBU so mostra
  * *.dbf, entao a copia ficava invisivel dentro do proprio programa que a criou.
  * Com a extensao real ela aparece na arvore, abre, e da para ver os registros
  * -- que e a prova de que a copia presta.
@@ -351,7 +351,7 @@ FUNCTION CopiaArquivo( cOrigem, cDestino, nBloco, bEvento, nCopiados, lExclusivo
       ENDIF
 
       /* Entre pedacos, nunca no meio de um. R1 de docs/10-integridade.md. */
-      IF Dbu_Canceled()
+      IF QDbu_Canceled()
          FClose( nIn )
          FClose( nOut )
          /* R3: cancelar nao deixa lixo. Copia pela metade e pior que nenhuma,
@@ -563,7 +563,7 @@ FUNCTION CopiaPorRegistro( cDestino, bEvento )
          IF HB_ISBLOCK( bEvento )
             Eval( bEvento, nFeitos, nTotal )
          ENDIF
-         IF Dbu_Canceled()
+         IF QDbu_Canceled()
             xErro := Err( "WARN_CANCELED_BACKUP", "canceled by user", , ;
                           { "file" => hb_FNameNameExt( cDestino ) } )
             EXIT

@@ -5,8 +5,8 @@
  *   conexao = um diretorio com DBFs, nomeado. Todas visiveis numa arvore,
  *   sem limite e sem "trocar de pasta".
  *
- * O cadastro (nome + caminho) fica central, em <raiz>/.dbu/connections.json.
- * Os perfis de visao ficam em <pasta do cliente>/.dbu/perfis/, para acompanharem
+ * O cadastro (nome + caminho) fica central, em <raiz>/.qdbu/connections.json.
+ * Os perfis de visao ficam em <pasta do cliente>/.qdbu/perfis/, para acompanharem
  * backup e copia da pasta.
  */
 
@@ -33,6 +33,7 @@ FUNCTION Api_Workspace_List( hP )
       AAdd( aRet, { ;
          "name"   => hCon[ "name" ], ;
          "dir"    => hCon[ "dir" ], ;
+         "codepage" => iif( hb_HHasKey( hCon, "codepage" ), hCon[ "codepage" ], "" ), ;
          "existe" => hb_DirExists( hCon[ "dir" ] ) } )
    NEXT
 
@@ -50,6 +51,7 @@ FUNCTION Api_Workspace_Add( hP )
 
    LOCAL cName := Par( hP, "name" )
    LOCAL cDir  := Par( hP, "dir" )
+   LOCAL cCdp  := Par( hP, "codepage" )
    LOCAL aCon, hCon
 
    IF Empty( cDir )
@@ -75,11 +77,61 @@ FUNCTION Api_Workspace_Add( hP )
                   { "name" => cName } )
    ENDIF
 
+   IF ! Empty( cCdp ) .AND. ! CdpValida( cCdp )
+      RETURN Err( "ERROR_UNKNOWN_CODEPAGE", "unknown codepage", "codepage", ;
+                  { "codepage" => cCdp } )
+   ENDIF
+
    hCon := { "name" => cName, "dir" => cDir }
+   IF ! Empty( cCdp )
+      hCon[ "codepage" ] := cCdp
+   ENDIF
    AAdd( aCon, hCon )
    SaveConnections( aCon )
 
    RETURN Ok( { "connection" => hCon } )
+
+/*
+ * workspace.update {"name":"Cliente A","codepage":"ESWIN"} -> { connection }
+ *
+ * Muda o codepage de uma conexao ja cadastrada (o nivel CONEXAO da cascata).
+ * codepage vazio REMOVE a escolha -- a conexao volta a herdar do global.
+ * Igual ao Navicat: a codepage e propriedade da conexao, editavel depois.
+ */
+FUNCTION Api_Workspace_Update( hP )
+
+   LOCAL cName := Par( hP, "name" )
+   LOCAL cCdp  := Par( hP, "codepage" )
+   LOCAL aCon := Connections()
+   LOCAL n
+
+   IF Empty( cName )
+      RETURN Err( "ERROR_PARAM_REQUIRED", "connection name is required", "name", ;
+                  { "param" => "name" } )
+   ENDIF
+
+   IF ! Empty( cCdp ) .AND. ! CdpValida( cCdp )
+      RETURN Err( "ERROR_UNKNOWN_CODEPAGE", "unknown codepage", "codepage", ;
+                  { "codepage" => cCdp } )
+   ENDIF
+
+   n := AScan( aCon, {| h | Upper( h[ "name" ] ) == Upper( cName ) } )
+   IF n == 0
+      RETURN Err( "ERROR_CONNECTION_NOT_FOUND", "connection not found", "name", ;
+                  { "name" => cName } )
+   ENDIF
+
+   IF Empty( cCdp )
+      IF hb_HHasKey( aCon[ n ], "codepage" )
+         hb_HDel( aCon[ n ], "codepage" )
+      ENDIF
+   ELSE
+      aCon[ n ][ "codepage" ] := cCdp
+   ENDIF
+
+   SaveConnections( aCon )
+
+   RETURN Ok( { "connection" => aCon[ n ] } )
 
 /* workspace.remove {"name":"Cliente A"} */
 FUNCTION Api_Workspace_Remove( hP )
@@ -316,10 +368,10 @@ STATIC FUNCTION IndexesOf( cDir, cNameDbf )
 
 /* ------------------------------------------------------------ persistencia */
 
-/* <raiz>/.dbu/connections.json -- mesma convencao .dbu/ das pastas de trabalho. */
+/* <raiz>/.qdbu/connections.json -- mesma convencao .qdbu/ das pastas de trabalho. */
 STATIC FUNCTION ArqConnections()
 
-   LOCAL cDir := DirConfigDbu()
+   LOCAL cDir := DirConfigQDbu()
 
    IF ! hb_DirExists( cDir )
       hb_DirBuild( cDir )

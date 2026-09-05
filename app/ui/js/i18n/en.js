@@ -126,7 +126,7 @@
   UI_ORDER_TITLE: "Controlling index for the row order",
   UI_ROWS_PER_PAGE: "rows/page",
   UI_ROWS_PER_PAGE_TITLE: "Records per page",
-  UI_LAST_READ: "Last read",
+  UI_LAST_READ: "Last read — the screen refreshes by itself every 5 s while nothing is being edited",
   UI_RELOAD: "Reload from disk (F5)",
 
   UI_FIELD: "Field",
@@ -444,6 +444,7 @@
 
   UI_PAGE_RANGE: "on this page: {first}–{last}",
   UI_PAGE_RANGE_EMPTY: "no records in view",
+  UI_PAGE_COUNT: { one: "on this page: {n} record", other: "on this page: {n} records" },
   UI_FILTERED_SUFFIX: "{n} filtered",
   UI_UNKNOWN_COUNT: "?",
   UI_GOTO_RECORD: "record {n}",
@@ -535,7 +536,7 @@
 
   UI_PREFLIGHT: "Pre-flight checks",
   UI_PREFLIGHT_EXPLAIN:
-    "Before altering the file, DBU checks what could go wrong and makes a " +
+    "Before altering the file, QDBU checks what could go wrong and makes a " +
     "copy. Nothing is altered until you confirm.",
   UI_BACKUP_RUN: "Run the backup",
   UI_BACKUP_DONE: "Backup written to {dir}",
@@ -620,16 +621,21 @@
   UI_ASK_BACKUP_TITLE: "Make a copy first?",
   UI_ASK_BACKUP:
     "The copy stays in the same folder, with the time in its name, and opens " +
-    "in DBU like any file — you can check it before deleting the copy.",
+    "in QDBU like any file — you can check it before deleting the copy.",
   UI_WITH_BACKUP: "Yes, copy first",
   UI_WITHOUT_BACKUP: "No, go without a copy",
   UI_GO_AHEAD: "Continue",
 
-  UI_ZAP_DONE: "'{file}' zapped: {n} records deleted.",
-  UI_ZAP_DONE_BACKUP:
-    "'{file}' zapped: {n} records deleted. The copy is in '{backup}'.",
+  UI_ZAP_DONE: { one: "'{file}' zapped: {n} record deleted.", other: "'{file}' zapped: {n} records deleted." },
+  UI_ZAP_DONE_BACKUP: {
+    one: "'{file}' zapped: {n} record deleted. The copy is in '{backup}'.",
+    other: "'{file}' zapped: {n} records deleted. The copy is in '{backup}'.",
+  },
   UI_PACK_DONE: { one: "'{file}' packed: {n} record removed.", other: "'{file}' packed: {n} records removed." },
-  UI_PACK_DONE_BACKUP: "'{file}' packed: {n} removed. The copy is in '{backup}'.",
+  UI_PACK_DONE_BACKUP: {
+    one: "'{file}' packed: {n} record removed. The copy is in '{backup}'.",
+    other: "'{file}' packed: {n} records removed. The copy is in '{backup}'.",
+  },
   UI_NOTHING_TO_PACK: "'{file}' has no records marked; nothing was changed.",
 
   ERROR_ZAP_CREATE_FAILED:
@@ -907,4 +913,91 @@
   ERROR_ZIP_FAILED: "'{file}' could not be written: {reason}",
   UI_ROLE_ZIP: "compressed",
 
+
+  // ---- T8: record editing ----
+  ERROR_CELL_TYPE: "{field} does not take that kind of value.",
+  ERROR_CELL_TOO_LONG:
+    "{field} holds {len} characters and the value has {size} — shorten it or widen the field in the structure.",
+  ERROR_CELL_NOT_NUMBER: "{field} is Numeric and '{value}' is not a number.",
+  ERROR_CELL_NOT_DATE: "{field} is a Date and '{value}' is not one — use YYYY-MM-DD.",
+  ERROR_FIELD_TYPE_UNSUPPORTED: "{field} is type {type} and cannot be edited here.",
+  ERROR_RECORD_OUT_OF_RANGE: "Record {recno} does not exist — the file goes up to {max}.",
+  ERROR_CANNOT_LOCK_RECORD:
+    "Record {recno} of '{file}' is locked by another user — try again in a moment.",
+  ERROR_WRITE_FAILED: "Could not write record {recno} of '{file}'[[: {reason}]].",
+
+  UI_ADD_RECORD: "+ Record",
+  UI_ADD_RECORD_TITLE: "Appends a blank record at the end of the file",
+  UI_DELETE_RECORD: "Delete",
+  UI_DELETE_RECORD_TITLE: "Marks the current record for deletion (PACK is what removes it)",
+  UI_RECALL_RECORD: "Recall",
+  UI_RECALL_RECORD_TITLE: "Clears the deletion mark on the current record",
+  UI_CONFIRM: "Confirm",
+  UI_SAVE: "Save",
+  UI_MEMO_TITLE: "{field} — record {n}",
+  UI_NO_CURRENT_RECORD: "No record selected — click a row in the grid.",
+  INFO_RECORD_UPDATED: "Record {n} updated: {field}.",
+  INFO_RECORD_ADDED: "Record {n} appended.",
+  INFO_RECORD_ADDED_HIDDEN:
+    "Record {n} appended — the active filter hides it, because it starts blank.",
+  INFO_RECORD_DELETED: "Record {n} marked for deletion.",
+  INFO_RECORD_RECALLED: "Record {n} recalled.",
+
+  // ---- T9: form ----
+  UI_VIEW_FORM: "Form",
+  UI_FIRST_RECORD: "First record",
+  UI_PREV_RECORD: "Previous record",
+  UI_NEXT_RECORD: "Next record",
+  UI_LAST_RECORD: "Last record",
+  UI_AT_FIRST_RECORD: "Already at the first record.",
+  UI_AT_LAST_RECORD: "Already at the last record.",
+  UI_DELETED_BADGE: "deleted",
+
+  // ---- R8: what you edit must be what is on disk ----
+  ERROR_PARAM_MUST_BE_STRING: "Parameter '{param}' must be a string[[ (field {field})]].",
+  ERROR_CONNECTION_NOT_FOUND: "Connection '{name}' not found.",
+  ERROR_UNKNOWN_CODEPAGE: "Codepage '{codepage}' is not one of the available ones.",
+  UI_CDP_PT850: "DOS Brazil (CP850)",
+  UI_CDP_ESWIN: "Windows (CP1252)",
+  UI_CDP_PTISO: "ISO-8859-1 (Latin-1)",
+  UI_CDP_PT860: "DOS Portugal (CP860)",
+  UI_CDP_UTF8: "UTF-8",
+  INFO_CODEPAGE_CHANGED: "File codepage: {cp}.",
+  // ---- three-level config (global / connection / file) ----
+  UI_PREFERENCES: "Preferences",
+  UI_CONFIG_EXPLAIN: "These apply to the whole app. Each connection and each file may set its own codepage on top of these.",
+  UI_DEFAULT_CODEPAGE: "Default codepage",
+  UI_SHOW_DELETED: "Show deleted records",
+  UI_EPOCH_INFO: "Two-digit years use the century from {year} on (SET EPOCH, fixed).",
+  UI_CONN_CODEPAGE: "Codepage",
+  UI_CDP_INHERIT: "(inherit)",
+  UI_MENU_CODEPAGE: "Connection codepage",
+  UI_PIN_FILE: "Pin this codepage for the file",
+  UI_PINNED_FILE: "Codepage pinned for this file",
+  UI_CODEPAGE_FROM_CONN: "Inherited from the connection.",
+  UI_CODEPAGE_FROM_GLOBAL: "App default.",
+  UI_CODEPAGE_FROM_FILE: "Pinned for this file.",
+  INFO_CODEPAGE_PINNED: "Codepage {cp} pinned for this file.",
+  INFO_CONFIG_SAVED: "Preferences saved.",
+  INFO_CONNECTION_UPDATED: "Connection '{name}' updated.",
+  WARN_CODEPAGE_NOT_PINNED: "Could not write to the folder; codepage {cp} applies to this session only.",
+  WARN_CONFIG_NOT_SAVED: "Could not save to disk; preferences apply to this session only.",
+  UI_CODEPAGE: "Codepage",
+  UI_CODEPAGE_TITLE: "How this file's bytes become text — does not change the file",
+  UI_CODEPAGE_HINT: "The header suggests {cp}.",
+  ERROR_STALE_VALUE:
+    "{field} was changed by someone else while you were editing: it was '{expected}', now it is '{actual}'.",
+  INFO_RECORD_REFRESHED:
+    "Record {n} was changed by another user — showing the current values.",
+  UI_STALE_TITLE: "Changed by someone else",
+  UI_STALE_EXPLAIN:
+    "While you were editing, {field} of record {n} changed from '{expected}' to '{actual}'. What to do with what you typed?",
+  UI_STALE_DELETE_ASK:
+    "Record {n} changed since you saw it — {field}: it was '{expected}', now it is '{actual}'. Delete anyway?",
+  UI_STALE_RECALL_ASK:
+    "Record {n} changed since you saw it — {field}: it was '{expected}', now it is '{actual}'. Recall anyway?",
+  UI_DELETE_ANYWAY: "Delete anyway",
+  UI_RECALL_ANYWAY: "Recall anyway",
+  UI_STALE_DISCARD: "Discard mine",
+  UI_STALE_OVERWRITE: "Overwrite",
 };

@@ -439,9 +439,9 @@ FUNCTION Api_Struct_Modify( hP )
 
    /* R4: backup antes. Se ele falhar, a operacao NAO acontece. */
    IF lBackup
-      Dbu_JobBegin( JobMsg( "UI_JOB_BACKUP", hb_FNameNameExt( cBackup ) ), LastRec() )
-      xErro := CopiaPorRegistro( cBackup, {| n, t | HB_SYMBOL_UNUSED( t ), Dbu_Progress( n ) } )
-      Dbu_JobEnd()
+      QDbu_JobBegin( JobMsg( "UI_JOB_BACKUP", hb_FNameNameExt( cBackup ) ), LastRec() )
+      xErro := CopiaPorRegistro( cBackup, {| n, t | HB_SYMBOL_UNUSED( t ), QDbu_Progress( n ) } )
+      QDbu_JobEnd()
       IF xErro != NIL
          ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .T. )
          RETURN xErro
@@ -572,7 +572,7 @@ STATIC FUNCTION TransformaPara( cTmp, aEstru, aDe, nFalhas )
    ordSetFocus( 0 )
    dbGoTop()
 
-   Dbu_JobBegin( JobMsg( "UI_JOB_RESTRUCT", hb_FNameNameExt( cTmp ) ), nTotal )
+   QDbu_JobBegin( JobMsg( "UI_JOB_RESTRUCT", hb_FNameNameExt( cTmp ) ), nTotal )
 
    DO WHILE ! Eof()
 
@@ -602,8 +602,8 @@ STATIC FUNCTION TransformaPara( cTmp, aEstru, aDe, nFalhas )
 
       nFeitos++
       IF nFeitos % 500 == 0
-         Dbu_Progress( nFeitos )
-         IF Dbu_Canceled()
+         QDbu_Progress( nFeitos )
+         IF QDbu_Canceled()
             xErro := Err( "WARN_CANCELED_RESTRUCT", "canceled by user", , ;
                           { "file" => hb_FNameNameExt( cTmp ) } )
             EXIT
@@ -613,7 +613,7 @@ STATIC FUNCTION TransformaPara( cTmp, aEstru, aDe, nFalhas )
       dbSkip( 1 )
    ENDDO
 
-   Dbu_JobEnd()
+   QDbu_JobEnd()
 
    dbSelectArea( nDestino )
    dbCloseArea()

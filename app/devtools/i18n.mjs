@@ -53,6 +53,7 @@ const IMPLICITAS = [
   /^UI_ROW_[A-Z]+$/,
   /^UI_BACKUP_FILES$/,
   /^UI_TYPE_[A-Z]$/, //            window.I.tipo(letra)
+  /^UI_CDP_[A-Z0-9]+$/, //         "UI_CDP_" + codepage.id (rotuloCodepage, app.js)
   /^UI_THEME_[A-Z]+$/, //          "UI_THEME_" + tema.id (js/tema.js)
   /^ERROR_PARAM_REQUIRED_/, //     especializacao por params.param (i18n.js)
   /^ERROR_PARAM_OUT_OF_RANGE_/,
@@ -168,9 +169,9 @@ for (const f of fontes) {
 // telas: o SOLTOS acima so varre .js, e a barra de tarefa recebe o rotulo como
 // DADO vindo do Harbour -- nao como chave. Nenhuma das duas varreduras o via.
 //
-// A regra e simples e verificavel: o argumento de Dbu_JobBegin() vem de
+// A regra e simples e verificavel: o argumento de QDbu_JobBegin() vem de
 // JobMsg(). Ver src/util/job.prg.
-const JOB = /Dbu_JobBegin\(\s*([^,)]*)/g;
+const JOB = /QDbu_JobBegin\(\s*([^,)]*)/g;
 
 const rotulos = [];
 for (const f of fontes) {
@@ -225,7 +226,7 @@ if (soltos.length) {
 console.log("");
 if (rotulos.length) {
   falhou = true;
-  console.log(`ROTULOS -- Dbu_JobBegin() sem JobMsg(), frase nasce na DLL (${rotulos.length}):`);
+  console.log(`ROTULOS -- QDbu_JobBegin() sem JobMsg(), frase nasce na DLL (${rotulos.length}):`);
   console.log(lista(rotulos));
 } else {
   console.log("ROTULOS: nenhum rotulo de tarefa fora do dicionario");

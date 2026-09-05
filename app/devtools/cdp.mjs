@@ -11,7 +11,9 @@
  *   node --experimental-websocket cdp.mjs eval     "<expressao js>"
  *   node --experimental-websocket cdp.mjs evalfile "<arquivo.js>"
  *   node --experimental-websocket cdp.mjs text  "<seletor css>"
- *   node --experimental-websocket cdp.mjs click "<seletor css>"
+ *   node --experimental-websocket cdp.mjs click    "<seletor css>"
+ *   node --experimental-websocket cdp.mjs dblclick "<seletor css>"
+ *   node --experimental-websocket cdp.mjs scroll   "<seletor css>" <dx> [dy]
  *   node --experimental-websocket cdp.mjs fill  "<seletor css>" "<valor>"
  *   node --experimental-websocket cdp.mjs shot  "<arquivo.png>"
  *   node --experimental-websocket cdp.mjs reload
@@ -46,6 +48,38 @@ function conectar(url) {
     ws.addEventListener("open", () => ok(ws));
     ws.addEventListener("error", (e) => err(new Error("falha no WebSocket: " + e.message)));
   });
+}
+
+/*
+ * A CAIXA PODE AINDA NAO EXISTIR -- espera antes de desistir.
+ *
+ * O SweetAlert entra com animacao: nos primeiros quadros os botoes existem no
+ * DOM com `getBoundingClientRect()` zerado. Quem clicava nesse instante caia no
+ * ramo `.click()` la embaixo, que -- como diz o GUIA-DO-PROJETO.md -- NAO passa pela
+ * camada de composicao e chama o manipulador direto. E o ramo que existe para
+ * elemento genuinamente sem caixa acabava atendendo o caso "cheguei cedo
+ * demais", justamente mascarando os defeitos de top layer que so o clique de
+ * mouse de verdade expoe. O aviso saia no texto do retorno e passava batido.
+ *
+ * Meio segundo, em passos de 50 ms: o suficiente para qualquer animacao de
+ * entrada, curto o bastante para nao esconder um elemento que nunca tera caixa.
+ */
+async function caixaDe(ws, seletor, esperaMs = 500) {
+  const consulta = `(() => { const e = document.querySelector(${j(seletor)});
+       if (!e) return null;
+       e.scrollIntoView({block:"nearest"});
+       const r = e.getBoundingClientRect();
+       return { x: r.left + r.width/2, y: r.top + r.height/2,
+                w: r.width, h: r.height,
+                nome: (e.textContent||e.id||e.tagName).trim().slice(0,40) }; })()`;
+
+  const ate = Date.now() + esperaMs;
+  let caixa = await avaliar(ws, consulta);
+  while (caixa && caixa.w === 0 && caixa.h === 0 && Date.now() < ate) {
+    await new Promise((r) => setTimeout(r, 50));
+    caixa = await avaliar(ws, consulta);
+  }
+  return caixa;
 }
 
 let ws = null;
@@ -208,16 +242,7 @@ async function main() {
      * coordenada: ai cai no `.click()`, dizendo que caiu.
      */
     case "click": {
-      const caixa = await avaliar(
-        ws,
-        `(() => { const e = document.querySelector(${j(args[0])});
-           if (!e) return null;
-           e.scrollIntoView({block:"nearest"});
-           const r = e.getBoundingClientRect();
-           return { x: r.left + r.width/2, y: r.top + r.height/2,
-                    w: r.width, h: r.height,
-                    nome: (e.textContent||e.id||e.tagName).trim().slice(0,40) }; })()`
-      );
+      const caixa = await caixaDe(ws, args[0]);
       if (!caixa) { out = "elemento nao encontrado: " + args[0]; break; }
       if (caixa.w === 0 || caixa.h === 0) {
         out = await avaliar(
@@ -233,6 +258,71 @@ async function main() {
         });
       }
       out = "clicado: " + caixa.nome;
+      break;
+    }
+    /*
+     * DUPLO CLIQUE DE VERDADE -- `clickCount` crescente, nao dois `click`.
+     *
+     * A quarta lacuna desta ferramenta, encontrada em 03/09/2026 ao tentar
+     * abrir um arquivo pela arvore. Na arvore, clique simples SELECIONA e duplo
+     * clique ABRE: sem este comando nao havia como exercitar o caminho mais
+     * usado do app, e mandar `click` duas vezes tambem nao serve -- o navegador
+     * so sintetiza `dblclick` quando o segundo `mousePressed` chega com
+     * `clickCount: 2`. Dois cliques de `clickCount: 1` produzem dois `click` e
+     * nenhum `dblclick`, exatamente como no defeito que o teste procura.
+     */
+    case "dblclick": {
+      const caixa = await caixaDe(ws, args[0]);
+      if (!caixa) { out = "elemento nao encontrado: " + args[0]; break; }
+      if (caixa.w === 0 || caixa.h === 0) {
+        out = "elemento sem caixa, nao da para dar duplo clique: " + args[0];
+        break;
+      }
+      for (const clickCount of [1, 2]) {
+        for (const type of ["mousePressed", "mouseReleased"]) {
+          await enviar(ws, "Input.dispatchMouseEvent", {
+            type, x: caixa.x, y: caixa.y, button: "left", clickCount,
+          });
+        }
+      }
+      out = "duplo clique: " + caixa.nome;
+      break;
+    }
+    /*
+     * ROLAGEM COM RODA DE MOUSE DE VERDADE.
+     *
+     * `el.scrollLeft = N` no eval move a barra e NAO e rolar: nao passa pela
+     * camada de composicao, nao dispara o mesmo caminho de pintura, e portanto
+     * nao expoe o que so aparece quando o navegador compoe a cena rolada --
+     * como uma celula `position: sticky` com fundo translucido deixando o
+     * conteudo de baixo atravessar. Foi assim que esse defeito passou batido:
+     * a medicao por DOM dizia que o valor da celula estava certo, e estava.
+     *
+     * `Input.dispatchMouseEvent` com `type: mouseWheel` e o evento que o mouse
+     * gera. Precisa das coordenadas de onde o ponteiro esta, porque quem rola e
+     * o elemento sob ele.
+     *
+     * Uso: scroll <seletor> <dx> [dy]
+     */
+    case "scroll": {
+      const caixa = await caixaDe(ws, args[0]);
+      if (!caixa) { out = "elemento nao encontrado: " + args[0]; break; }
+      const dx = Number(args[1] || 0);
+      const dy = Number(args[2] || 0);
+      await enviar(ws, "Input.dispatchMouseEvent", {
+        type: "mouseWheel",
+        x: caixa.x, y: caixa.y,
+        deltaX: dx, deltaY: dy,
+        pointerType: "mouse",
+      });
+      // A rolagem e assincrona: sem esperar, a leitura seguinte pega o estado
+      // de antes e o teste conclui que nada rolou.
+      await new Promise((r) => setTimeout(r, 250));
+      out = await avaliar(
+        ws,
+        `(() => { const e = document.querySelector(${j(args[0])});
+           return "rolou para " + Math.round(e.scrollLeft) + "," + Math.round(e.scrollTop); })()`
+      );
       break;
     }
     case "fill":
@@ -263,7 +353,7 @@ async function main() {
       break;
     default:
       console.error(
-        "comandos: eval | evalfile | text | html | click | fill | key | type | shot | reload | logs"
+        "comandos: eval | evalfile | text | html | click | dblclick | fill | key | type | scroll | shot | reload | logs"
       );
       process.exitCode = 2;
       return;

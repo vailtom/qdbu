@@ -7,7 +7,7 @@
 // é sempre a mesma: um matiz só, em três alturas — muito escuro na moldura,
 // médio nos detalhes, branco no conteúdo.
 //
-// O DBU já fazia isso, ao contrário: a paleta original também é um matiz só
+// O DBU original já fazia isso, ao contrário: a paleta dele também é um matiz só
 // (quente, ~35°) em nove luminosidades, mas escuro no conteúdo. Copiar as cores
 // de lá inverteria o app; o que viaja é o MATIZ. Mantendo luminosidade e
 // saturação e trocando o ângulo da cor, sai o mesmo desenho noutra cor — e
@@ -46,7 +46,7 @@
   const EXTRAS = ["--ok", "--aviso", "--erro", "--acento-texto"];
 
   /*
-   * As ONZE do NetPDV, mais o ambar do DBU -- que abre a lista por ser a cor
+   * As ONZE do NetPDV, mais o ambar do DBU original -- que abre a lista por ser a cor
    * com que o app nasceu e o que continua valendo no app.css.
    *
    * Cada uma sai de um hex NUCLEO, que la e a cor escura da moldura contra
@@ -177,10 +177,21 @@
    * arquivo aberto. Restaurar uma sessão salva em outra máquina não pode trocar
    * as cores de quem está aqui agora.
    */
+  /* Chave `dbu.` -> `qdbu.`, com a antiga lida uma vez. Mesma razão do
+     `guardado()` de i18n.js: o tema escolhido não pode virar o padrão só
+     porque o produto trocou de nome. Migra ao ler e apaga a antiga. */
   function guardado() {
     try {
-      const v = localStorage.getItem("dbu.tema");
-      return daId(v) ? v : null;
+      const v = localStorage.getItem("qdbu.tema");
+      if (v) return daId(v) ? v : null;
+
+      const antigo = localStorage.getItem("dbu.tema");
+      if (antigo && daId(antigo)) {
+        localStorage.setItem("qdbu.tema", antigo);
+        localStorage.removeItem("dbu.tema");
+        return antigo;
+      }
+      return null;
     } catch (e) {
       return null; // modo privado, storage bloqueado — segue no padrão
     }
@@ -218,7 +229,7 @@
   function mudarTema(id) {
     if (!aplicar(id)) return false;
     try {
-      localStorage.setItem("dbu.tema", id);
+      localStorage.setItem("qdbu.tema", id);
     } catch (e) {
       /* sem storage: vale só para esta execução */
     }

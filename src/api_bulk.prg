@@ -208,9 +208,9 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
    /* PACK com backup: copia por REGISTRO, sob o exclusivo que ja temos. E a
       unica forma de o retrato ser consistente -- ninguem escreve agora. */
    IF cAcao == "pack" .AND. lBackup
-      Dbu_JobBegin( JobMsg( "UI_JOB_BACKUP", hb_FNameNameExt( cBackup ) ), LastRec() )
-      xErro := CopiaPorRegistro( cBackup, {| n, t | HB_SYMBOL_UNUSED( t ), Dbu_Progress( n ) } )
-      Dbu_JobEnd()
+      QDbu_JobBegin( JobMsg( "UI_JOB_BACKUP", hb_FNameNameExt( cBackup ) ), LastRec() )
+      xErro := CopiaPorRegistro( cBackup, {| n, t | HB_SYMBOL_UNUSED( t ), QDbu_Progress( n ) } )
+      QDbu_JobEnd()
 
       IF xErro != NIL
          /* Backup falhou: NAO opera. R4 -- backup antes, e se nao houve backup
@@ -220,18 +220,47 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
       ENDIF
    ENDIF
 
+   /*
+    * OS INDICES TEM DE ESTAR ABERTOS **DURANTE** O PACK/ZAP.
+    *
+    * A regra do projeto diz que aqui os indices nao se fecham "porque e o
+    * proprio dbPack() que os reconstroi". Verdade -- mas so vale para os que
+    * estao abertos NA AREA no momento da chamada, e ate agora nenhum estava: o
+    * caminho exclusivo acima faz `AbreNaArea()` do zero, que abre o .DBF e mais
+    * nada. `__dbPack()` rodava sobre uma area sem ordem nenhuma, nao tinha o que
+    * reconstruir, e `ReabreArea()` depois reanexava um .NTX que descrevia o
+    * arquivo de ANTES.
+    *
+    * O sintoma e o que a R5 previu: nenhum erro em lugar nenhum, e a grade
+    * mostrando dados errados. Medido em 03/09/2026 na fixture TIPOS.DBF, 7
+    * registros com 1 marcado, indice TIPOSTXT por TXT: depois do PACK a ordem
+    * fisica mostrava os 6 restantes e a ordem indexada mostrava 3. Metade dos
+    * registros invisivel, sem uma linha de aviso. O carimbo do .NTX no disco
+    * continuava sendo o da criacao -- o PACK nao o tinha tocado.
+    *
+    * Vale para o ZAP pelo mesmo motivo: `__dbZap()` esvazia os indices ABERTOS;
+    * os que ficaram de fora sobrevivem cheios de chaves para registros que nao
+    * existem mais.
+    *
+    * Falha ao reabrir um indice aqui NAO aborta: o objetivo desta reabertura e
+    * que o RDD reconstrua o que der: o que nao voltou tambem nao vai para o
+    * `Religar()` reanexar obsoleto, porque `ordCount()` la ja sera > 0. Quem
+    * precisa saber e a pessoa, e ela ve pela lista de indices abertos.
+    */
+   ReanexaIndices( hEstado )
+
    BEGIN SEQUENCE WITH {| e | Break( e ) }
       IF cAcao == "pack"
-         Dbu_JobBegin( JobMsg( iif( cAcao == "pack", "UI_JOB_PACK", "UI_JOB_ZAP" ), ;
+         QDbu_JobBegin( JobMsg( iif( cAcao == "pack", "UI_JOB_PACK", "UI_JOB_ZAP" ), ;
                                hb_FNameNameExt( cArq ) ), 0 )
          __dbPack()
-         Dbu_JobEnd()
+         QDbu_JobEnd()
       ELSE
          __dbZap()
       ENDIF
       dbCommit()
    RECOVER USING oErr
-      Dbu_JobEnd()
+      QDbu_JobEnd()
       ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL )
       RETURN Err( iif( cAcao == "pack", "ERROR_PACK_FAILED", "ERROR_ZAP_FAILED" ), ;
                   "operation failed", "h", ;

@@ -13,9 +13,9 @@
  *                   can continue in the next run. Survives the process.
  *
  * Files, one owner each -- so there are never two writers in the same place:
- *   .dbu/session.json      this module (panel, tree, tabs)
- *   .dbu/connections.json  api_workspace
- *   .dbu/window.json       the Rust side (position, size, maximized)
+ *   .qdbu/session.json      this module (panel, tree, tabs)
+ *   .qdbu/connections.json  api_workspace
+ *   .qdbu/window.json       the Rust side (position, size, maximized)
  */
 
 #include "dbinfo.ch"
@@ -97,7 +97,7 @@ FUNCTION Api_Session_State( hP )
  *
  * Sem parametro, so relata. O padrao do Harbour e OFF -- registro marcado
  * aparece, tachado na grade -- e isso e o certo para uma ferramenta de
- * manutencao: quem abre o DBU quer justamente ver o que esta marcado.
+ * manutencao: quem abre o QDBU quer justamente ver o que esta marcado.
  */
 FUNCTION Api_Session_Deleted( hP )
 
@@ -229,7 +229,7 @@ STATIC FUNCTION ParArr( hP, cKey )
 
 STATIC FUNCTION SessionFile()
 
-   LOCAL cDir := DirConfigDbu()
+   LOCAL cDir := DirConfigQDbu()
 
    IF ! hb_DirExists( cDir )
       hb_DirBuild( cDir )

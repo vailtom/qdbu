@@ -18,6 +18,11 @@
 
 # ---- Build ----
 bin/
+
+# O `outro app` dos cenarios de concorrencia (R8). O FONTE entra no
+# repositorio -- sem ele o cenario nao e reproduzivel --, o binario nao:
+# ele se refaz com tests/concorrencia/build.bat.
+tests/concorrencia/*.exe
 target/
 app/src-tauri/gen/
 *.obj
@@ -51,10 +56,15 @@ docs/fontes/*.avi
 docs/fontes/*.mov
 
 # ---- Estado local da aplicacao ----
-# .dbu/ e o que ESTA maquina abriu: connections.json com os caminhos reais
+# .qdbu/ e o que ESTA maquina abriu: connections.json com os caminhos reais
 # (J:\bases\...), session.json com abas e expressoes de filtro, e o log de
 # alteracoes. E estado de quem rodou, nao do projeto -- e leva nome de pasta de
 # cliente junto. Mesma razao de .run/ estar fora.
+.qdbu/
+# O nome anterior, de antes da renomeacao para QDBU. Continua listado porque a
+# migracao (migra_config_em, em main.rs) so roda quando o app sobe: entre o
+# `git pull` e o primeiro boot a pasta velha ainda esta ai, e ela carrega
+# caminho de cliente.
 .dbu/
 
 # ---- Material de estudo de terceiros: NUNCA commitar ----
@@ -79,3 +89,6 @@ tests/fixtures/*.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# temporario do backup_sources.py (arjota.bat) quando interrompido no meio
+backup_sources_*.lst

@@ -23,11 +23,21 @@ REQUEST HB_CODEPAGE_UTF8
    portugues -- e o rotulo na UI diz "ANSI" para nao exigir isso do usuario. */
 REQUEST HB_CODEPAGE_PTISO
 
+/* Codepages oferecidas por arquivo (B3.2/B3.5). PT860 = DOS Portugal;
+   ESWIN = representante do Windows-1252 ocidental (ver Candidatos abaixo). */
+REQUEST HB_CODEPAGE_PT860
+REQUEST HB_CODEPAGE_ESWIN
+
+/* Codepage do pedido CORRENTE. Antes era "o codepage do app"; agora o
+   dispatcher a troca por pedido, a partir do arquivo que o pedido toca
+   (dispatch.prg, CdpDoPedido). A VM e uma so thread, entao setar e restaurar
+   em volta de cada Despacha e seguro. */
 STATIC s_cNativa := "PT850"
 
 /*
- * Codepage do lado DBF/sistema de arquivos. Padrao PT850, que e o que o
- * Clipper usava no Brasil. Configuravel por arquivo mais adiante (B3.2).
+ * Codepage do lado DBF/sistema de arquivos. O dispatcher a troca por pedido
+ * (dispatch.prg): cada arquivo carrega o seu, guardado no handle desde o
+ * file.open. Sem handle no pedido, vale CdpPadrao().
  */
 FUNCTION CdpNativa( cNova )
 
@@ -38,6 +48,51 @@ FUNCTION CdpNativa( cNova )
    ENDIF
 
    RETURN cAnterior
+
+/*
+ * As codepages OFERECIDAS na tela, por ordem de uso no Brasil.
+ *
+ * So entra o que REALMENTE linkou -- `hb_cdpExists()` filtra, entao um REQUEST
+ * que faltasse vira ausencia de opcao, nunca uma opcao morta que estoura ao
+ * ser escolhida. O ROTULO nao vem daqui: e texto de usuario e mora no i18n
+ * (UI_CDP_<id>). Daqui saem so o id do Harbour e o numero canonico da pagina,
+ * que a tela usa de pista e a deteccao por cabecalho casa.
+ *
+ * Nao existe "PTWIN" no Harbour: os drivers *WIN latinos (ESWIN, FRWIN, ITWIN)
+ * compartilham a MESMA tabela Windows-1252. ESWIN representa o CP1252 ocidental
+ * -- a conversao de BYTES e identica entre eles; o que muda e a collation, e o
+ * QDBU ordena por indice (chave no cabecalho do NTX) ou fisica, nunca pela
+ * collation da VM. Ver docs/06-plano-de-entrega.md, B3.
+ */
+STATIC FUNCTION Candidatos()
+   RETURN { ;
+      { "id" => "PT850", "cp" => 850 }, ;
+      { "id" => "ESWIN", "cp" => 1252 }, ;
+      { "id" => "PTISO", "cp" => 28591 }, ;
+      { "id" => "PT860", "cp" => 860 }, ;
+      { "id" => "UTF8",  "cp" => 65001 } }
+
+FUNCTION CodepagesDisponiveis()
+
+   LOCAL aRet := {}, h
+
+   FOR EACH h IN Candidatos()
+      IF hb_cdpExists( h[ "id" ] )
+         AAdd( aRet, hb_HClone( h ) )
+      ENDIF
+   NEXT
+
+   RETURN aRet
+
+/* .T. se `cId` e uma das oferecidas -- e nao qualquer codepage do Harbour.
+   Assim a tela e o backend nunca divergem sobre o que existe. */
+FUNCTION CdpValida( cId )
+   RETURN HB_ISSTRING( cId ) .AND. ;
+          AScan( CodepagesDisponiveis(), {| h | h[ "id" ] == cId } ) > 0
+
+/* O padrao quando o pedido nao diz nada: PT850, o do Clipper no Brasil. */
+FUNCTION CdpPadrao()
+   RETURN "PT850"
 
 /*
  * T( cUtf8 ) -- texto de MENSAGEM, escrito com acento no fonte.

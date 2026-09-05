@@ -137,10 +137,46 @@ FUNCTION Desligar( hEstado, lFecharIndices )
  * tudo voltou. Nunca levanta erro: a operacao ja aconteceu, e recusar-se a
  * religar deixaria o usuario pior do que religar pela metade.
  */
+/*
+ * Reabre os bags de indice do estado na area ATUAL. So isso -- nem ordem ativa,
+ * nem filtro, nem cursor.
+ *
+ * Existe porque `Religar()` faz esta mesma coisa como primeiro passo, e o
+ * PACK/ZAP precisa dela ANTES da operacao, quando restaurar ordem e filtro
+ * seria errado (o filtro nao deve valer para um `__dbPack()`).
+ *
+ * Devolve as falhas no mesmo formato de `Religar()`; quem chama decide se
+ * aborta ou segue.
+ */
+FUNCTION ReanexaIndices( hEstado )
+
+   LOCAL aFalhas := {}
+   LOCAL hIdx, oErr
+
+   IF ! HB_ISHASH( hEstado ) .OR. ! hb_HHasKey( hEstado, "indexes" )
+      RETURN aFalhas
+   ENDIF
+
+   FOR EACH hIdx IN hEstado[ "indexes" ]
+      BEGIN SEQUENCE WITH {| e | Break( e ) }
+         ordListAdd( hIdx[ "path" ] )
+      RECOVER USING oErr
+         AAdd( aFalhas, { ;
+            "item"   => "index", ;
+            "code"   => "ERROR_REBIND_INDEX_FAILED", ;
+            "params" => { "file"   => hb_FNameNameExt( hIdx[ "path" ] ), ;
+                          "key"    => hIdx[ "key" ], ;
+                          "reason" => ErroTexto( oErr ) } } )
+      END SEQUENCE
+   NEXT
+
+   RETURN aFalhas
+
+
 FUNCTION Religar( hEstado, lSemIndices )
 
    LOCAL aFalhas := {}
-   LOCAL hIdx, nOrdem := 0, i, oErr
+   LOCAL nOrdem := 0, i, oErr
 
    /*
     * `lSemIndices` e o caminho da ALTERACAO DE ESTRUTURA.
@@ -164,19 +200,11 @@ FUNCTION Religar( hEstado, lSemIndices )
 
    /* 1. Indices. Reabre pelo caminho; se o arquivo sumiu ou recusa, registra e
          segue -- o proximo pode funcionar. */
+   /* `ordCount() == 0` e a guarda que faz isto conviver com o PACK/ZAP: la os
+      indices ja foram reanexados ANTES da operacao (ver ReanexaIndices e o
+      comentario em api_bulk.prg), e reabri-los aqui os duplicaria. */
    IF ! lSemIndices .AND. Len( hEstado[ "indexes" ] ) > 0 .AND. ordCount() == 0
-      FOR EACH hIdx IN hEstado[ "indexes" ]
-         BEGIN SEQUENCE WITH {| e | Break( e ) }
-            ordListAdd( hIdx[ "path" ] )
-         RECOVER USING oErr
-            AAdd( aFalhas, { ;
-               "item"   => "index", ;
-               "code"   => "ERROR_REBIND_INDEX_FAILED", ;
-               "params" => { "file"   => hb_FNameNameExt( hIdx[ "path" ] ), ;
-                             "key"    => hIdx[ "key" ], ;
-                             "reason" => ErroTexto( oErr ) } } )
-         END SEQUENCE
-      NEXT
+      aFalhas := ReanexaIndices( hEstado )
    ENDIF
 
    /* 2. Ordem ativa. Pelo NOME e nao pelo numero: se um indice do meio nao

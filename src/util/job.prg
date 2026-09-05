@@ -3,10 +3,10 @@
  *
  * POR QUE ISTO EXISTE
  *
- * `Dbu_JobBegin()` recebe UMA string, que a barra de tarefa mostra na tela. Ate
+ * `QDbu_JobBegin()` recebe UMA string, que a barra de tarefa mostra na tela. Ate
  * aqui as sete chamadas do projeto passavam a frase pronta e em portugues:
  *
- *     Dbu_JobBegin( "Exportando " + hb_FNameNameExt( cArq ), nTotal )
+ *     QDbu_JobBegin( "Exportando " + hb_FNameNameExt( cArq ), nTotal )
  *
  * Dois defeitos num so lugar.
  *
@@ -39,7 +39,7 @@
 #include "hbclass.ch"
 
 /*
- * O rotulo pronto para o Dbu_JobBegin().
+ * O rotulo pronto para o QDbu_JobBegin().
  *
  * NOME CURTO, e nao o caminho completo: o buffer tem 256 bytes e o
  * hb_strncpy() do lado C corta por BYTE. Um corte no meio de um caractere

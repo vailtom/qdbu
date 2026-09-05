@@ -19,7 +19,7 @@
  * nao e formato. JSON escapa sozinho, o Harbour ja o gera nativo, e cada linha
  * continua legivel a olho nu e achavel com grep.
  *
- * UM ARQUIVO POR DIA, em `.dbu/log/AAAA-MM-DD.jsonl`. Fica em `.dbu/` e nao em
+ * UM ARQUIVO POR DIA, em `.qdbu/log/AAAA-MM-DD.jsonl`. Fica em `.qdbu/` e nao em
  * `.run/` de proposito: `.run/` e descartavel (cache, temporarios), e apagar o
  * log de operacoes nao pode ser efeito colateral de limpar cache.
  *
@@ -81,12 +81,13 @@ STATIC FUNCTION MetodosRegistrados()
       "backup.run", ;
       "struct.create", "struct.modify", ;
       "bulk.pack", "bulk.zap", ;
-      "mass.replace", "mass.delete", "mass.recall", "mass.appendfrom" }
+      "mass.replace", "mass.delete", "mass.recall", "mass.appendfrom", ;
+      "data.update", "data.append", "data.delete", "data.recall" }
 
-/* <raiz>/.dbu/log */
+/* <raiz>/.qdbu/log */
 FUNCTION DirLog()
 
-   LOCAL cDir := hb_DirSepAdd( DirConfigDbu() ) + LOG_DIR
+   LOCAL cDir := hb_DirSepAdd( DirConfigQDbu() ) + LOG_DIR
 
    IF ! hb_DirExists( cDir )
       hb_DirBuild( cDir )

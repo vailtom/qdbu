@@ -24,7 +24,7 @@
 
 /* De quantos em quantos registros publicar progresso e olhar o cancelamento.
    Mesmo valor do filter.count: mantem a barra fluida sem pesar no laco. */
-#define DBU_PASSO_JOB  500
+#define QDBU_PASSO_JOB  500
 
 /*
  * Registro marcado para exclusao.
@@ -94,7 +94,7 @@ FUNCTION Api_Export_Csv( hP )
    ENDIF
 
    nTotal := LastRec()
-   Dbu_JobBegin( JobMsg( "UI_JOB_EXPORTING", cArq ), nTotal )
+   QDbu_JobBegin( JobMsg( "UI_JOB_EXPORTING", cArq ), nTotal )
 
    /* BOM antes de qualquer byte, senao o Excel nao o reconhece. */
    IF lBom .AND. cCdp == "UTF8"
@@ -130,9 +130,9 @@ FUNCTION Api_Export_Csv( hP )
 
       IF s_nLimite > 0 .AND. ++nLidos >= s_nLimite
          EXIT
-      ELSEIF s_nLimite == 0 .AND. ++nLidos % DBU_PASSO_JOB == 0
-         Dbu_Progress( nLidos )
-         IF Dbu_Canceled()
+      ELSEIF s_nLimite == 0 .AND. ++nLidos % QDBU_PASSO_JOB == 0
+         QDbu_Progress( nLidos )
+         IF QDbu_Canceled()
             EXIT
          ENDIF
       ENDIF
@@ -140,8 +140,8 @@ FUNCTION Api_Export_Csv( hP )
       dbSkip( 1 )
    ENDDO
 
-   lParou := Dbu_Canceled()
-   Dbu_JobEnd()
+   lParou := QDbu_Canceled()
+   QDbu_JobEnd()
    FClose( nHandle )
 
    RETURN Finaliza( cH, cArq, aCols, nLidos, lParou, nPulados )
@@ -177,7 +177,7 @@ FUNCTION Api_Export_Json( hP )
    ENDIF
 
    nTotal := LastRec()
-   Dbu_JobBegin( JobMsg( "UI_JOB_EXPORTING", cArq ), nTotal )
+   QDbu_JobBegin( JobMsg( "UI_JOB_EXPORTING", cArq ), nTotal )
 
    FWrite( nHandle, "[" + hb_eol() )
 
@@ -204,9 +204,9 @@ FUNCTION Api_Export_Json( hP )
 
       IF s_nLimite > 0 .AND. ++nLidos >= s_nLimite
          EXIT
-      ELSEIF s_nLimite == 0 .AND. ++nLidos % DBU_PASSO_JOB == 0
-         Dbu_Progress( nLidos )
-         IF Dbu_Canceled()
+      ELSEIF s_nLimite == 0 .AND. ++nLidos % QDBU_PASSO_JOB == 0
+         QDbu_Progress( nLidos )
+         IF QDbu_Canceled()
             EXIT
          ENDIF
       ENDIF
@@ -214,14 +214,14 @@ FUNCTION Api_Export_Json( hP )
       dbSkip( 1 )
    ENDDO
 
-   lParou := Dbu_Canceled()
+   lParou := QDbu_Canceled()
 
    /* Fecha o array mesmo cancelado: um JSON truncado no meio nao abre em lugar
       nenhum, e o arquivo vai ser apagado logo abaixo de qualquer forma -- mas
       se um dia alguem resolver conservar o parcial, ele ao menos sera valido. */
    FWrite( nHandle, hb_eol() + "]" + hb_eol() )
 
-   Dbu_JobEnd()
+   QDbu_JobEnd()
    FClose( nHandle )
 
    RETURN Finaliza( cH, cArq, aCols, nLidos, lParou, nPulados )
@@ -270,7 +270,7 @@ FUNCTION Api_Export_Xlsx( hP )
    ENDIF
 
    nTotal := LastRec()
-   Dbu_JobBegin( JobMsg( "UI_JOB_EXPORTING", cArq ), nTotal )
+   QDbu_JobBegin( JobMsg( "UI_JOB_EXPORTING", cArq ), nTotal )
 
    oXls:AddSheet( cAba )
 
@@ -351,9 +351,9 @@ FUNCTION Api_Export_Xlsx( hP )
 
       IF s_nLimite > 0 .AND. ++nLidos >= s_nLimite
          EXIT
-      ELSEIF s_nLimite == 0 .AND. ++nLidos % DBU_PASSO_JOB == 0
-         Dbu_Progress( nLidos )
-         IF Dbu_Canceled()
+      ELSEIF s_nLimite == 0 .AND. ++nLidos % QDBU_PASSO_JOB == 0
+         QDbu_Progress( nLidos )
+         IF QDbu_Canceled()
             EXIT
          ENDIF
       ENDIF
@@ -361,8 +361,8 @@ FUNCTION Api_Export_Xlsx( hP )
       dbSkip( 1 )
    ENDDO
 
-   lParou := Dbu_Canceled()
-   Dbu_JobEnd()
+   lParou := QDbu_Canceled()
+   QDbu_JobEnd()
 
    /* Close() SEMPRE, inclusive cancelado: e ele que fecha o pacote ZIP e libera
       o handle. Pular o Close para "abortar mais rapido" vaza o handle e deixa os
@@ -430,13 +430,13 @@ FUNCTION Api_Export_Dbf( hP )
    nOrigem := Select()
    nTotal := LastRec()
 
-   Dbu_JobBegin( JobMsg( "UI_JOB_COPYING", cArq ), nTotal )
+   QDbu_JobBegin( JobMsg( "UI_JOB_COPYING", cArq ), nTotal )
 
    BEGIN SEQUENCE WITH {| e | Break( e ) }
       /* dbCreate cria o .DBT junto quando ha campo memo na estrutura. */
       dbCreate( cArq, aEstru )
    RECOVER USING oErr
-      Dbu_JobEnd()
+      QDbu_JobEnd()
       RETURN Err( "ERROR_EXPORT_FAILED", "could not create the file", "path", ;
                   { "file" => hb_FNameNameExt( cArq ), ;
                     "reason" => iif( HB_ISOBJECT( oErr ) .AND. ;
@@ -449,7 +449,7 @@ FUNCTION Api_Export_Dbf( hP )
    BEGIN SEQUENCE WITH {| e | Break( e ) }
       dbUseArea( .T., , cArq, cAliasNovo, .F., .F. )   /* exclusivo: e nosso */
    RECOVER USING oErr
-      Dbu_JobEnd()
+      QDbu_JobEnd()
       ApagaDbf( cArq )
       RETURN Err( "ERROR_EXPORT_OPEN_FAILED", "file created but could not be opened", ;
                   "path", { "file" => hb_FNameNameExt( cArq ), ;
@@ -487,9 +487,9 @@ FUNCTION Api_Export_Dbf( hP )
       NEXT
       dbSelectArea( nOrigem )
 
-      IF ++nLidos % DBU_PASSO_JOB == 0
-         Dbu_Progress( nLidos )
-         IF Dbu_Canceled()
+      IF ++nLidos % QDBU_PASSO_JOB == 0
+         QDbu_Progress( nLidos )
+         IF QDbu_Canceled()
             EXIT
          ENDIF
       ENDIF
@@ -497,8 +497,8 @@ FUNCTION Api_Export_Dbf( hP )
       dbSkip( 1 )
    ENDDO
 
-   lParou := Dbu_Canceled()
-   Dbu_JobEnd()
+   lParou := QDbu_Canceled()
+   QDbu_JobEnd()
 
    /* Fecha o destino ANTES de qualquer coisa: e ele que grava o cabecalho com a
       contagem de registros. Apagar com a area aberta deixaria o handle preso. */

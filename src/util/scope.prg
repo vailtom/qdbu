@@ -157,7 +157,7 @@ FUNCTION EscopoPercorre( hEsc, cRotulo, bAcao, nFeitos, nVistos )
 
    nTeto := iif( hEsc[ "mode" ] == "next", hEsc[ "n" ], 0 )
 
-   Dbu_JobBegin( JobMsg( cRotulo, Alias() ), ;
+   QDbu_JobBegin( JobMsg( cRotulo, Alias() ), ;
                  iif( nTeto > 0, nTeto, LastRec() ) )
 
    DO WHILE ! Eof()
@@ -184,9 +184,9 @@ FUNCTION EscopoPercorre( hEsc, cRotulo, bAcao, nFeitos, nVistos )
       ENDIF
 
       IF nVistos % 500 == 0
-         Dbu_Progress( nVistos )
-         IF Dbu_Canceled()
-            Dbu_JobEnd()
+         QDbu_Progress( nVistos )
+         IF QDbu_Canceled()
+            QDbu_JobEnd()
             RETURN Err( "WARN_CANCELED_BULK", "canceled by user", , ;
                         { "n" => nFeitos } )
          ENDIF
@@ -195,7 +195,7 @@ FUNCTION EscopoPercorre( hEsc, cRotulo, bAcao, nFeitos, nVistos )
       dbSkip( 1 )
    ENDDO
 
-   Dbu_JobEnd()
+   QDbu_JobEnd()
 
    RETURN xErro
 

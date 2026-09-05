@@ -1,15 +1,15 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "DBU",
+  "productName": "QDBU",
   "version": "0.1.0",
-  "identifier": "br.projetos.dbuharbour",
+  "identifier": "br.projetos.qdbu",
   "build": {
     "frontendDist": "../ui"
   },
   "app": {
     "windows": [
       {
-        "title": "DBU - Database Utility",
+        "title": "QDBU - Database Utility",
         "width": 1280,
         "height": 800,
         "minWidth": 720,
@@ -27,9 +27,9 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "resources": [
-      "../../bin/dbudll.dll"
-    ],
+    "resources": {
+      "../../bin/qdbudll.dll": "qdbudll.dll"
+    },
     "icon": [
       "icons/icon.ico"
     ]

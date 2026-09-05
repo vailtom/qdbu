@@ -86,6 +86,24 @@ header {
 
 .acoes-topo { display: flex; align-items: center; gap: 10px; }
 
+/* Botao de icone no cabecalho (⚙ Preferencias), no mesmo tom do seletor de tema. */
+.icone {
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid var(--line);
+  border-radius: 5px; padding: 4px 8px; cursor: pointer;
+  color: var(--fg); font-size: 15px; line-height: 1;
+}
+.icone:hover { border-color: var(--amber); color: var(--amber); }
+
+/* Linha de checkbox nos dialogos: rotulo ao lado da caixa, sem esticar (a regra
+   `dialog input { display:block; width:100% }` transformaria o checkbox num
+   bloco). O `display: flex` E A METADE QUE FALTAVA: sem ele valia o
+   `dialog label { display: block }`, as duas regras de baixo nao tinham
+   container flex nenhum, e a caixa ficava numa linha com o rotulo na de baixo.
+   Defeito que so o screenshot mostra -- no DOM esta tudo certo. */
+.linha-check { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.linha-check input { display: inline-block; width: auto; margin: 0; }
+
 .tema { position: relative; }
 
 .tema-btn {
@@ -608,6 +626,16 @@ body.arrastando-aba .aba { cursor: grabbing; }
 .barra-grade input:focus, .barra-grade select:focus {
   outline: none; border-color: var(--amber);
 }
+
+/* O cabecalho do DBF sugere outra codepage: o seletor se destaca, mas nada
+   muda sozinho -- a pessoa decide (B3). Cor de aviso, nunca de erro. */
+#pg-codepage.sugere { border-color: var(--aviso); color: var(--aviso); }
+
+/* O 📌 aceso diz "esta lente esta FIXADA neste arquivo" -- a origem e o proprio
+   arquivo, e nao a cascata. Sem esta regra a classe `.ativo` que o JS liga nao
+   pintava nada: fixado e nao fixado ficavam identicos, e a unica diferenca era
+   um title que so aparece com o mouse parado em cima. */
+#pg-cod-fixar.ativo { border-color: var(--amber); color: var(--amber); }
 
 /* A posicao empurra o resto para a direita e nunca muda de lugar ao trocar de
    pagina -- numero que pula de posicao nao se le. */
@@ -1360,7 +1388,7 @@ body.arrastando-aba .aba { cursor: grabbing; }
 /* ---- SweetAlert vestido com o tema do app ----
    Sem isto ele chega branco sobre uma tela escura, com a fonte dele. O ponto
    de usá-lo é justamente ser DA APLICAÇÃO, e não do sistema como o confirm(). */
-.swal2-popup.dbu-swal {
+.swal2-popup.qdbu-swal {
   background: var(--bg2);
   color: var(--txt1);
   border: 1px solid var(--line);
@@ -1368,10 +1396,10 @@ body.arrastando-aba .aba { cursor: grabbing; }
   font-family: inherit;
   font-size: 13px;
 }
-.swal2-popup.dbu-swal .swal2-title { color: var(--txt1); font-size: 15px; }
-.swal2-popup.dbu-swal .swal2-html-container { color: var(--txt2); font-size: 12.5px; line-height: 1.55; }
-.swal2-popup.dbu-swal .swal2-actions { gap: 8px; }
-.swal2-popup.dbu-swal .swal2-styled { border-radius: 5px; font-size: 12.5px; box-shadow: none; }
+.swal2-popup.qdbu-swal .swal2-title { color: var(--txt1); font-size: 15px; }
+.swal2-popup.qdbu-swal .swal2-html-container { color: var(--txt2); font-size: 12.5px; line-height: 1.55; }
+.swal2-popup.qdbu-swal .swal2-actions { gap: 8px; }
+.swal2-popup.qdbu-swal .swal2-styled { border-radius: 5px; font-size: 12.5px; box-shadow: none; }
 /* A HIERARQUIA VISUAL SEGUE A SEGURANÇA, e isso só apareceu no screenshot.
    Na primeira versão "Não, seguir sem cópia" saía em vermelho preenchido e
    "Sim, copiar antes" sem preenchimento nenhum: o olho ia direto para a opção
@@ -1381,23 +1409,23 @@ body.arrastando-aba .aba { cursor: grabbing; }
    A primeira versão escrevia `var(--acento)` — variável que NÃO EXISTE: o fundo
    saía transparente e o texto, escuro sobre escuro, ficava ilegível. Medido com
    getComputedStyle, não visto no olho. */
-.swal2-popup.dbu-swal .swal2-styled.swal2-confirm {
+.swal2-popup.qdbu-swal .swal2-styled.swal2-confirm {
   background: var(--amber);
   color: var(--acento-texto);
   font-weight: 600;
 }
 /* A saída destrutiva: contorno e texto vermelhos, sem preenchimento. Continua
    legível e marcada como risco, sem competir pelo clique. */
-.swal2-popup.dbu-swal .swal2-styled.swal2-deny {
+.swal2-popup.qdbu-swal .swal2-styled.swal2-deny {
   background: transparent;
   color: var(--erro);
   border: 1px solid var(--erro);
 }
-.swal2-popup.dbu-swal .swal2-styled.swal2-cancel { background: var(--bg3); color: var(--txt1); }
-.swal2-container.dbu-swal-fundo { background: rgba(0, 0, 0, .55); }
+.swal2-popup.qdbu-swal .swal2-styled.swal2-cancel { background: var(--bg3); color: var(--txt1); }
+.swal2-container.qdbu-swal-fundo { background: rgba(0, 0, 0, .55); }
 
 /* O arquivo citado no aviso: monoespaçado, para não se confundir com a frase. */
-.dbu-swal code {
+.qdbu-swal code {
   font-family: var(--mono); font-size: 12px;
   background: var(--bg3); padding: 1px 5px; border-radius: 3px;
 }
@@ -1620,15 +1648,15 @@ body.arrastando-aba .aba { cursor: grabbing; }
 /* A lista de impactos dentro do SweetAlert de alterar estrutura.
    Alinhada à esquerda de propósito: o texto do diálogo é centrado, mas uma
    lista centrada vira uma pilha de linhas soltas e ilegível. */
-.dbu-swal .sw-lista {
+.qdbu-swal .sw-lista {
   text-align: left; margin: 10px 0 0; padding: 8px 10px 8px 26px;
   background: var(--bg3); border-radius: 6px; font-size: 12.5px; line-height: 1.55;
 }
-.dbu-swal .sw-lista li { color: var(--erro); }
+.qdbu-swal .sw-lista li { color: var(--erro); }
 
 /* Pendência (o que ficou para o usuário fazer), e não estrago consumado --
    por isso âmbar de atenção, não o vermelho de erro. */
-.dbu-swal .sw-lista.sw-pend li { color: var(--aviso); }
+.qdbu-swal .sw-lista.sw-pend li { color: var(--aviso); }
 
 /* Célula travada pelo TIPO (largura de data/lógico/memo, decimais fora do
    numérico). Apagada, mas legível: o valor ainda é informação — 8 para uma
@@ -1758,6 +1786,21 @@ dialog select:focus { outline: none; border-color: var(--amber); }
  */
 #grade tbody tr.cursor > td:first-child { box-shadow: inset 3px 0 0 var(--amber); }
 #grade tbody tr.cursor > td { background: color-mix(in srgb, var(--amber) 7%, transparent); }
+/*
+ * A CÉLULA FIXA PRECISA DE FUNDO OPACO, e o realce do cursor tirava isso dela.
+ *
+ * `.recno` é `position: sticky` -- ela flutua sobre as outras colunas enquanto
+ * a grade rola. Um fundo translúcido ali não deixa ver "o fundo da linha": não
+ * há linha por baixo, há o CONTEÚDO DAS OUTRAS COLUNAS passando. Medido em
+ * 04/09/2026 no NETEST de 126 colunas: rolado a 6000 px, a linha do cursor era
+ * a única sem número visível -- no lugar dele, pedaços de EST_COD atravessando.
+ *
+ * A correção é misturar o âmbar com a cor de fundo em vez de com `transparent`:
+ * o realce fica igual ao das outras células, e a célula volta a ser opaca.
+ */
+#grade tbody tr.cursor > td.recno {
+  background: color-mix(in srgb, var(--amber) 7%, var(--bg2));
+}
 #grade tbody tr { cursor: pointer; }
 
 /* De onde a operação em massa vai partir. */
@@ -1806,3 +1849,188 @@ dialog select:focus { outline: none; border-color: var(--amber); }
 }
 .pv-zip b { display: block; font-size: 12.5px; font-weight: 600; color: var(--fg); }
 .pv-zip small { display: block; font-size: 11.5px; color: var(--dim); line-height: 1.45; }
+
+/* ---------------------------------------------------- T8: edicao na grade */
+
+/* A celula em edicao. O fundo muda para a pessoa saber onde esta digitando
+   numa grade de 40 colunas -- a borda do input sozinha se perde entre as
+   linhas da tabela. */
+.grade td.editando {
+  padding: 0 2px;
+  background: var(--bg3);
+  white-space: nowrap;
+}
+
+.cel-editor {
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--amber);
+  border-radius: 3px;
+  padding: 1px 4px;
+  outline: none;
+  vertical-align: middle;
+}
+
+/* A recusa pinta a BORDA, e nao o fundo: fundo vermelho sobre texto claro
+   prejudica a leitura justamente do valor que precisa ser relido e corrigido. */
+.grade td.recusado .cel-editor {
+  border-color: var(--erro);
+}
+
+.cel-ok,
+.cel-cancel {
+  font: inherit;
+  line-height: 1;
+  padding: 2px 5px;
+  margin-left: 2px;
+  border: 1px solid var(--bg4);
+  border-radius: 3px;
+  background: var(--bg2);
+  color: var(--dim);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.cel-ok:hover { border-color: var(--ok); color: var(--ok); }
+.cel-cancel:hover { border-color: var(--erro); color: var(--erro); }
+
+/* ---------------------------------------------------- T8: editor de memo */
+
+#dlg-memo { min-width: 620px; }
+
+#memo-texto {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--bg4);
+  border-radius: 4px;
+  padding: 8px;
+  resize: vertical;
+}
+
+.memo-rodape {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.memo-espaco { flex: 1; }
+.memo-conta { color: var(--dim2); font-size: 11.5px; white-space: nowrap; }
+.memo-rodape .ff-msg { margin: 0; }
+
+/* ------------------------------------------------------- T9: formulario */
+
+/*
+ * SEM padding-top no container: ele fica na barra.
+ *
+ * `top: 0` cola a barra no inicio da AREA DE ROLAGEM, e o padding-top do
+ * container fica ACIMA disso -- uma faixa de 14 px que a barra nao cobre e por
+ * onde o conteudo rolado aparece. Na tela ficava um campo cortado flutuando
+ * sobre a navegacao. Mover o espaco para dentro da barra faz o fundo dela
+ * comecar no topo de verdade.
+ */
+#visao-form { padding: 0 16px 14px; overflow: auto; }
+
+/*
+ * A navegacao no TOPO: aqui percorrer registros e a acao principal, ao
+ * contrario da grade, onde navegar e secundario a leitura.
+ *
+ * E FIXA, porque "no topo" nao basta. Medido em 04/09/2026 no NETEST de 125
+ * campos: o formulario tem 4.079 px de altura em 828 px de janela, e rolar ate
+ * o fim levava a barra para -1.865 px -- para ver o proximo registro era
+ * preciso rolar tudo de volta. Justamente na tela onde navegar e o que se faz.
+ *
+ * O fundo OPACO e obrigatorio junto com o sticky: sem ele os campos passam por
+ * baixo e atravessam a barra, o mesmo defeito que a coluna fixa da grade teve.
+ */
+.fm-barra {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 0 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--bg);
+}
+.fm-barra button {
+  font: inherit;
+  color: var(--dim);
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  border-radius: 4px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+.fm-barra button:hover { color: var(--fg); border-color: var(--amber); }
+.fm-pos { font-family: var(--mono); font-size: 12px; color: var(--fg); padding: 0 6px; }
+.fm-sep { width: 8px; }
+.fm-espaco { flex: 1; }
+.fm-msg { font-size: 12px; color: var(--dim); }
+.fm-msg.ok { color: var(--ok); }
+.fm-msg.erro { color: var(--erro); }
+.fm-msg.aviso { color: var(--aviso); }
+
+.fm-deletado {
+  font-size: 11px;
+  color: var(--erro);
+  border: 1px solid var(--erro);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+/* Duas colunas: rotulo a esquerda, campo a direita. Largura maxima para o
+   campo nao virar uma linha de 1800 px num monitor largo -- texto que atravessa
+   a tela inteira e mais dificil de ler, nao mais facil. */
+.fm-campos { max-width: 900px; }
+
+.fm-linha {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  align-items: start;
+  gap: 10px;
+  margin-bottom: 7px;
+}
+
+.fm-rotulo {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--dim);
+  text-align: right;
+  padding-top: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* O tipo ao lado do nome: quem edita precisa saber que ali cabem 10
+   caracteres ANTES de digitar 15 e levar recusa. */
+.fm-tipo {
+  color: var(--dim2);
+  font-size: 11px;
+  margin-left: 7px;
+}
+
+.fm-campo {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--line2);
+  border-radius: 4px;
+  padding: 4px 7px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+}
+.fm-campo:focus { border-color: var(--amber); }
+.fm-campo.recusado { border-color: var(--erro); }
+.fm-memo { resize: vertical; line-height: 1.5; }
+
+.fm-vazio { color: var(--dim2); font-style: italic; }
