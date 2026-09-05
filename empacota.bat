@@ -109,19 +109,10 @@ if exist "%SAIDA%\%NOME%.zip" (
   exit /b 1
 )
 
-rem ---- COPIA FIXA NA RAIZ -------------------------------------------
-rem O nome em dist\ carrega versao e data, que e o que serve para saber
-rem qual build foi mandado para quem. Mas quem so quer o ULTIMO pacote
-rem teria de olhar a pasta e escolher. `qdbu.zip` na raiz e o caminho
-rem estavel: aponta sempre para o que acabou de ser gerado.
-copy /y "%SAIDA%\%NOME%.zip" "%QDBU_HOME%\qdbu.zip" >nul
-if errorlevel 1 echo [%~nx0] Nao consegui atualizar qdbu.zip na raiz.
-
 echo.
 echo   Pacote:  dist\%NOME%.zip
 for %%f in ("%SAIDA%\%NOME%.zip") do echo   Tamanho: %%~zf bytes
 echo   Conteudo: QDBU.exe + qdbudll.dll + LEIAME.txt + LICENSE.txt
-echo   Copia:   qdbu.zip ^(raiz, sempre o ultimo^)
 echo.
 echo   Manda o .zip. Quem recebe descompacta numa pasta gravavel e clica
 echo   em QDBU.exe. Nao precisa instalar nada.

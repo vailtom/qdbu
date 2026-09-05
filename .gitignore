@@ -40,11 +40,9 @@ tests/fixtures/*.csv
 tests/fixtures/*.json
 
 # ---- Pacotes gerados por empacota.bat ----
-# A copia da raiz aponta sempre para o ultimo pacote. Ela NAO e versionada:
-# sao 2,8 MB de binario que mudam a cada build, e cada commit guardaria um
-# blob novo para sempre. Binario de release se distribui por GitHub Releases,
-# que fica FORA da arvore do repositorio -- nao commitando no repo.
-qdbu.zip
+# 2,8 MB de binario que mudam a cada build: commitar guardaria um blob novo
+# para sempre. Binario de release se distribui por GitHub Releases, que fica
+# FORA da arvore do repositorio.
 dist/
 
 # ---- Runtime: tudo que o projeto gera fica em .run/ ----
