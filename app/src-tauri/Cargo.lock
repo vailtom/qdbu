@@ -2380,7 +2380,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "qdbu-console"
+name = "qdbu"
 version = "0.1.0"
 dependencies = [
  "libloading 0.8.9",

@@ -25,7 +25,7 @@ rem
 rem O app aberto ja impedia o build antes disto (o linker nao substitui o .exe
 rem em uso e devolve LNK1104); o que muda e a mensagem, que passa a vir cedo e
 rem incompreensivel. Por isso a checagem aqui, com o nome do processo.
-tasklist /fi "imagename eq qdbu-console.exe" 2>nul | find /i "qdbu-console.exe" >nul
+tasklist /fi "imagename eq qdbu.exe" 2>nul | find /i "qdbu.exe" >nul
 if not errorlevel 1 (
   echo.
   echo [%~nx0] O app esta ABERTO e segura bin\qdbudll.dll -- feche-o e repita.
@@ -53,4 +53,4 @@ if errorlevel 1 exit /b 1
 
 echo.
 copy /y "%QDBU_HOME%\bin\qdbudll.dll" "target\i686-pc-windows-msvc\release\" >nul
-echo Pronto: app\src-tauri\target\i686-pc-windows-msvc\release\qdbu-console.exe
+echo Pronto: app\src-tauri\target\i686-pc-windows-msvc\release\qdbu.exe

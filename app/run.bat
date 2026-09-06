@@ -7,7 +7,7 @@ setlocal
 rem Dev: compila e lanca destacado.
 rem
 rem O app nao tem console (windows_subsystem = "windows"); os logs vao para
-rem %QDBU_HOME%\.run\qdbu-console.log -- acompanhe com devtools\log.bat.
+rem %QDBU_HOME%\.run\qdbu.log -- acompanhe com devtools\log.bat.
 rem
 rem O CDP do WebView2 sobe SEMPRE em build de debug, na porta 9333 (ligado pelo
 rem proprio Rust, ver liga_cdp() em src-tauri/src/main.rs). Valide a UI com
@@ -38,10 +38,10 @@ rem
 rem O app aberto ja impedia o build antes disto (o linker nao substitui o .exe
 rem em uso e devolve LNK1104); o que muda e a mensagem, que passa a vir cedo e
 rem incompreensivel. Por isso a checagem aqui, com o nome do processo.
-tasklist /fi "imagename eq qdbu-console.exe" 2>nul | find /i "qdbu-console.exe" >nul
+tasklist /fi "imagename eq qdbu.exe" 2>nul | find /i "qdbu.exe" >nul
 if not errorlevel 1 (
   echo [%~nx0] Fechando a instancia anterior do app -- ela segura bin\qdbudll.dll.
-  taskkill /im qdbu-console.exe /f >nul 2>&1
+  taskkill /im qdbu.exe /f >nul 2>&1
 )
 
 rem A DLL PRECISA EXISTIR ANTES DO CARGO -- nao so na hora de empacotar.
@@ -61,4 +61,4 @@ if errorlevel 1 exit /b 1
 
 rem O >nul 2>&1 desanexa os handles: sem isso o app herda o stdout de quem
 rem chamou, e um wrapper que capture a saida fica preso esperando o app fechar.
-start "" "target\i686-pc-windows-msvc\debug\qdbu-console.exe" >nul 2>&1
+start "" "target\i686-pc-windows-msvc\debug\qdbu.exe" >nul 2>&1

@@ -19,7 +19,7 @@ rem O `resources` do tauri.conf.json faz o tauri-build copiar
 rem bin\qdbudll.dll para junto do executavel em TODO `cargo build`. Com o
 rem app rodando a DLL esta carregada e a copia falha com "os error 32", no
 rem meio de trinta linhas de saida. Parar aqui da a mensagem util.
-tasklist /fi "imagename eq qdbu-console.exe" 2>nul | find /i "qdbu-console.exe" >nul
+tasklist /fi "imagename eq qdbu.exe" 2>nul | find /i "qdbu.exe" >nul
 if not errorlevel 1 (
   echo.
   echo [%~nx0] O app esta ABERTO e segura bin\qdbudll.dll -- feche-o e repita.
@@ -48,7 +48,7 @@ echo [%~nx0] Compilando release 32-bit com CRT estatica...
 cd /d "%~dp0app\src-tauri"
 cargo build --release --target i686-pc-windows-msvc || exit /b 1
 
-set "ORIGEM=%QDBU_HOME%\app\src-tauri\target\i686-pc-windows-msvc\release\qdbu-console.exe"
+set "ORIGEM=%QDBU_HOME%\app\src-tauri\target\i686-pc-windows-msvc\release\qdbu.exe"
 if not exist "%ORIGEM%" (
   echo [%~nx0] O executavel nao apareceu em target\...\release\ -- build falhou?
   exit /b 1
@@ -86,7 +86,7 @@ rem ---- O conteudo, e so ele -------------------------------------------
 rem A interface NAO entra: `generate_context!()` a embute no binario em
 rem tempo de compilacao, e em release `dir_da_ui()` devolve None. Copiar
 rem app\ui para ca criaria uma segunda copia que o app jamais leria.
-copy /y "%ORIGEM%" "%PASTA%\QDBU.exe" >nul || exit /b 1
+copy /y "%ORIGEM%" "%PASTA%\qdbu.exe" >nul || exit /b 1
 copy /y "%QDBU_HOME%\bin\qdbudll.dll" "%PASTA%\qdbudll.dll" >nul || exit /b 1
 copy /y "%QDBU_HOME%\LICENSE" "%PASTA%\LICENSE.txt" >nul
 
@@ -112,10 +112,10 @@ if exist "%SAIDA%\%NOME%.zip" (
 echo.
 echo   Pacote:  dist\%NOME%.zip
 for %%f in ("%SAIDA%\%NOME%.zip") do echo   Tamanho: %%~zf bytes
-echo   Conteudo: QDBU.exe + qdbudll.dll + LEIAME.txt + LICENSE.txt
+echo   Conteudo: qdbu.exe + qdbudll.dll + LEIAME.txt + LICENSE.txt
 echo.
 echo   Manda o .zip. Quem recebe descompacta numa pasta gravavel e clica
-echo   em QDBU.exe. Nao precisa instalar nada.
+echo   em qdbu.exe. Nao precisa instalar nada.
 echo.
 exit /b 0
 
@@ -133,7 +133,7 @@ rem =====================================================================
 >>%1 echo   1. Descompacte esta pasta onde voce tenha permissao de escrita
 >>%1 echo      (Documentos, Desktop, um pendrive). Evite Arquivos de
 >>%1 echo      Programas: o app grava do lado dele.
->>%1 echo   2. Clique em QDBU.exe. Nao ha instalacao.
+>>%1 echo   2. Clique em qdbu.exe. Nao ha instalacao.
 >>%1 echo.
 >>%1 echo O QUE A MAQUINA PRECISA TER
 >>%1 echo.
@@ -147,7 +147,7 @@ rem =====================================================================
 >>%1 echo.
 >>%1 echo ONDE ELE GRAVA
 >>%1 echo.
->>%1 echo   Ao lado do QDBU.exe, em duas pastas que ele cria sozinho:
+>>%1 echo   Ao lado do qdbu.exe, em duas pastas que ele cria sozinho:
 >>%1 echo.
 >>%1 echo     .run\    log da aplicacao e cache do navegador embutido
 >>%1 echo     .qdbu\   suas conexoes, a sessao e o LOG DE ALTERACOES
@@ -170,7 +170,7 @@ rem =====================================================================
 >>%1 echo.
 >>%1 echo AO RELATAR UM PROBLEMA
 >>%1 echo.
->>%1 echo   Mande o .run\qdbu-console.log junto, e diga o que voce fez ate
+>>%1 echo   Mande o .run\qdbu.log junto, e diga o que voce fez ate
 >>%1 echo   a tela errada aparecer. O log tem o que aconteceu; a descricao
 >>%1 echo   tem o que voce esperava.
 exit /b 0

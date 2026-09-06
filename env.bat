@@ -32,7 +32,7 @@ if exist "%QDBU_VSWHERE%" (
 :vs_ok
 
 rem ---- Pastas geradas: dentro do projeto, nunca em %TEMP% ou %LOCALAPPDATA% ----
-if "%QDBU_LOG%"=="" set "QDBU_LOG=%QDBU_HOME%\.run\qdbu-console.log"
+if "%QDBU_LOG%"=="" set "QDBU_LOG=%QDBU_HOME%\.run\qdbu.log"
 if "%WEBVIEW2_USER_DATA_FOLDER%"=="" set "WEBVIEW2_USER_DATA_FOLDER=%QDBU_HOME%\.run\webview2"
 if not exist "%QDBU_HOME%\.run" mkdir "%QDBU_HOME%\.run"
 

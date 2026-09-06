@@ -102,13 +102,13 @@ fn dir_run() -> PathBuf {
     d
 }
 
-/// Arquivo de log: `QDBU_LOG` se definida, senao `<raiz>/.run/qdbu-console.log`.
+/// Arquivo de log: `QDBU_LOG` se definida, senao `<raiz>/.run/qdbu.log`.
 fn caminho_log() -> &'static Path {
     LOG_PATH.get_or_init(|| {
         env::var("QDBU_LOG")
             .map(PathBuf::from)
             .ok()
-            .unwrap_or_else(|| dir_run().join("qdbu-console.log"))
+            .unwrap_or_else(|| dir_run().join("qdbu.log"))
     })
 }
 
