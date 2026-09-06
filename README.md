@@ -140,6 +140,7 @@ app\run.bat                       :: builds and launches
 app\dev.bat                       :: same, serving the UI from disk (hot editing)
 app\build.bat                     :: release
 empacota.bat                      :: portable package into dist\
+clean.bat                         :: report what can be freed; `clean.bat agora` frees it
 ```
 
 ## Validating

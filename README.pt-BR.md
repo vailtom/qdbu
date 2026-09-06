@@ -136,6 +136,7 @@ app\run.bat                       :: compila e lança
 app\dev.bat                       :: idem, servindo a UI do disco (edição a quente)
 app\build.bat                     :: release
 empacota.bat                      :: pacote portátil em dist\
+clean.bat                         :: relatório do que dá para liberar; `clean.bat agora` libera
 ```
 
 ## Validar

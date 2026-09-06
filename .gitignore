@@ -70,3 +70,9 @@ env.local.bat
 .idea/
 .DS_Store
 Thumbs.db
+
+# ---- Screenshot do cdp.bat ----
+# `cdp.bat shot` grava webview.png na raiz. E prova de teste, nao artefato
+# do projeto: cada execucao sobrescreve, e a que interessa e a que foi
+# colada na resposta ao autor.
+webview.png

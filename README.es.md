@@ -144,6 +144,7 @@ app\run.bat                       :: compila y lanza
 app\dev.bat                       :: igual, sirviendo la UI desde el disco
 app\build.bat                     :: release
 empacota.bat                      :: paquete portátil en dist\
+clean.bat                         :: informe de lo liberable; `clean.bat agora` lo libera
 ```
 
 ## Validar
