@@ -31,7 +31,8 @@
       "../../bin/qdbudll.dll": "qdbudll.dll"
     },
     "icon": [
-      "icons/icon.ico"
+      "icons/icon.ico",
+      "icons/icon.png"
     ]
   }
 }
