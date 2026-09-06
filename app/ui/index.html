@@ -3,10 +3,53 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Favicon. Num app Tauri nao ha aba de navegador, entao ele nao aparece
+     em lugar nenhum hoje -- quem manda na janela e na barra de tarefas e o
+     recurso do .exe, vindo de src-tauri/icons/icon.ico. Fica aqui porque
+     custa 3 KB e passa a valer sozinho no dia em que a interface for aberta
+     por um navegador de verdade, para depurar. PNG de 32px, e nao o .ico de
+     494 KB: os assets sao EMBUTIDOS no binario. -->
+<link rel="icon" type="image/png" href="favicon.png">
 <title>QDBU</title>
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
+
+<!--
+  ICONES -- Lucide v1.41, ISC. Ver app/ui/vendor/lucide/LICENSE.
+
+  INLINE, e nao um arquivo referenciado por `<use href="arquivo.svg#id">`:
+  referencia externa em `<use>` depende da origem, e esta interface e servida ora
+  pelo protocolo `dev://` do disco, ora embutida no binario. Inline funciona nos
+  dois sem depender de qual esta valendo -- e a regra 1 do guia do projeto e que
+  o app funcione sem rede.
+
+  Traco em `currentColor`: sao doze temas, e o acento muda em todos. Emoji
+  ignora `color` e ficaria igual nos doze; SVG acompanha.
+
+  Para acrescentar um icone: pegue o miolo de
+  https://unpkg.com/lucide-static@latest/icons/<nome>.svg e ponha num
+  `<symbol id="i-<nome>" viewBox="0 0 24 24">`.
+-->
+<svg id="sprite-icones" aria-hidden="true" focusable="false"
+     style="position:absolute;width:0;height:0;overflow:hidden">
+  <defs>
+    <symbol id="i-table-properties" viewBox="0 0 24 24"><path d="M15 3v18" /> <rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M21 9H3" /> <path d="M21 15H3" /></symbol>
+    <symbol id="i-table-2" viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18" /></symbol>
+    <symbol id="i-rectangle-ellipsis" viewBox="0 0 24 24"><rect width="20" height="12" x="2" y="6" rx="2" /> <path d="M12 12h.01" /> <path d="M17 12h.01" /> <path d="M7 12h.01" /></symbol>
+    <symbol id="i-columns-3" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M9 3v18" /> <path d="M15 3v18" /></symbol>
+    <symbol id="i-arrow-down-a-z" viewBox="0 0 24 24"><path d="m3 16 4 4 4-4" /> <path d="M7 20V4" /> <path d="M20 8h-5" /> <path d="M15 10V6.5a2.5 2.5 0 0 1 5 0V10" /> <path d="M15 14h5l-5 6h5" /></symbol>
+    <symbol id="i-funnel" viewBox="0 0 24 24"><path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z" /></symbol>
+    <symbol id="i-file-output" viewBox="0 0 24 24"><path d="M4.226 20.925A2 2 0 0 0 6 22h12a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v3.127" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="m5 11-3 3" /> <path d="m5 17-3-3h10" /></symbol>
+    <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /> <path d="m9 12 2 2 4-4" /></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14" /> <path d="M12 5v14" /></symbol>
+    <symbol id="i-circle-minus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /> <path d="M8 12h8" /></symbol>
+    <symbol id="i-undo-2" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /> <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" /> <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" /> <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" /></symbol>
+    <symbol id="i-shrink" viewBox="0 0 24 24"><path d="m15 15 6 6m-6-6v4.8m0-4.8h4.8" /> <path d="M9 19.8V15m0 0H4.2M9 15l-6 6" /> <path d="M15 4.2V9m0 0h4.8M15 9l6-6" /> <path d="M9 4.2V9m0 0H4.2M9 9 3 3" /></symbol>
+    <symbol id="i-trash-2" viewBox="0 0 24 24"><path d="M10 11v6" /> <path d="M14 11v6" /> <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /> <path d="M3 6h18" /> <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></symbol>
+  </defs>
+</svg>
 
 <header>
   <div class="brand">
@@ -54,31 +97,31 @@
     <div id="conteudo" class="conteudo" hidden>
 
       <div class="visoes" role="tablist" data-i18n-aria="UI_FILE_VIEW">
-        <button type="button" class="visao" data-visao="estrutura" role="tab" data-i18n="UI_VIEW_STRUCTURE"></button>
-        <button type="button" class="visao ativa" data-visao="dados" role="tab" data-i18n="UI_VIEW_DATA"></button>
-        <!-- T9. Terceira visao do MESMO registro, e nao uma tela a parte: a
-             grade mostra muitas linhas e poucas colunas, o formulario mostra
-             uma linha e TODAS as colunas. Alternam pelo cursor, que ja e
-             pegajoso desde a T8. -->
-        <button type="button" class="visao" data-visao="form" role="tab" data-i18n="UI_VIEW_FORM"></button>
+        <button type="button" class="visao" data-visao="estrutura" role="tab"><svg class="ico" aria-hidden="true"><use href="#i-table-properties"></use></svg><span data-i18n="UI_VIEW_STRUCTURE"></span></button>
+        <button type="button" class="visao ativa" data-visao="dados" role="tab"><svg class="ico" aria-hidden="true"><use href="#i-table-2"></use></svg><span data-i18n="UI_VIEW_DATA"></span></button>
+        <!-- T9. Grade e formulario sao a MESMA visao "Dados", e alternam pelo
+             botao do rodape: a grade mostra muitas linhas e poucas colunas, o
+             formulario mostra uma linha e TODAS as colunas. Nao sao abas
+             irmas de "Estrutura" -- essa fala do esquema, as duas falam do
+             mesmo registro, e compartilham o cursor desde a T8. -->
 
         <!-- Ferramentas da grade ficam nesta barra, nao na de baixo: e onde o
              Navicat poe `Columns` e `Filter & Sort`, e o Filtro (T6) entra aqui
              do lado. O botao acende enquanto o painel esta aberto. -->
         <span class="visoes-sep"></span>
         <button type="button" id="pg-colunas" class="ferramenta"
-                data-i18n-title="UI_COLUMNS_TITLE" data-i18n="UI_COLUMNS"></button>
+                data-i18n-title="UI_COLUMNS_TITLE"><svg class="ico" aria-hidden="true"><use href="#i-columns-3"></use></svg><span data-i18n="UI_COLUMNS"></span></button>
         <button type="button" id="pg-indices" class="ferramenta"
-                data-i18n-title="UI_INDEXES_TITLE" data-i18n="UI_INDEXES"></button>
+                data-i18n-title="UI_INDEXES_TITLE"><svg class="ico" aria-hidden="true"><use href="#i-arrow-down-a-z"></use></svg><span data-i18n="UI_INDEXES"></span></button>
         <button type="button" id="pg-filtro" class="ferramenta"
-                data-i18n-title="UI_FILTER_TITLE" data-i18n="UI_FILTER"></button>
+                data-i18n-title="UI_FILTER_TITLE"><svg class="ico" aria-hidden="true"><use href="#i-funnel"></use></svg><span data-i18n="UI_FILTER"></span></button>
         <button type="button" id="pg-exportar" class="ferramenta"
-                data-i18n-title="UI_EXPORT_TITLE" data-i18n="UI_EXPORT"></button>
+                data-i18n-title="UI_EXPORT_TITLE"><svg class="ico" aria-hidden="true"><use href="#i-file-output"></use></svg><span data-i18n="UI_EXPORT"></span></button>
         <!-- Ao lado de Exportar porque é a ação irmã: as duas leem o arquivo e
              criam outro ao lado, sem tocar no original. A diferença é o que sai
              — uma converte, a outra copia idêntico. -->
         <button type="button" id="pg-backup" class="ferramenta"
-                data-i18n-title="UI_BACKUP_TITLE" data-i18n="UI_BACKUP"></button>
+                data-i18n-title="UI_BACKUP_TITLE"><svg class="ico" aria-hidden="true"><use href="#i-shield-check"></use></svg><span data-i18n="UI_BACKUP"></span></button>
         <!-- T8: as tres que agem sobre UM registro. Ficam antes do divisor de
              risco porque nao sao destrutivas no mesmo sentido -- inserir cria,
              e excluir apenas MARCA, com Recuperar do lado desfazendo. E por
@@ -86,11 +129,11 @@
              oferece "excluir" ensina que a marca e definitiva quando nao e. -->
         <span class="visoes-sep"></span>
         <button type="button" id="pg-inserir" class="ferramenta"
-                data-i18n-title="UI_ADD_RECORD_TITLE" data-i18n="UI_ADD_RECORD"></button>
+                data-i18n-title="UI_ADD_RECORD_TITLE"><svg class="ico" aria-hidden="true"><use href="#i-plus"></use></svg><span data-i18n="UI_ADD_RECORD"></span></button>
         <button type="button" id="pg-excluir" class="ferramenta"
-                data-i18n-title="UI_DELETE_RECORD_TITLE" data-i18n="UI_DELETE_RECORD"></button>
+                data-i18n-title="UI_DELETE_RECORD_TITLE"><svg class="ico" aria-hidden="true"><use href="#i-circle-minus"></use></svg><span data-i18n="UI_DELETE_RECORD"></span></button>
         <button type="button" id="pg-recuperar" class="ferramenta"
-                data-i18n-title="UI_RECALL_RECORD_TITLE" data-i18n="UI_RECALL_RECORD"></button>
+                data-i18n-title="UI_RECALL_RECORD_TITLE"><svg class="ico" aria-hidden="true"><use href="#i-undo-2"></use></svg><span data-i18n="UI_RECALL_RECORD"></span></button>
 
         <!-- As duas que DESTROEM. Separadas por um divisor e marcadas com a cor
              de risco: ficam na mesma barra porque é onde se age sobre o
@@ -103,11 +146,11 @@
              que o escopo e o mesmo. O DBU original tambem as reunia, no menu
              Utils. -->
         <button type="button" id="pg-massa" class="ferramenta risco"
-                data-i18n-title="UI_MASS_TITLE" data-i18n="UI_MASS"></button>
+                data-i18n-title="UI_MASS_TITLE"><svg class="ico" aria-hidden="true"><use href="#i-layers"></use></svg><span data-i18n="UI_MASS"></span></button>
         <button type="button" id="pg-pack" class="ferramenta risco"
-                data-i18n-title="UI_PACK_TITLE" data-i18n="UI_PACK"></button>
+                data-i18n-title="UI_PACK_TITLE"><svg class="ico" aria-hidden="true"><use href="#i-shrink"></use></svg><span data-i18n="UI_PACK"></span></button>
         <button type="button" id="pg-zap" class="ferramenta risco"
-                data-i18n-title="UI_ZAP_TITLE" data-i18n="UI_ZAP"></button>
+                data-i18n-title="UI_ZAP_TITLE"><svg class="ico" aria-hidden="true"><use href="#i-trash-2"></use></svg><span data-i18n="UI_ZAP"></span></button>
         <span class="filtro-ativo" id="filtro-ativo" hidden></span>
       </div>
 
@@ -226,59 +269,6 @@
 
         <!-- Barra inferior consolidada: navegação, posição e frescor num lugar
              só. No DBU original isso estava espalhado por cantos da tela. -->
-        <div class="barra-grade">
-          <div class="nav">
-            <button type="button" id="pg-topo"     data-i18n-title="UI_FIRST_PAGE">⏮</button>
-            <button type="button" id="pg-anterior" data-i18n-title="UI_PREV_PAGE">◀</button>
-            <button type="button" id="pg-proxima"  data-i18n-title="UI_NEXT_PAGE">▶</button>
-            <button type="button" id="pg-fim"      data-i18n-title="UI_LAST_PAGE">⏭</button>
-          </div>
-
-          <label class="ir"><span data-i18n="UI_GOTO"></span>
-            <input id="pg-ir" type="text" inputmode="numeric" size="8"
-                   data-i18n-ph="UI_RECORD" autocomplete="off">
-          </label>
-
-          <!-- Busca incremental. Muda de natureza conforme haja indice: com
-               indice e seek pela chave (instantaneo, a cada tecla); sem indice
-               e varredura, e varredura a cada tecla travaria a UI -- por isso
-               so no Enter. O placeholder diz qual dos dois esta valendo. -->
-          <label class="busca-inc">
-            <input id="pg-buscar" type="search" size="16"
-                   data-i18n-ph="UI_SEARCH" autocomplete="off" spellcheck="false">
-          </label>
-          <button type="button" id="pg-proximo" data-i18n-title="UI_NEXT_MATCH">↓</button>
-
-          <label class="ord"><span data-i18n="UI_ORDER"></span>
-            <select id="pg-ordem" data-i18n-title="UI_ORDER_TITLE">
-              <option value="0" data-i18n="UI_ORDER_PHYSICAL"></option>
-            </select>
-          </label>
-
-          <label class="cod"><span data-i18n="UI_CODEPAGE"></span>
-            <select id="pg-codepage" data-i18n-title="UI_CODEPAGE_TITLE"></select>
-            <button type="button" id="pg-cod-fixar" data-i18n-title="UI_PIN_FILE">📌</button>
-          </label>
-
-          <label class="tam">
-            <select id="pg-tamanho" data-i18n-title="UI_ROWS_PER_PAGE_TITLE">
-              <option>50</option><option>100</option>
-              <option selected>200</option><option>500</option>
-            </select>
-            <span data-i18n="UI_ROWS_PER_PAGE"></span>
-          </label>
-
-          <!-- O REGISTRO ATUAL. O DBU original mostrava isto no `statline`
-               (DBUEDIT.PRG:566) e nos tinhamos perdido: havia o total e o
-               intervalo da pagina, mas nada dizia ONDE o cursor esta -- e
-               "proximos n" e "do atual ate o fim" partem justamente dele.
-               A barra ambar na grade so ajuda com a linha a vista; rolando
-               para longe, o numero aqui e a unica resposta. -->
-          <span class="atual" id="pg-atual" hidden></span>
-          <span class="posicao" id="pg-posicao">—</span>
-          <span class="refresh" id="pg-refresh" data-i18n-title="UI_LAST_READ"></span>
-          <button type="button" id="pg-recarregar" data-i18n-title="UI_RELOAD">⟳</button>
-        </div>
       </div>
 
       <!-- visão: estrutura -- SOMENTE LEITURA.
@@ -322,20 +312,86 @@
         <!-- A navegação fica no TOPO e não no rodapé como a da grade: aqui ela
              é a ação principal -- percorrer registro a registro é o que se faz
              num formulário. Na grade, navegar é secundário à leitura. -->
-        <div class="fm-barra">
-          <button type="button" id="fm-topo" data-i18n-title="UI_FIRST_RECORD">⏮</button>
-          <button type="button" id="fm-anterior" data-i18n-title="UI_PREV_RECORD">◀</button>
-          <span class="fm-pos" id="fm-pos"></span>
-          <button type="button" id="fm-proximo" data-i18n-title="UI_NEXT_RECORD">▶</button>
-          <button type="button" id="fm-fim" data-i18n-title="UI_LAST_RECORD">⏭</button>
-          <span class="fm-sep"></span>
-          <span class="fm-deletado" id="fm-deletado" hidden data-i18n="UI_DELETED_BADGE"></span>
-          <span class="fm-espaco"></span>
-          <span class="fm-msg" id="fm-msg"></span>
-        </div>
         <div class="fm-campos" id="fm-campos"></div>
         <p class="fm-vazio" id="fm-vazio" hidden></p>
       </div>
+
+        <!-- O RODAPE E UM SO, e vale para a grade E para o formulario.
+             Antes ele vivia dentro de #visao-dados e sumia ao alternar: o
+             formulario trazia uma barra propria no TOPO, e a pessoa perdia de
+             uma vez o "ir p/", a busca, a ordem e os ajustes, alem de ver a
+             navegacao mudar de lugar na tela. Grade e formulario sao a mesma
+             visao; a moldura nao pode dancar entre elas.
+
+             O que muda e a UNIDADE dos botoes de navegacao: pagina na grade,
+             registro no formulario. Mesmo lugar, mesmo icone, mesmo gesto. -->
+<div class="barra-grade">
+          <div class="nav">
+            <button type="button" id="pg-topo"     data-i18n-title="UI_FIRST_PAGE">⏮</button>
+            <button type="button" id="pg-anterior" data-i18n-title="UI_PREV_PAGE">◀</button>
+            <button type="button" id="pg-proxima"  data-i18n-title="UI_NEXT_PAGE">▶</button>
+            <button type="button" id="pg-fim"      data-i18n-title="UI_LAST_PAGE">⏭</button>
+          </div>
+
+          <label class="ir"><span data-i18n="UI_GOTO"></span>
+            <input id="pg-ir" type="text" inputmode="numeric" size="8"
+                   data-i18n-ph="UI_RECORD" autocomplete="off">
+          </label>
+
+          <!-- Busca incremental. Muda de natureza conforme haja indice: com
+               indice e seek pela chave (instantaneo, a cada tecla); sem indice
+               e varredura, e varredura a cada tecla travaria a UI -- por isso
+               so no Enter. O placeholder diz qual dos dois esta valendo. -->
+          <label class="busca-inc">
+            <input id="pg-buscar" type="search" size="16"
+                   data-i18n-ph="UI_SEARCH" autocomplete="off" spellcheck="false">
+          </label>
+          <button type="button" id="pg-proximo" data-i18n-title="UI_NEXT_MATCH">↓</button>
+
+          <label class="ord"><span data-i18n="UI_ORDER"></span>
+            <select id="pg-ordem" data-i18n-title="UI_ORDER_TITLE">
+              <option value="0" data-i18n="UI_ORDER_PHYSICAL"></option>
+            </select>
+          </label>
+
+
+          <!-- O REGISTRO ATUAL. O DBU original mostrava isto no `statline`
+               (DBUEDIT.PRG:566) e nos tinhamos perdido: havia o total e o
+               intervalo da pagina, mas nada dizia ONDE o cursor esta -- e
+               "proximos n" e "do atual ate o fim" partem justamente dele.
+               A barra ambar na grade so ajuda com a linha a vista; rolando
+               para longe, o numero aqui e a unica resposta. -->
+          <span class="atual" id="pg-atual" hidden></span>
+          <span class="posicao" id="pg-posicao">—</span>
+          <!-- Do formulario, e so aparecem nele: o distintivo diz que o registro a
+               vista esta marcado (na grade isso e o tachado da linha), e a mensagem
+               e a recusa da gravacao de um campo. -->
+          <span class="fm-deletado" id="fm-deletado" hidden data-i18n="UI_DELETED_BADGE"></span>
+          <span class="fm-msg" id="fm-msg"></span>
+          <span class="refresh" id="pg-refresh" data-i18n-title="UI_LAST_READ"></span>
+          <button type="button" id="pg-recarregar" data-i18n-title="UI_RELOAD">⟳</button>
+
+          <!-- AJUSTES DA GRADE, atras de um clique.
+               Linhas por pagina se escolhe uma vez e esquece; navegar e buscar sao
+               de todo minuto. O criterio para sair da barra e FREQUENCIA de uso, o
+               mesmo que mandou a codepage para o cartao da Estrutura.
+          
+               O BOTAO MOSTRA O VALOR, e nao um icone. E o que faz o painel servir a
+               quem nao conhece o app: le "200 linhas" sem abrir nada, e so clica
+               quando quer mudar. Engrenagem esconderia o controle E a informacao. -->
+          <button type="button" id="pg-ajustes" class="ajustes"
+                  data-i18n-title="UI_GRID_SETTINGS_TITLE"></button>
+
+          <!-- O BOTAO MOSTRA O DESTINO, nao onde se esta. Na grade ele traz o icone
+               do formulario; no formulario, o da grade. E um alternador, e alternador
+               que anuncia o estado corrente obriga a pessoa a deduzir o que o clique
+               faz. Fica no rodape, e nao no topo, porque a navegacao de registro --
+               que e o trabalho do formulario -- tambem esta aqui embaixo. -->
+          <button type="button" id="pg-visao" class="visao-alt"
+                  data-i18n-aria="UI_VIEW_FORM" data-i18n-title="UI_SWITCH_TO_FORM">
+            <svg class="ico" aria-hidden="true"><use href="#i-rectangle-ellipsis"></use></svg>
+          </button>
+        </div>
       </div>
 
     </div>
@@ -867,6 +923,63 @@
 </dialog>
 
 <!-- diálogo: preferências (config global) -->
+<!-- Codepage DESTE arquivo. Mora na visao Estrutura, ao lado do cartao que
+     mostra a lente vigente, e nao no rodape: trocar a lente e ato raro e
+     deliberado, e o rodape e para o que se usa a cada pagina. -->
+<!-- Ajustes da grade. Dois itens hoje; o valor de existir e ter onde por os
+     proximos sem continuar empilhando na barra ate ela quebrar. -->
+<dialog id="dlg-ajustes">
+  <form method="dialog" id="form-ajustes">
+    <h2 data-i18n="UI_GRID_SETTINGS"></h2>
+
+    <label>
+      <span data-i18n="UI_ROWS_PER_PAGE"></span>
+      <select id="aj-tamanho">
+        <option>50</option><option>100</option>
+        <option selected>200</option><option>500</option>
+      </select>
+    </label>
+
+    <label class="linha-check">
+      <input type="checkbox" id="aj-deletados">
+      <span data-i18n="UI_SHOW_DELETED"></span>
+    </label>
+    <!-- SET DELETED e da maquina virtual inteira, nao do arquivo: mudar aqui
+         muda em todas as abas. Dizer isso e obrigatorio -- um controle que
+         parece ser da aba corrente e mente e pior que nao ter o controle. -->
+    <p class="explica" data-i18n="UI_SHOW_DELETED_GLOBAL"></p>
+
+    <div class="acoes">
+      <button type="button" id="aj-cancelar" class="ghost" data-i18n="UI_CANCEL"></button>
+      <button type="submit" class="primario" data-i18n="UI_APPLY"></button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-codepage">
+  <form method="dialog" id="form-codepage">
+    <h2 data-i18n="UI_CODEPAGE_DIALOG"></h2>
+    <p class="explica" data-i18n="UI_CODEPAGE_EXPLAIN"></p>
+
+    <label>
+      <span data-i18n="UI_CODEPAGE"></span>
+      <select id="cp-sel"></select>
+    </label>
+
+    <label class="linha-check">
+      <input type="checkbox" id="cp-fixar">
+      <span data-i18n="UI_PIN_FILE"></span>
+    </label>
+
+    <p class="explica" id="cp-origem"></p>
+
+    <div class="acoes">
+      <button type="button" id="cp-cancelar" class="ghost" data-i18n="UI_CANCEL"></button>
+      <button type="submit" class="primario" data-i18n="UI_APPLY"></button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="dlg-config">
   <form method="dialog" id="form-config">
     <h2 data-i18n="UI_PREFERENCES"></h2>
@@ -879,6 +992,13 @@
     <label class="linha-check">
       <input type="checkbox" id="cfg-deleted">
       <span data-i18n="UI_SHOW_DELETED"></span>
+    </label>
+    <!-- Barra de ferramentas: so o icone, ou o icone com o nome ao lado.
+         Marcado por padrao -- quem chega ao app le os nomes, e so os esconde
+         depois de ja saber onde cada coisa esta. -->
+    <label class="linha-check">
+      <input type="checkbox" id="cfg-rotulos">
+      <span data-i18n="UI_TOOLBAR_LABELS"></span>
     </label>
     <p class="explica" id="cfg-epoch"></p>
 

@@ -21,11 +21,12 @@ FUNCTION Api_Config_Get( hP )
    HB_SYMBOL_UNUSED( hP )
 
    RETURN Ok( { ;
-      "codepage"    => CodepageGlobal(), ;
-      "showDeleted" => ! Set( _SET_DELETED ), ;
-      "epoch"       => Set( _SET_EPOCH ), ;
-      "codepages"   => CodepagesDisponiveis(), ;
-      "default"     => CdpPadrao() } )
+      "codepage"      => CodepageGlobal(), ;
+      "showDeleted"   => ! Set( _SET_DELETED ), ;
+      "toolbarLabels" => RotulosNaBarra(), ;
+      "epoch"         => Set( _SET_EPOCH ), ;
+      "codepages"     => CodepagesDisponiveis(), ;
+      "default"       => CdpPadrao() } )
 
 /*
  * config.set {"codepage":"ESWIN","showDeleted":true} -> config.get + saved
@@ -59,11 +60,19 @@ FUNCTION Api_Config_Set( hP )
       Set( _SET_DELETED, ! hP[ "showDeleted" ] )   /* aplica agora, nao so no proximo boot */
    ENDIF
 
+   /* Preferencia de TELA, sem estado na VM: a barra de ferramentas mostra so
+      os icones ou o icone com o texto ao lado. Quem aplica e a interface; aqui
+      ela so e guardada, para sobreviver ao fechamento. */
+   IF hb_HHasKey( hP, "toolbarLabels" ) .AND. HB_ISLOGICAL( hP[ "toolbarLabels" ] )
+      h[ "toolbarLabels" ] := hP[ "toolbarLabels" ]
+   ENDIF
+
    lSalvou := SalvaConfigGlobal( h )
    SessBump()
 
    RETURN Ok( { ;
-      "saved"       => lSalvou, ;
-      "codepage"    => CodepageGlobal(), ;
-      "showDeleted" => ! Set( _SET_DELETED ), ;
-      "epoch"       => Set( _SET_EPOCH ) } )
+      "saved"         => lSalvou, ;
+      "codepage"      => CodepageGlobal(), ;
+      "showDeleted"   => ! Set( _SET_DELETED ), ;
+      "toolbarLabels" => RotulosNaBarra(), ;
+      "epoch"         => Set( _SET_EPOCH ) } )

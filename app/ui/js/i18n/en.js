@@ -125,7 +125,10 @@
   UI_ORDER_PHYSICAL: "Natural",
   UI_ORDER_TITLE: "Controlling index for the row order",
   UI_ROWS_PER_PAGE: "rows/page",
-  UI_ROWS_PER_PAGE_TITLE: "Records per page",
+  UI_GRID_SETTINGS: "Grid settings",
+  UI_GRID_SETTINGS_TITLE: "Rows per page and display of deleted records",
+  UI_ROWS_N: "{n} rows",
+  UI_SHOW_DELETED_GLOBAL: "Applies to every tab: showing deleted records is a session-wide setting, not a per-file one.",
   UI_LAST_READ: "Last read — the screen refreshes by itself every 5 s while nothing is being edited",
   UI_RELOAD: "Reload from disk (F5)",
 
@@ -945,6 +948,8 @@
 
   // ---- T9: form ----
   UI_VIEW_FORM: "Form",
+  UI_SWITCH_TO_FORM: "View one record at a time, with every field",
+  UI_SWITCH_TO_GRID: "Back to the grid, with many records",
   UI_FIRST_RECORD: "First record",
   UI_PREV_RECORD: "Previous record",
   UI_NEXT_RECORD: "Next record",
@@ -968,6 +973,7 @@
   UI_CONFIG_EXPLAIN: "These apply to the whole app. Each connection and each file may set its own codepage on top of these.",
   UI_DEFAULT_CODEPAGE: "Default codepage",
   UI_SHOW_DELETED: "Show deleted records",
+  UI_TOOLBAR_LABELS: "Show labels on the toolbar",
   UI_EPOCH_INFO: "Two-digit years use the century from {year} on (SET EPOCH, fixed).",
   UI_CONN_CODEPAGE: "Codepage",
   UI_CDP_INHERIT: "(inherit)",
@@ -984,6 +990,8 @@
   WARN_CONFIG_NOT_SAVED: "Could not save to disk; preferences apply to this session only.",
   UI_CODEPAGE: "Codepage",
   UI_CODEPAGE_TITLE: "How this file's bytes become text — does not change the file",
+  UI_CODEPAGE_DIALOG: "This file's codepage",
+  UI_CODEPAGE_EXPLAIN: "A DBF does not reliably record which codepage it was written with. This choice is only the reading LENS: changing it does not alter a single byte of the file, and you can change it back at any time.",
   UI_CODEPAGE_HINT: "The header suggests {cp}.",
   ERROR_STALE_VALUE:
     "{field} was changed by someone else while you were editing: it was '{expected}', now it is '{actual}'.",

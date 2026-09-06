@@ -165,21 +165,38 @@ FUNCTION Api_File_SetCodepage( hP )
    hInfo := SessHandle( cH )
    hInfo[ "codepage" ] := cCdp
 
+   /*
+    * `persist` tem tres valores, e o terceiro nasceu com a caixa de marcar.
+    *
+    *   ausente   vale so nesta sessao; o disco fica como esta
+    *   "file"    fixa em <pasta>/.qdbu/arquivos.json
+    *   "none"    DESFIXA -- tira este arquivo do mapa
+    *
+    * Sem o "none", desmarcar a caixa deixava a tela dizendo "nao fixado" com a
+    * entrada ainda no disco, e a cascata trazia o pino de volta na proxima
+    * abertura. A lente escolhida continua valendo nesta sessao de qualquer
+    * forma; o que "none" desfaz e a permanencia.
+    */
    IF cPers == "file"
       lSalvou := SalvaCodepageArquivo( hInfo[ "path" ], cCdp )
+   ELSEIF cPers == "none"
+      lSalvou := RemoveCodepageArquivo( hInfo[ "path" ] )
    ENDIF
 
    /*
-    * A ORIGEM SO E "file" SE O DISCO ACEITOU.
+    * A ORIGEM SO E "file" SE FOI PEDIDO FIXAR **E** O DISCO ACEITOU.
     *
-    * Fixar e best-effort: pasta de cliente read-only ou de rede devolve
-    * .F. e a lente vale so nesta sessao. Carimbar "file" antes de saber
-    * acendia o 📌 e punha o title "fixado neste arquivo" enquanto a barra
-    * avisava que NAO tinha gravado -- duas afirmacoes opostas na mesma tela,
-    * e a que a pessoa acredita e a do botao. Reabrir o arquivo cairia na
-    * cascata e a escolha teria sumido sem ninguem ver.
+    * Fixar e best-effort: pasta de cliente read-only ou de rede devolve .F. e a
+    * lente vale so nesta sessao. Carimbar "file" antes de saber acendia o botao
+    * e punha o title "fixado neste arquivo" enquanto a barra avisava que NAO
+    * tinha gravado -- duas afirmacoes opostas na mesma tela, e a que a pessoa
+    * acredita e a do botao. Reabrir o arquivo cairia na cascata e a escolha
+    * teria sumido sem ninguem ver.
+    *
+    * `lSalvou` sozinho nao serve: com "none" ele volta .T. quando a REMOCAO deu
+    * certo, e isso e o oposto de estar fixado.
     */
-   hInfo[ "codepageOrigin" ] := iif( lSalvou, "file", "session" )
+   hInfo[ "codepageOrigin" ] := iif( cPers == "file" .AND. lSalvou, "file", "session" )
 
    SessBump()
 

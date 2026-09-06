@@ -507,7 +507,6 @@ dialog .acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 
 .estrutura .tipo { font-family: var(--mono); color: var(--amber); }
 .estrutura th.num { text-align: right; }
 
-
 /* arrastar abas */
 .aba { cursor: pointer; }
 .aba.arrastando { opacity: .4; }
@@ -629,20 +628,94 @@ body.arrastando-aba .aba { cursor: grabbing; }
 
 /* O cabecalho do DBF sugere outra codepage: o seletor se destaca, mas nada
    muda sozinho -- a pessoa decide (B3). Cor de aviso, nunca de erro. */
-#pg-codepage.sugere { border-color: var(--aviso); color: var(--aviso); }
 
 /* O 📌 aceso diz "esta lente esta FIXADA neste arquivo" -- a origem e o proprio
    arquivo, e nao a cascata. Sem esta regra a classe `.ativo` que o JS liga nao
    pintava nada: fixado e nao fixado ficavam identicos, e a unica diferenca era
    um title que so aparece com o mouse parado em cima. */
-#pg-cod-fixar.ativo { border-color: var(--amber); color: var(--amber); }
 
 /* A posicao empurra o resto para a direita e nunca muda de lugar ao trocar de
    pagina -- numero que pula de posicao nao se le. */
+/* O botao de ajustes da grade MOSTRA O VALOR ("200 linhas"), entao precisa de
+   largura estavel: sem isso a barra dança ao trocar de 50 para 500. `tabular-nums`
+   e a largura minima resolvem, e o alinhamento a direita mantem a borda parada. */
+.barra-grade .ajustes {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  min-width: 84px; text-align: center;
+}
+
+/* O alternador grade/formulario: SO O ICONE, e ele aponta o DESTINO, nao o
+   estado atual. Sem rotulo visivel o nome acessivel vem do `aria-label` --
+   botao de icone sem nome e invisivel para leitor de tela --, e o `title`
+   explica o destino por extenso para quem passa o mouse.
+   Quadrado: nao ha texto para acomodar, e por isso ele nao usa a classe
+   `.ajustes` -- a largura minima dela existe para o rotulo "200 linhas". */
+.barra-grade .visao-alt {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 0; padding: 5px 8px;
+}
+/* Barra so com icones (preferencia em Preferencias).
+
+   O texto e ESCONDIDO, nao removido: recortado a um pixel em vez de
+   `display:none`. Com display none o botao ficaria sem nome acessivel -- icone
+   nao tem texto para leitor de tela --, e seria preciso repetir o rotulo num
+   aria-label em catorze botoes. Assim o nome continua na arvore de
+   acessibilidade, e o `title` segue explicando por extenso a quem passa o
+   mouse. */
+.visoes.so-icones .ferramenta > span,
+.visoes.so-icones .visao > span {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+/* Sem texto nao ha o que separar, e o botao vira quadrado. */
+.visoes.so-icones .ferramenta,
+.visoes.so-icones .visao { gap: 0; padding-left: 9px; padding-right: 9px; }
+
+.visao-alt .ico { width: 15px; height: 15px; }
+
+/* A barra do formulario ganha o mesmo botao, no mesmo canto -- alvo fixo entre
+   as duas visoes. `margin-left: auto` o empurra para a direita como a posicao
+   faz na barra da grade. */
+
 .barra-grade .posicao {
   margin-left: auto; font-family: var(--mono); color: var(--fg);
 }
 .barra-grade .refresh { font-family: var(--mono); color: var(--dim2); }
+
+/* ---------------------------------------------- o cartao que AGE (codepage) */
+
+/* Rotulo e valor empilhados, e o botao AO LADO deles, atravessando as duas
+   linhas. Grid em vez de flex porque `cartao()` monta os dois spans direto no
+   cartao -- sem envolucro, `flex-direction: row` poria rotulo e valor lado a
+   lado em vez de empilhados. */
+.cartao.com-acao {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "rot acao" "val acao";
+  align-items: center;
+  column-gap: 12px;
+}
+.cartao.com-acao > .c-rot  { grid-area: rot; }
+.cartao.com-acao > .c-val  { grid-area: val; }
+.cartao.com-acao > .c-acao { grid-area: acao; }
+
+.c-acao {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--fg);
+  font: inherit; font-size: 13px; line-height: 1;
+  padding: 5px 8px; border-radius: 4px; cursor: pointer;
+}
+.c-acao:hover:not(:disabled) { border-color: var(--amber); color: var(--amber); }
+.c-acao:disabled { color: var(--dim2); cursor: default; opacity: .5; }
+.c-acao:focus-visible { outline: 1px solid var(--amber); outline-offset: 1px; }
+
+/* O cabecalho do DBF sugere outra codepage: o cartao se destaca, mas nada muda
+   sozinho -- a pessoa decide (B3). Cor de aviso, nunca de erro. */
+.cartao.sugere { border-color: var(--aviso); }
+.cartao.sugere .c-val { color: var(--aviso); }
+
+/* Aceso quando a lente esta FIXADA neste arquivo, e nao herdada da cascata. */
+#pg-cod-trocar.ativo { border-color: var(--amber); color: var(--amber); }
 
 /* --------------------------------------------------------------- colunas */
 
@@ -724,6 +797,27 @@ body.arrastando-aba .aba { cursor: grabbing; }
   width: 1px; align-self: center; height: 16px;
   background: var(--line); margin: 0 8px;
 }
+/* ------------------------------------------------------------------ icones */
+
+/* Lucide, inline em index.html. O traco herda `currentColor`, entao o icone
+   acompanha o estado do botao -- apagado quando ocioso, ambar quando ativo,
+   vermelho nas destrutivas -- e os doze temas de graca, sem uma regra por tema.
+
+   O ICONE ACOMPANHA O ROTULO, nao o substitui. A disciplina de idiomas do
+   projeto existe para o texto chegar na lingua de quem le; barra so de icones
+   joga isso fora e obriga a decorar desenhos. Por isso `aria-hidden`: quem usa
+   leitor de tela ouve o rotulo, e o icone e enfeite. */
+.ico {
+  width: 14px; height: 14px; flex: none;
+  fill: none; stroke: currentColor;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+
+/* O botao vira caixa flexivel so para alinhar icone e texto pela metade da
+   altura. `gap` no lugar de margem: com o rotulo vazio (enquanto o i18n nao
+   pintou) nao sobra espaco pendurado. */
+.ferramenta, .visao { display: inline-flex; align-items: center; gap: 6px; }
+
 .ferramenta {
   background: none; border: 1px solid transparent; color: var(--dim);
   font: inherit; font-size: 12px; cursor: pointer;
@@ -1133,7 +1227,6 @@ body.arrastando-aba .aba { cursor: grabbing; }
  * ate a borda do dialogo.
  */
 #dlg-export .ex-linha > label.ex-cresce { flex: 1 1 auto; min-width: 240px; }
-
 
 /* Campo de arquivo + botao de procurar, na mesma linha. */
 .ex-arq-linha { display: flex; gap: 5px; align-items: stretch; }
@@ -1947,37 +2040,14 @@ dialog select:focus { outline: none; border-color: var(--amber); }
  * O fundo OPACO e obrigatorio junto com o sticky: sem ele os campos passam por
  * baixo e atravessam a barra, o mesmo defeito que a coluna fixa da grade teve.
  */
-.fm-barra {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 0 10px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid var(--line);
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  background: var(--bg);
-}
-.fm-barra button {
-  font: inherit;
-  color: var(--dim);
-  background: var(--bg2);
-  border: 1px solid var(--line2);
-  border-radius: 4px;
-  padding: 3px 9px;
-  cursor: pointer;
-}
-.fm-barra button:hover { color: var(--fg); border-color: var(--amber); }
-.fm-pos { font-family: var(--mono); font-size: 12px; color: var(--fg); padding: 0 6px; }
-.fm-sep { width: 8px; }
-.fm-espaco { flex: 1; }
-.fm-msg { font-size: 12px; color: var(--dim); }
-.fm-msg.ok { color: var(--ok); }
-.fm-msg.erro { color: var(--erro); }
-.fm-msg.aviso { color: var(--aviso); }
 
-.fm-deletado {
+.fm-pos { font-family: var(--mono); font-size: 12px; color: var(--fg); padding: 0 6px; }
+.barra-grade .fm-msg { font-size: 12px; color: var(--dim); }
+.barra-grade .fm-msg.ok { color: var(--ok); }
+.barra-grade .fm-msg.erro { color: var(--erro); }
+.barra-grade .fm-msg.aviso { color: var(--aviso); }
+
+.barra-grade .fm-deletado {
   font-size: 11px;
   color: var(--erro);
   border: 1px solid var(--erro);

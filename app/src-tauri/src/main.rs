@@ -1661,6 +1661,31 @@ fn selftest() -> i32 {
                 );
                 let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&re)));
 
+                // 5b. DESFIXAR tira do disco -- e nao so da tela.
+                //
+                // A caixa de marcar do dialogo OFERECE desfixar; enquanto o
+                // pino era botao de mao unica nao havia o que desfazer. Sem o
+                // persist:"none", a tela dizia "nao fixado" com a entrada ainda
+                // no arquivos.json, e a cascata trazia o pino de volta na
+                // abertura seguinte -- mentira silenciosa, que e o modo de
+                // falhar que este projeto persegue.
+                let hu = abre(&format!(r#"{{"path":"{ed2_s}"}}"#));
+                let su = rpc_bruto(&hb, "file.setcodepage",
+                    &format!(r#"{{"h":"{}","codepage":"PT850","persist":"none"}}"#, hde(&hu)))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&hu)));
+                // reabrir e a prova: se o disco ainda tivesse o pino, a cascata
+                // devolveria origem "file" em vez de cair para o nivel de cima.
+                let rv = abre(&format!(r#"{{"path":"{ed2_s}"}}"#));
+                let (cv, ov) = cod(&rv);
+                t.ok(
+                    "CFG: persist:none DESFIXA -- o pino sai do disco e a cascata volta a mandar",
+                    su.as_ref().map(|v| v.pointer("/result/codepageOrigin").and_then(|o| o.as_str()) == Some("session")).unwrap_or(false)
+                        && ov != "file",
+                    &format!("desfixar {su:?} / ao reabrir codepage {cv} origem {ov}"),
+                );
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&rv)));
+
                 // devolve o global para PT850, para nao vazar para outros testes
                 let _ = rpc_bruto(&hb, "config.set", r#"{"codepage":"PT850"}"#);
 

@@ -496,11 +496,10 @@ function desenharConteudo() {
     cx.appendChild(cartao(T("UI_CARD_LAST_UPDATE"), dataLegivel(i.lastUpdate)));
   }
   if (i.bytes) cx.appendChild(cartao(T("UI_CARD_SIZE"), tamanhoLegivel(i.bytes)));
-  if (i.codepage) cx.appendChild(cartao(T("UI_CARD_CODEPAGE"), rotuloCodepage(i.codepage)));
+  if (i.codepage) cx.appendChild(cartaoCodepage(a, i));
 
   desenharGrade();
   desenharComboOrdem();
-  desenharComboCodepage();
 
   desenharEstrutura(a);
 }
@@ -2259,27 +2258,90 @@ function atualizarBarraGrade(p) {
   ref.textContent = p.readAt ? "⟳ " + p.readAt.slice(11) : "";
   ref.title = p.readAt ? T("UI_LAST_READ_AT", { time: p.readAt }) : "";
 
-  $("pg-topo").disabled = p.first <= 1;
-  $("pg-anterior").disabled = p.first <= 1;
-  $("pg-proxima").disabled = p.eof;
-  $("pg-fim").disabled = p.eof;
+  /*
+   * O LIMITE DEPENDE DA VISAO, porque a unidade depende dela.
+   *
+   * Na grade, `p.first` e `p.eof` dizem se ha pagina antes e depois. No
+   * formulario a unidade e o REGISTRO, e a pagina em memoria nao sabe onde a
+   * travessia comeca ou termina -- quem descobre e `navegarForm()`, notando que
+   * o recno nao mudou (dbSkip em EOF nao sai do lugar). Aplicar aqui o criterio
+   * da grade desabilitava "primeiro" e "anterior" sempre que a pagina comecava
+   * no registro 1, deixando dois botoes mortos no formulario.
+   */
+  const naGrade = visaoAtiva !== "form";
+  $("pg-topo").disabled = naGrade && p.first <= 1;
+  $("pg-anterior").disabled = naGrade && p.first <= 1;
+  $("pg-proxima").disabled = naGrade && p.eof;
+  $("pg-fim").disabled = naGrade && p.eof;
 }
 
 function trocarVisao(qual) {
   visaoAtiva = qual;
+  /*
+   * "Dados" fica acesa no formulario TAMBEM. As duas sao a mesma visao, vistas
+   * de angulos diferentes do mesmo registro -- quem alterna pelo rodape nao saiu
+   * de Dados, so trocou a forma de olhar. Apagar a aba ali diria o contrario.
+   */
   for (const b of document.querySelectorAll(".visao")) {
-    b.classList.toggle("ativa", b.dataset.visao === qual);
+    const dele = b.dataset.visao === qual || (b.dataset.visao === "dados" && qual === "form");
+    b.classList.toggle("ativa", dele);
   }
+  /*
+   * O ALTERNADOR E UM SO E APONTA O DESTINO. Na grade traz o icone do
+   * formulario; no formulario, o da grade. Trocar o `href` do `<use>` basta --
+   * o simbolo vem do sprite embutido.
+   */
+  const paraForm = qual !== "form";
+  const alt = $("pg-visao");
+  if (alt) {
+    alt.querySelector("use").setAttribute("href", paraForm ? "#i-rectangle-ellipsis" : "#i-table-2");
+    alt.title = T(paraForm ? "UI_SWITCH_TO_FORM" : "UI_SWITCH_TO_GRID");
+    alt.setAttribute("aria-label", T(paraForm ? "UI_VIEW_FORM" : "UI_VIEW_DATA"));
+    // Na Estrutura nao ha o que alternar: nem grade nem formulario estao a vista.
+    alt.hidden = qual === "estrutura";
+  }
+
+  /*
+   * O TITLE DOS QUATRO SEGUE A UNIDADE. Eles navegam por pagina na grade e por
+   * registro no formulario; manter "proxima pagina" no formulario seria a dica
+   * de ferramenta dizendo uma coisa e o botao fazendo outra. As chaves de
+   * registro ja existiam -- eram as da barra que o formulario tinha antes.
+   */
+  const chaves = paraForm
+    ? ["UI_FIRST_PAGE", "UI_PREV_PAGE", "UI_NEXT_PAGE", "UI_LAST_PAGE"]
+    : ["UI_FIRST_RECORD", "UI_PREV_RECORD", "UI_NEXT_RECORD", "UI_LAST_RECORD"];
+  ["pg-topo", "pg-anterior", "pg-proxima", "pg-fim"].forEach((id, i) => {
+    const b = $(id);
+    if (b) {
+      b.title = T(chaves[i]);
+      // `data-i18n-title` fica com a chave certa para a repintura de idioma.
+      b.dataset.i18nTitle = chaves[i];
+    }
+  });
+
   $("visao-dados").hidden = qual !== "dados";
   $("visao-estrutura").hidden = qual !== "estrutura";
   $("visao-form").hidden = qual !== "form";
 
-  // O botao Colunas so vale sobre a grade; na Estrutura ele nao tem o que
-  // filtrar e ficaria aceso comandando um painel que ninguem ve.
-  $("pg-colunas").hidden = qual !== "dados";
-  $("pg-indices").hidden = qual !== "dados";
-  $("pg-filtro").hidden = qual !== "dados";
-  $("pg-exportar").hidden = qual !== "dados";
+  /*
+   * A BARRA NAO MUDA ENTRE GRADE E FORMULARIO. As duas sao a mesma visao
+   * "Dados", e botao que some ao alternar faz a barra dancar -- a pessoa perde
+   * a referencia de onde as coisas estao, que e justamente o que uma barra de
+   * ferramentas existe para dar.
+   *
+   * E some sem motivo: indice e filtro mudam a TRAVESSIA, e o formulario navega
+   * por ela tanto quanto a grade; exportar age sobre o arquivo em qualquer
+   * visao. So Colunas e discutivel -- o formulario mostra todos os campos de
+   * proposito --, mas ele governa a grade para a qual se volta, entao esconde-lo
+   * so obrigaria a alternar de novo para mexer nele.
+   *
+   * Na Estrutura eles saem: ali nao ha travessia nem registro corrente.
+   */
+  const emDados = qual === "dados" || qual === "form";
+  $("pg-colunas").hidden = !emDados;
+  $("pg-indices").hidden = !emDados;
+  $("pg-filtro").hidden = !emDados;
+  $("pg-exportar").hidden = !emDados;
 
   /*
    * As tres de REGISTRO valem na grade E no formulario -- as duas visoes falam
@@ -2287,10 +2349,9 @@ function trocarVisao(qual) {
    * onde a pessoa esta olhando UM registro, seria escondê-las justamente onde
    * fazem mais sentido.
    */
-  const emRegistro = qual === "dados" || qual === "form";
-  $("pg-inserir").hidden = !emRegistro;
-  $("pg-excluir").hidden = !emRegistro;
-  $("pg-recuperar").hidden = !emRegistro;
+  $("pg-inserir").hidden = !emDados;
+  $("pg-excluir").hidden = !emDados;
+  $("pg-recuperar").hidden = !emDados;
 
   if (qual === "dados") {
     garantirPagina(abas.find((a) => a.h === abaAtiva));
@@ -2323,38 +2384,120 @@ function trocarVisao(qual) {
    * estava na linha 12 encontra a 12 aqui -- e volta para a 12 lá.
    */
   if (qual === "form") carregarForm(abaAtiva, cursorDe.get(abaAtiva));
+
+  /*
+   * Recalcula o estado dos quatro botoes de navegacao: o criterio de limite
+   * mudou junto com a visao, e ele so era refeito quando uma pagina
+   * carregava -- alternar sem recarregar deixava "primeiro" e "anterior"
+   * travados, e dois botoes mortos nao se distinguem de dois botoes quebrados.
+   */
+  atualizarBarraGrade(paginaDaAba(abaAtiva));
 }
 
 // ------------------------------------------------------- eventos da grade
+
+/* O alternador do rodape: cada um leva para o OUTRO lado. Dois botoes e nao um
+   porque cada visao tem a sua propria barra -- a grade tem `.barra-grade`, o
+   formulario tem `.fm-barra` --, e o alvo tem de ficar no mesmo canto nas duas
+   para virar alvo fixo. */
+$("pg-visao").addEventListener("click", () => trocarVisao(visaoAtiva === "form" ? "dados" : "form"));
 
 document.querySelector(".visoes").addEventListener("click", (ev) => {
   const b = ev.target.closest(".visao");
   if (b) trocarVisao(b.dataset.visao);
 });
 
-$("pg-topo").addEventListener("click", () => carregarPagina(abaAtiva, "top", 0));
+/*
+ * OS QUATRO DE NAVEGACAO SERVEM AS DUAS VISOES.
+ *
+ * Mesmo lugar, mesmo icone, mesmo gesto -- muda a UNIDADE: pagina na grade,
+ * registro no formulario. Antes eram dois conjuntos de botoes em duas barras
+ * diferentes, e alternar a visao movia a navegacao de lugar na tela.
+ */
+function noFormulario() {
+  return visaoAtiva === "form";
+}
 
-$("pg-fim").addEventListener("click", () =>
-  carregarPagina(abaAtiva, "bottom", -(tamanhoPagina - 1))
-);
+$("pg-topo").addEventListener("click", () => {
+  if (noFormulario()) navegarForm("top");
+  else carregarPagina(abaAtiva, "top", 0);
+});
+
+$("pg-fim").addEventListener("click", () => {
+  if (noFormulario()) navegarForm("bottom");
+  else carregarPagina(abaAtiva, "bottom", -(tamanhoPagina - 1));
+});
 
 $("pg-proxima").addEventListener("click", () => {
+  if (noFormulario()) { navegarForm(1); return; }
   const p = paginaDaAba(abaAtiva);
   if (p && p.rows.length) carregarPagina(abaAtiva, p.last, 1);
 });
 
 $("pg-anterior").addEventListener("click", () => {
+  if (noFormulario()) { navegarForm(-1); return; }
   const p = paginaDaAba(abaAtiva);
   if (p && p.rows.length) carregarPagina(abaAtiva, p.first, -tamanhoPagina);
 });
 
-$("pg-tamanho").addEventListener("change", (ev) => {
-  tamanhoPagina = Number(ev.target.value) || PAGINA_PADRAO;
+/*
+ * AJUSTES DA GRADE -- o painel do rodape.
+ *
+ * O botao MOSTRA O VALOR vigente ("200 linhas"), e nao um icone: quem nao
+ * conhece o app le o que esta valendo sem abrir nada. Esconder o controle e
+ * util; esconder a informacao junto seria perder duas vezes.
+ */
+function rotuloAjustes() {
+  const b = $("pg-ajustes");
+  if (b) b.textContent = T("UI_ROWS_N", { n: tamanhoPagina });
+}
+
+function abrirAjustes() {
+  $("aj-tamanho").value = String(tamanhoPagina);
+  // O estado de "mostrar excluidos" mora na VM, nao aqui: perguntar a ela evita
+  // a caixa mentir depois de alguem ter mudado por Preferencias.
+  QDBU.rpc("session.deleted", {})
+    .then((r) => { $("aj-deletados").checked = !!r.show; })
+    .catch(() => { $("aj-deletados").checked = false; })
+    .finally(() => $("dlg-ajustes").showModal());
+}
+
+async function gravarAjustes() {
+  const novoTam = Number($("aj-tamanho").value) || PAGINA_PADRAO;
+  const mostrar = $("aj-deletados").checked;
+  $("dlg-ajustes").close();
+
+  try {
+    const r = await QDBU.rpc("session.deleted", { show: mostrar });
+    /*
+     * SET DELETED e da VM inteira. Trocar aqui envelhece as paginas em cache de
+     * TODAS as abas -- limpa-las forca a recarga ao reativar cada uma. Sem
+     * isto, trocar de aba mostraria o estado de deletados anterior. E a mesma
+     * limpeza que gravarConfig() faz, pelo mesmo motivo.
+     */
+    if (r.show !== r.wasShowing) {
+      gradeDe.clear();
+      formDe.clear();
+    }
+  } catch (e) {
+    hint(msgErro(e));
+  }
+
+  tamanhoPagina = novoTam;
+  rotuloAjustes();
   const p = paginaDaAba(abaAtiva);
   // Reancora na primeira linha visivel: mudar o tamanho da pagina nao deve
   // teletransportar o usuario para o topo do arquivo.
-  carregarPagina(abaAtiva, p && p.rows.length ? p.first : "top", 0);
+  if (visaoAtiva === "form") await carregarForm(abaAtiva, cursorDe.get(abaAtiva));
+  else await carregarPagina(abaAtiva, p && p.rows.length ? p.first : "top", 0);
   agendarSalvar();
+}
+
+$("pg-ajustes").addEventListener("click", abrirAjustes);
+$("aj-cancelar").addEventListener("click", () => $("dlg-ajustes").close());
+$("form-ajustes").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  gravarAjustes();
 });
 
 $("pg-recarregar").addEventListener("click", () => {
@@ -2713,6 +2856,20 @@ async function trocarOrdem(n) {
  * Codepage padrao + mostrar registros deletados. O SET EPOCH e fixo (1979) e
  * so aparece informado.
  */
+/*
+ * A barra de ferramentas com ou sem os nomes.
+ *
+ * Esconder e VISUAL, nunca estrutural: o texto continua no DOM, recortado a um
+ * pixel. Com `display:none` o botao ficaria sem nome acessivel -- um icone nao
+ * tem texto para um leitor de tela ler --, e seria preciso repetir o rotulo num
+ * `aria-label` em catorze botoes. Assim o nome continua na arvore de
+ * acessibilidade e o `title` segue explicando por extenso a quem passa o mouse.
+ */
+function aplicarRotulosBarra(mostrar) {
+  const b = document.querySelector(".visoes");
+  if (b) b.classList.toggle("so-icones", !mostrar);
+}
+
 async function abrirConfig() {
   try {
     const c = await QDBU.rpc("config.get", {});
@@ -2720,6 +2877,7 @@ async function abrirConfig() {
     preencherSelectCodepage($("cfg-codepage"), false);
     $("cfg-codepage").value = c.codepage || "PT850";
     $("cfg-deleted").checked = !!c.showDeleted;
+    $("cfg-rotulos").checked = c.toolbarLabels !== false;
     $("cfg-epoch").textContent = T("UI_EPOCH_INFO", { year: String(c.epoch) });
     $("dlg-config").showModal();
   } catch (e) {
@@ -2732,8 +2890,13 @@ async function gravarConfig() {
     const r = await QDBU.rpc("config.set", {
       codepage: $("cfg-codepage").value,
       showDeleted: $("cfg-deleted").checked,
+      toolbarLabels: $("cfg-rotulos").checked,
     });
     $("dlg-config").close();
+    // Vale JA, e nao so no proximo arranque: a resposta e a fonte, e nao o
+    // que estava marcado na caixa -- se o disco recusar, a tela mostra o que
+    // de fato ficou valendo.
+    aplicarRotulosBarra(r.toolbarLabels !== false);
     // SET DELETED e GLOBAL na VM: vale para TODAS as abas. As paginas em cache
     // (gradeDe/formDe) das outras envelhecem -- limpa-las forca a recarga ao
     // reativar; a ativa recarrega agora. Sem isto, trocar de aba mostraria o
@@ -2789,48 +2952,62 @@ function preencherSelectCodepage(sel, comHerdar) {
   for (const c of codepagesDisp) sel.appendChild(new Option(rotuloCodepage(c.id), c.id));
 }
 
-function desenharComboCodepage() {
-  const sel = $("pg-codepage");
-  const aba = abas.find((a) => a.h === abaAtiva);
-  const atual = (aba && aba.info && aba.info.codepage) || "";
-  // `pista` e nao `hint`: `hint()` e a funcao da barra de status, global e usada
-  // no arquivo inteiro. Um `const hint` aqui a sombreia no corpo desta funcao --
-  // a proxima linha que chamasse `hint("...")` morreria com "hint is not a
-  // function". E a familia de defeitos que o guia do projeto lista em "NOME
-  // COMPARTILHADO ENTRE ARQUIVOS".
-  const pista = (aba && aba.info && aba.info.codepageHint) || "";
+/*
+ * O CARTAO DA CODEPAGE E O UNICO QUE AGE.
+ *
+ * Ele mostra a lente vigente e traz ao lado o botao que a troca. Mora aqui, na
+ * Estrutura, e nao no rodape: trocar a lente e ato raro e deliberado, enquanto o
+ * rodape e para o que se usa a cada pagina -- navegar, buscar, ordenar.
+ *
+ * A pista do cabecalho continua SUGERINDO sem decidir (a maioria dos DBFs
+ * Clipper grava 0x00). Quando ela aponta outra codepage, o cartao inteiro se
+ * destaca e o title diz qual.
+ */
+function cartaoCodepage(aba, i) {
+  const atual = i.codepage || "";
+  const pista = i.codepageHint || "";
+  const origem = i.codepageOrigin || "";
+  const sugere = !!(pista && pista !== atual);
 
-  sel.textContent = "";
-  for (const c of codepagesDisp) {
-    sel.appendChild(new Option(rotuloCodepage(c.id), c.id));
-  }
-  sel.value = atual;
-  sel.disabled = !aba || !codepagesDisp.length || (aba && aba.detached);
+  const d = cartao(T("UI_CARD_CODEPAGE"), rotuloCodepage(atual), "com-acao" + (sugere ? " sugere" : ""));
+  d.title = textoOrigemCodepage(atual, origem, pista) || T("UI_CODEPAGE_TITLE");
 
-  /*
-   * O CABECALHO SUGERE, mas nao decide (a maioria dos DBFs Clipper grava 0x00).
-   * Quando ele aponta uma codepage diferente da ativa, o seletor se destaca e
-   * o title diz qual -- a pessoa troca se quiser, e nada muda sozinho.
-   */
-  const origem = (aba && aba.info && aba.info.codepageOrigin) || "";
-  const sugere = pista && pista !== atual;
-  sel.classList.toggle("sugere", !!sugere);
-  // O title diz a origem (herdado da conexao/global) e, se houver, a sugestao
-  // do cabecalho -- assim a pessoa sabe por que aquela lente esta ativa.
+  const b = elemento("button", "c-acao", "\u270E");
+  b.type = "button";
+  b.id = "pg-cod-trocar";
+  // Quando a lente esta fixada NESTE arquivo, o botao diz isso -- a informacao
+  // existia no pino antigo e nao pode sumir so porque o controle mudou de lugar.
+  b.title = origem === "file" ? T("UI_PINNED_FILE") : T("UI_CODEPAGE_TITLE");
+  b.disabled = !aba || !codepagesDisp.length || !!aba.detached;
+  // "ja fixado neste arquivo" quando a origem e o proprio arquivo
+  b.classList.toggle("ativo", origem === "file");
+  b.addEventListener("click", abrirCodepage);
+  d.appendChild(b);
+
+  return d;
+}
+
+/* A frase que explica POR QUE aquela lente esta ativa -- usada no title do
+   cartao e no rodape do dialogo, para as duas nunca divergirem. */
+function textoOrigemCodepage(atual, origem, pista) {
   const partes = [];
   if (origem === "connection") partes.push(T("UI_CODEPAGE_FROM_CONN"));
   else if (origem === "global" || origem === "default") partes.push(T("UI_CODEPAGE_FROM_GLOBAL"));
   else if (origem === "file") partes.push(T("UI_CODEPAGE_FROM_FILE"));
-  if (sugere) partes.push(T("UI_CODEPAGE_HINT", { cp: rotuloCodepage(pista) }));
-  sel.title = partes.length ? partes.join(" ") : T("UI_CODEPAGE_TITLE");
+  if (pista && pista !== atual) partes.push(T("UI_CODEPAGE_HINT", { cp: rotuloCodepage(pista) }));
+  return partes.join(" ");
+}
 
-  const fixar = $("pg-cod-fixar");
-  if (fixar) {
-    fixar.disabled = sel.disabled;
-    // "ja fixado neste arquivo" quando a origem e o proprio arquivo
-    fixar.classList.toggle("ativo", origem === "file");
-    fixar.title = origem === "file" ? T("UI_PINNED_FILE") : T("UI_PIN_FILE");
-  }
+/* Abre o dialogo com a lente vigente marcada e a origem explicada. */
+function abrirCodepage() {
+  const aba = abas.find((a) => a.h === abaAtiva);
+  if (!aba || !aba.info) return;
+  const i = aba.info;
+  preencherSelectCodepage($("cp-sel"), false);
+  $("cp-sel").value = i.codepage || "";
+  $("cp-fixar").checked = i.codepageOrigin === "file";
+  $("cp-origem").textContent = textoOrigemCodepage(i.codepage || "", i.codepageOrigin || "", i.codepageHint || "");
+  $("dlg-codepage").showModal();
 }
 
 /*
@@ -2849,8 +3026,16 @@ async function trocarCodepage(id, persist) {
   const aba = abas.find((a) => a.h === abaAtiva);
   if (!aba) return;
   try {
+    /*
+     * `persist` e TRES estados, nao dois. `undefined` significa "nao mexa no
+     * disco" -- e o caso de quem so troca a lente. `true` fixa, `false`
+     * DESFIXA: sem esse terceiro, desmarcar a caixa deixava a tela dizendo
+     * "nao fixado" com a entrada ainda no arquivo, e a cascata trazia o pino
+     * de volta na proxima abertura.
+     */
     const arg = { h: abaAtiva, codepage: id };
-    if (persist) arg.persist = "file";
+    if (persist === true) arg.persist = "file";
+    else if (persist === false) arg.persist = "none";
     const r = await QDBU.rpc("file.setcodepage", arg);
     if (aba.info) {
       aba.info.codepage = r.codepage;
@@ -2862,7 +3047,7 @@ async function trocarCodepage(id, persist) {
       const p = paginaDaAba(abaAtiva);
       await carregarPagina(abaAtiva, p && p.rows.length ? p.first : "top", 0);
     }
-    desenharComboCodepage();
+    desenharConteudo();
     if (persist) {
       hint(r.saved ? T("INFO_CODEPAGE_PINNED", { cp: rotuloCodepage(id) })
                    : T("WARN_CODEPAGE_NOT_PINNED", { cp: rotuloCodepage(id) }));
@@ -2871,7 +3056,7 @@ async function trocarCodepage(id, persist) {
     }
   } catch (e) {
     hint(msgErro(e));
-    desenharComboCodepage(); // volta o combo para a codepage que ficou
+    desenharConteudo(); // volta o cartao para a codepage que ficou valendo
   }
 }
 
@@ -3045,10 +3230,13 @@ $("pi-fechar-todos").addEventListener("click", async () => {
 });
 
 $("pg-ordem").addEventListener("change", (ev) => trocarOrdem(ev.target.value));
-$("pg-codepage").addEventListener("change", (ev) => trocarCodepage(ev.target.value, false));
-$("pg-cod-fixar").addEventListener("click", () => {
-  const id = $("pg-codepage").value;
-  if (id) trocarCodepage(id, true);
+$("cp-cancelar").addEventListener("click", () => $("dlg-codepage").close());
+$("form-codepage").addEventListener("submit", (ev) => {
+  ev.preventDefault();
+  const id = $("cp-sel").value;
+  const fixar = $("cp-fixar").checked;
+  $("dlg-codepage").close();
+  if (id) trocarCodepage(id, fixar);
 });
 
 /**
@@ -3928,6 +4116,15 @@ function ajustarBusca() {
 /** Vai para o registro e reancora a página nele. */
 async function irParaRegistro(recno, msg) {
   await carregarPagina(abaAtiva, recno, 0);
+  /*
+   * O CURSOR VAI JUNTO. Sem isto a busca ancorava a pagina no registro achado e
+   * deixava a marca onde estava: a linha encontrada aparecia no topo sem nada
+   * indicando que era ela, e o rodape continuava dizendo "reg. 42" depois de
+   * achar o 14 -- duas afirmacoes sobre o mesmo cursor, e a que a pessoa usa
+   * para se orientar era a falsa. Vale para a busca por indice e por varredura,
+   * e para o "ir p/ registro".
+   */
+  await porCursorEm(abaAtiva, recno);
   desenharGrade();
   if (msg) hint(msg);
 }
@@ -4792,10 +4989,13 @@ async function restaurarSessao() {
   // O <select> so aceita os valores que ele oferece; um pageSize gravado a mao
   // fora da lista deixaria o campo em branco mostrando outra coisa.
   const tam = String(est.pageSize || PAGINA_PADRAO);
-  if ([...$("pg-tamanho").options].some((o) => o.value === tam)) {
+  if ([...$("aj-tamanho").options].some((o) => o.value === tam)) {
     tamanhoPagina = Number(tam);
-    $("pg-tamanho").value = tam;
+    $("aj-tamanho").value = tam;
   }
+  // Fora do `if`: o rotulo do botao tem de refletir o tamanho VIGENTE,
+  // valido ou nao o que veio da sessao.
+  rotuloAjustes();
   ordemAbas = est.tabOrder || (est.openFiles || []).map((f) => f.path || "");
 
   // A DLL pode ja ter arquivos abertos -- por exemplo depois de um F5, em que a
@@ -5157,6 +5357,15 @@ $("form-conexao").addEventListener("submit", async (ev) => {
   // A lista de codepages (uma vez): o seletor por arquivo do rodape sai dela.
   await carregarCodepages();
 
+  // A preferencia de tela da barra de ferramentas. Uma ida so, aqui: ela nao
+  // muda sozinha, e o dialogo de Preferencias a reaplica quando alguem troca.
+  try {
+    const cfg = await QDBU.rpc("config.get", {});
+    aplicarRotulosBarra(cfg.toolbarLabels !== false);
+  } catch (e) {
+    /* sem a preferencia o padrao vale: com os nomes */
+  }
+
   // A DLL e a fonte da verdade: repinta a partir do que ela tem em memoria.
   // Depois disso, restaura o que a sessao anterior tinha e ainda nao esta aberto.
   await repintarDoEstado();
@@ -5196,7 +5405,6 @@ window.addEventListener("idioma-mudou", () => {
   pintar("abas", desenharAbas);
   pintar("conteudo", desenharConteudo);
   pintar("combo de ordem", desenharComboOrdem);
-  pintar("combo de codepage", desenharComboCodepage);
   pintar("busca", ajustarBusca);
   pintar("cdp", () => {
     $("cdp").textContent = portaCdp
@@ -7639,17 +7847,13 @@ function desenharForm() {
   if (!aba || !dados || !dados.row) {
     vazio.hidden = false;
     vazio.textContent = T(aba && aba.info && aba.info.filter ? "UI_EMPTY_FILTERED" : "UI_EMPTY_PAGE");
-    $("fm-pos").textContent = "";
     $("fm-deletado").hidden = true;
     return;
   }
   vazio.hidden = true;
 
   const { row, cols, records } = dados;
-  $("fm-pos").textContent = T("UI_CURRENT_RECORD", {
-    n: window.I.numero(row.recno),
-    total: window.I.numero(records),
-  });
+  /* "reg. N de T" e do rodape comum (#pg-atual), nao mais daqui. */
   $("fm-deletado").hidden = !row.deleted;
 
   row.values.forEach((v, i) => {
@@ -7876,10 +8080,6 @@ async function navegarForm(para) {
   }
 }
 
-$("fm-topo").addEventListener("click", () => navegarForm("top"));
-$("fm-fim").addEventListener("click", () => navegarForm("bottom"));
-$("fm-anterior").addEventListener("click", () => navegarForm(-1));
-$("fm-proximo").addEventListener("click", () => navegarForm(1));
 
 // ------------------------------------------------------ refresh automático (R9)
 /*

@@ -123,7 +123,10 @@
   UI_ORDER_PHYSICAL: "Natural",
   UI_ORDER_TITLE: "Índice controlador del orden de las filas",
   UI_ROWS_PER_PAGE: "filas/pág",
-  UI_ROWS_PER_PAGE_TITLE: "Registros por página",
+  UI_GRID_SETTINGS: "Ajustes de la cuadrícula",
+  UI_GRID_SETTINGS_TITLE: "Filas por página y visualización de eliminados",
+  UI_ROWS_N: "{n} filas",
+  UI_SHOW_DELETED_GLOBAL: "Vale para todas las pestañas: mostrar eliminados es un ajuste de la sesión entera, no de este archivo.",
   UI_LAST_READ: "Última lectura — la pantalla se actualiza sola cada 5 s mientras nada esté en edición",
   UI_RELOAD: "Releer del disco (F5)",
 
@@ -941,6 +944,8 @@
 
   // ---- T9: formulario ----
   UI_VIEW_FORM: "Formulario",
+  UI_SWITCH_TO_FORM: "Ver un registro a la vez, con todos los campos",
+  UI_SWITCH_TO_GRID: "Volver a la cuadrícula, con muchos registros",
   UI_FIRST_RECORD: "Primer registro",
   UI_PREV_RECORD: "Registro anterior",
   UI_NEXT_RECORD: "Registro siguiente",
@@ -964,6 +969,7 @@
   UI_CONFIG_EXPLAIN: "Valen para toda la app. Cada conexión y cada archivo pueden tener su propio codepage por encima de estos.",
   UI_DEFAULT_CODEPAGE: "Codepage predeterminado",
   UI_SHOW_DELETED: "Mostrar registros eliminados",
+  UI_TOOLBAR_LABELS: "Mostrar los nombres en la barra de herramientas",
   UI_EPOCH_INFO: "Las fechas de dos dígitos usan el siglo a partir de {year} (SET EPOCH, fijo).",
   UI_CONN_CODEPAGE: "Codepage",
   UI_CDP_INHERIT: "(heredar)",
@@ -980,6 +986,8 @@
   WARN_CONFIG_NOT_SAVED: "No se pudo guardar en disco; las preferencias valen solo en esta sesión.",
   UI_CODEPAGE: "Codepage",
   UI_CODEPAGE_TITLE: "Cómo los bytes de este archivo se vuelven texto — no altera el archivo",
+  UI_CODEPAGE_DIALOG: "Codificación de este archivo",
+  UI_CODEPAGE_EXPLAIN: "Un DBF no guarda de forma fiable con qué codificación fue escrito. Esta elección es solo la LENTE de lectura: cambiarla no altera ni un byte del archivo, y se puede volver atrás cuando quiera.",
   UI_CODEPAGE_HINT: "El encabezado sugiere {cp}.",
   ERROR_STALE_VALUE:
     "{field} fue modificado por otra persona mientras editaba: era '{expected}', ahora es '{actual}'.",

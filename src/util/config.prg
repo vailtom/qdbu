@@ -103,6 +103,24 @@ FUNCTION CodepageGlobal()
 
    RETURN CdpPadrao()
 
+/*
+ * A barra de ferramentas mostra o texto ao lado do icone?
+ *
+ * Preferencia de TELA: nao ha estado na VM para aplicar, so um valor guardado
+ * que a interface le no arranque. `.T.` quando nada foi escolhido -- quem chega
+ * ao app pela primeira vez le os nomes, e so esconde depois de ja saber onde
+ * cada coisa esta.
+ */
+FUNCTION RotulosNaBarra()
+
+   LOCAL h := ConfigGlobal()
+
+   IF hb_HHasKey( h, "toolbarLabels" ) .AND. HB_ISLOGICAL( h[ "toolbarLabels" ] )
+      RETURN h[ "toolbarLabels" ]
+   ENDIF
+
+   RETURN .T.
+
 /* ========================================================== nivel CONEXAO */
 
 /* Codepage cadastrado na conexao `cConn`, ou "" se nao ha (ou nome nao existe).
@@ -178,6 +196,38 @@ FUNCTION SalvaCodepageArquivo( cArq, cCdp )
          hb_DirBuild( cDir )
       ENDIF
       hb_MemoWrit( ArqDaPasta( cArq ), hb_jsonEncode( h, .T. ) )
+   RECOVER
+      RETURN .F.
+   END SEQUENCE
+
+   RETURN .T.
+
+/*
+ * Desfixa: tira este arquivo do mapa da pasta.
+ *
+ * Existe porque a tela OFERECE desfixar. Enquanto o pino era um botao de mao
+ * unica, nao havia o que desfazer; com a caixa de marcar, desmarcar tem de
+ * mudar o disco -- senao a tela diz "nao fixado" e a cascata traz o pino de
+ * volta na proxima abertura, que e a mentira silenciosa que o projeto inteiro
+ * evita.
+ *
+ * BEST-EFFORT como o resto do modulo, e mais uma saida: mapa que nao existe ou
+ * arquivo que nao esta nele ja E o estado pedido, entao devolve .T. sem tocar
+ * no disco. Some com a pasta `.qdbu/` nao -- ela pode guardar outros perfis.
+ */
+FUNCTION RemoveCodepageArquivo( cArq )
+
+   LOCAL h, cNome := Upper( hb_FNameNameExt( cArq ) )
+
+   /* Sem RETURN dentro do corpo do SEQUENCE: o compilador recusa (E0025), e a
+      saida antecipada nao e necessaria -- nao estar no mapa ja e o estado
+      pedido, entao basta nao escrever. */
+   BEGIN SEQUENCE WITH {| e | Break( e ) }
+      h := ConfigArquivos( cArq )
+      IF hb_HHasKey( h, cNome )
+         hb_HDel( h, cNome )
+         hb_MemoWrit( ArqDaPasta( cArq ), hb_jsonEncode( h, .T. ) )
+      ENDIF
    RECOVER
       RETURN .F.
    END SEQUENCE

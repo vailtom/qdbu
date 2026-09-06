@@ -125,7 +125,10 @@
   UI_ORDER_PHYSICAL: "Física",
   UI_ORDER_TITLE: "Índice que comanda a ordem das linhas",
   UI_ROWS_PER_PAGE: "linhas/pág",
-  UI_ROWS_PER_PAGE_TITLE: "Registros por página",
+  UI_GRID_SETTINGS: "Ajustes da grade",
+  UI_GRID_SETTINGS_TITLE: "Linhas por página e exibição de excluídos",
+  UI_ROWS_N: "{n} linhas",
+  UI_SHOW_DELETED_GLOBAL: "Vale para todas as abas: mostrar excluídos é um ajuste da sessão inteira, não deste arquivo.",
   UI_LAST_READ: "Última leitura — a tela se atualiza sozinha a cada 5 s enquanto nada está sendo editado",
   UI_RELOAD: "Reler do disco (F5)",
 
@@ -976,6 +979,8 @@
 
   // ---- T9: formulario ----
   UI_VIEW_FORM: "Formulário",
+  UI_SWITCH_TO_FORM: "Ver um registro por vez, com todos os campos",
+  UI_SWITCH_TO_GRID: "Voltar para a grade, com muitos registros",
   UI_FIRST_RECORD: "Primeiro registro",
   UI_PREV_RECORD: "Registro anterior",
   UI_NEXT_RECORD: "Próximo registro",
@@ -999,6 +1004,7 @@
   UI_CONFIG_EXPLAIN: "Valem para o app inteiro. Cada conexão e cada arquivo podem ter o próprio codepage por cima destes.",
   UI_DEFAULT_CODEPAGE: "Codepage padrão",
   UI_SHOW_DELETED: "Mostrar registros excluídos",
+  UI_TOOLBAR_LABELS: "Mostrar os nomes na barra de ferramentas",
   UI_EPOCH_INFO: "Datas de dois dígitos usam o século a partir de {year} (SET EPOCH, fixo).",
   UI_CONN_CODEPAGE: "Codepage",
   UI_CDP_INHERIT: "(herdar)",
@@ -1015,6 +1021,8 @@
   WARN_CONFIG_NOT_SAVED: "Não foi possível salvar no disco; as preferências valem só nesta sessão.",
   UI_CODEPAGE: "Codepage",
   UI_CODEPAGE_TITLE: "Como os bytes deste arquivo viram texto — não altera o arquivo",
+  UI_CODEPAGE_DIALOG: "Codepage deste arquivo",
+  UI_CODEPAGE_EXPLAIN: "O DBF não guarda com segurança qual codepage foi usada ao gravar. Esta escolha é só a LENTE de leitura: trocar não altera um byte do arquivo, e dá para voltar quando quiser.",
   UI_CODEPAGE_HINT: "O cabeçalho sugere {cp}.",
   ERROR_STALE_VALUE:
     "{field} foi alterado por outra pessoa enquanto você editava: era '{expected}', agora é '{actual}'.",
