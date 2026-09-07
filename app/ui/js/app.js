@@ -5528,6 +5528,67 @@ async function perguntarSaida() {
 }
 
 QDBU.aoEvento("pedido-de-saida", perguntarSaida);
+// ------------------------------------------------------- arrastar e soltar
+
+/*
+ * Soltar um .DBF na janela abre o arquivo.
+ *
+ * O arrasto vem do SISTEMA OPERACIONAL, pelo Tauri, e nao pelo drag-and-drop
+ * do HTML5. A diferenca importa: dentro de um webview a soltura entrega um
+ * `File`, que da o NOME e nao o CAMINHO -- inutil para abrir um DBF, que mora
+ * num disco de rede que a pagina nao alcanca. Por isso `dragDropEnabled` foi
+ * ligado no tauri.conf.json e os eventos sao os do Tauri.
+ *
+ * Consequencia de ligar: o webview deixa de receber eventos de arrasto. Nada se
+ * perde -- o arrasto de abas usa pointer events justamente porque o HTML5 DnD
+ * nunca foi confiavel aqui.
+ */
+const solte = $("solte");
+
+function mostrarAlvo(ligado) {
+  solte.hidden = !ligado;
+  solte.inert = !ligado;
+}
+
+QDBU.aoEvento("tauri://drag-enter", () => mostrarAlvo(true));
+QDBU.aoEvento("tauri://drag-leave", () => mostrarAlvo(false));
+QDBU.aoEvento("tauri://drag-drop", (ev) => {
+  mostrarAlvo(false);
+  soltarArquivos((ev && ev.payload && ev.payload.paths) || []);
+});
+
+/*
+ * ABRE OS .DBF, E DIZ O QUE FEZ COM O RESTO.
+ *
+ * Um por vez, e nao em paralelo: a VM do Harbour e uma thread so, entao
+ * disparar cinco `file.open` juntos apenas os enfileira -- e enfileirar sem
+ * ordem faria a aba ativa no fim ser a que a fila resolvesse por ultimo, e nao
+ * a ultima que a pessoa soltou.
+ *
+ * O que nao e DBF NAO e ignorado em silencio. Arrastar o arquivo errado e
+ * comum, e uma janela que nao reage e indistinguivel de uma janela travada.
+ */
+async function soltarArquivos(caminhos) {
+  const dbf = [];
+
+  for (const p of caminhos) {
+    const nome = paraExibir(p);
+    const ext = (p.split(".").pop() || "").toLowerCase();
+
+    if (ext === "dbf") dbf.push(p);
+    else if (ext === "vew") hint(T("ERROR_CLI_VEW_UNSUPPORTED", { file: nome }));
+    // Sem extensao quase sempre e pasta -- e pasta neste app nao e arquivo a
+    // abrir, e conexao a cadastrar. Dizer ONDE se faz isso vale mais que
+    // recusar sem mais.
+    else if (ext === "" || ext === p.toLowerCase())
+      hint(T("ERROR_DROP_NOT_A_FILE", { file: nome }));
+    else hint(T("ERROR_DROP_NOT_A_DBF", { file: nome }));
+  }
+
+  for (const p of dbf) {
+    await abrirArquivo(p, null);
+  }
+}
 
 
 // ------------------------------------------------------- erro que nao some

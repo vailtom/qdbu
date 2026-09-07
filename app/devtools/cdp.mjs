@@ -13,6 +13,7 @@
  *   node --experimental-websocket cdp.mjs text  "<seletor css>"
  *   node --experimental-websocket cdp.mjs click    "<seletor css>"
  *   node --experimental-websocket cdp.mjs dblclick "<seletor css>"
+ *   node --experimental-websocket cdp.mjs drag "<seletor css>" <dx> [dy]
  *   node --experimental-websocket cdp.mjs scroll   "<seletor css>" <dx> [dy]
  *   node --experimental-websocket cdp.mjs fill  "<seletor css>" "<valor>"
  *   node --experimental-websocket cdp.mjs shot  "<arquivo.png>"
@@ -289,6 +290,53 @@ async function main() {
       break;
     }
     /*
+     * ARRASTO COM O MOUSE DE VERDADE -- a quinta lacuna desta ferramenta.
+     *
+     * O app tem UM arrasto proprio, o de reordenar abas, e ele nao usa
+     * drag-and-drop do HTML5: usa pointer events, porque o DnD do HTML5 nunca
+     * foi confiavel dentro do WebView2 (e agora esta desligado de vez, com
+     * `dragDropEnabled: true` entregando o arrasto do SISTEMA ao Tauri).
+     * Resultado: nao havia como exercitar por teste o unico arrasto do app --
+     * ele so era conferido a mao, e portanto quase nunca.
+     *
+     * Um `pressed` seguido de um `released` NAO serve: o codigo de arrasto so
+     * comeca depois de o ponteiro andar um minimo (ARRASTO_MINIMO, 5px em
+     * app.js) e decide a posicao de destino pelos movimentos INTERMEDIARIOS. Um
+     * salto unico do inicio ao fim passa por cima dessa logica -- que e
+     * exatamente a que se quer testar. Por isso o caminho e percorrido em
+     * passos.
+     *
+     * Uso: drag <seletor> <dx> [dy]
+     */
+    case "drag": {
+      const caixa = await caixaDe(ws, args[0]);
+      if (!caixa) { out = "elemento nao encontrado: " + args[0]; break; }
+      const dx = Number(args[1] || 0);
+      const dy = Number(args[2] || 0);
+      const PASSOS = 10;
+
+      await enviar(ws, "Input.dispatchMouseEvent", {
+        type: "mousePressed", x: caixa.x, y: caixa.y,
+        button: "left", buttons: 1, clickCount: 1, pointerType: "mouse",
+      });
+      for (let i = 1; i <= PASSOS; i++) {
+        await enviar(ws, "Input.dispatchMouseEvent", {
+          type: "mouseMoved",
+          x: Math.round(caixa.x + (dx * i) / PASSOS),
+          y: Math.round(caixa.y + (dy * i) / PASSOS),
+          button: "left", buttons: 1, pointerType: "mouse",
+        });
+        await new Promise((r) => setTimeout(r, 16));
+      }
+      await enviar(ws, "Input.dispatchMouseEvent", {
+        type: "mouseReleased", x: Math.round(caixa.x + dx), y: Math.round(caixa.y + dy),
+        button: "left", buttons: 0, clickCount: 1, pointerType: "mouse",
+      });
+      await new Promise((r) => setTimeout(r, 200));
+      out = "arrastou " + caixa.nome + " em " + dx + "," + dy;
+      break;
+    }
+    /*
      * ROLAGEM COM RODA DE MOUSE DE VERDADE.
      *
      * `el.scrollLeft = N` no eval move a barra e NAO e rolar: nao passa pela
@@ -353,7 +401,7 @@ async function main() {
       break;
     default:
       console.error(
-        "comandos: eval | evalfile | text | html | click | dblclick | fill | key | type | scroll | shot | reload | logs"
+        "comandos: eval | evalfile | text | html | click | dblclick | drag | fill | key | type | scroll | shot | reload | logs"
       );
       process.exitCode = 2;
       return;

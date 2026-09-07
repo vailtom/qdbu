@@ -29,6 +29,10 @@ rede.
 | `layers` | Em massa | muitos registros de uma vez |
 | `shrink` | Compactar | PACK encolhe o arquivo |
 | `trash-2` | Esvaziar | a lixeira fica para o que destrói de verdade |
+| `info` | Sobre | identidade, versão e data de linkedição |
+| `file-plus` | alvo do arrastar-e-soltar | o arquivo ENTRA — ver abaixo |
+
+**`file-plus` e não `file-output` no alvo do arrasto.** Os dois são um arquivo com uma seta, e a diferença é o SENTIDO dela: em `file-output` a seta sai — é o ícone de Exportar, o dado deixando a máquina. Num alvo onde se solta um arquivo para abrir, ele diz exatamente o contrário do que acontece. O `+` não tem sentido para inverter.
 
 **A escolha de `circle-minus` para Excluir é semântica, não estética.** No xBase
 excluir é uma MARCA reversível, com Recuperar do lado; uma lixeira ensinaria que

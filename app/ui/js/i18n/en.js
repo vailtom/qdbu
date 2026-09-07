@@ -1028,4 +1028,10 @@
   ERROR_CLI_VEW_UNSUPPORTED:
     "'{file}' is a .VEW file, and QDbu does not read that format yet.",
   ERROR_CLI_UNKNOWN_OPTION: "Unrecognised command-line option: {option}.",
+  // ------------------------------------------------------------ drag and drop
+  UI_DROP_HERE: "Drop to open",
+  UI_DROP_HINT: "DBF files. Folders are registered under + Connection.",
+  ERROR_DROP_NOT_A_DBF: "'{file}' is not a .DBF.",
+  ERROR_DROP_NOT_A_FILE:
+    "'{file}' is not a .DBF file. If it is a folder, register it under + Connection.",
 };

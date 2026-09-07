@@ -43,6 +43,7 @@
     <symbol id="i-file-output" viewBox="0 0 24 24"><path d="M4.226 20.925A2 2 0 0 0 6 22h12a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v3.127" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="m5 11-3 3" /> <path d="m5 17-3-3h10" /></symbol>
     <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /> <path d="m9 12 2 2 4-4" /></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /> <path d="M12 16v-4" /> <path d="M12 8h.01" /></symbol>
+    <symbol id="i-file-plus" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /> <path d="M14 2v4a2 2 0 0 0 2 2h4" /> <path d="M9 15h6" /> <path d="M12 18v-6" /></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14" /> <path d="M12 5v14" /></symbol>
     <symbol id="i-circle-minus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /> <path d="M8 12h8" /></symbol>
     <symbol id="i-undo-2" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /> <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></symbol>
@@ -971,6 +972,22 @@
   O aviso de prova de conceito e o mesmo dos tres README, palavra por palavra:
   quem le a janela e quem le o repositorio tem de receber a mesma informacao.
 -->
+<!--
+  Alvo do arrasto. Fica sempre no DOM e some por `hidden` -- criar o elemento no
+  primeiro `drag-enter` faria a primeira soltura chegar antes da pintura, e a
+  unica vez em que a pessoa precisa do aviso e justamente a primeira.
+
+  `inert` alem de `hidden`: enquanto invisivel ele nao pode receber foco nem
+  clique, senao viraria uma parada muda na ordem de tabulacao.
+-->
+<div id="solte" class="solte" hidden inert>
+  <div class="solte-caixa">
+    <svg class="solte-ico" aria-hidden="true"><use href="#i-file-plus" /></svg>
+    <p data-i18n="UI_DROP_HERE"></p>
+    <p class="explica" data-i18n="UI_DROP_HINT"></p>
+  </div>
+</div>
+
 <dialog id="dlg-sobre">
   <form method="dialog" id="form-sobre">
     <h2 id="sb-titulo"></h2>

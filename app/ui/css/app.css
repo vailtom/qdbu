@@ -118,6 +118,29 @@ header {
 #dlg-sobre h3 { margin: 16px 0 4px; font-size: 13px; }
 #dlg-sobre a { color: var(--amber); }
 
+/* Alvo do arrasto: cobre a janela inteira porque o alvo E a janela inteira --
+   nao ha uma zona certa para soltar, e desenhar uma retangulo pequeno faria a
+   pessoa mirar. `pointer-events: none` porque quem trata o arrasto e o sistema,
+   pelo Tauri: se este elemento capturasse o mouse ele nao mudaria nada e ainda
+   engoliria o clique que vier logo depois de uma soltura cancelada. */
+.solte {
+  position: fixed; inset: 0; z-index: 90;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+.solte-caixa {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 28px 40px; border-radius: 10px;
+  border: 2px dashed var(--amber); background: var(--bg2);
+  text-align: center;
+}
+.solte-caixa p { margin: 0; }
+.solte-ico { width: 34px; height: 34px; flex: none;
+  fill: none; stroke: var(--amber); stroke-width: 1.5;
+  stroke-linecap: round; stroke-linejoin: round; }
+
 .tema { position: relative; }
 
 .tema-btn {
