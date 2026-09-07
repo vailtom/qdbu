@@ -542,9 +542,21 @@ fn selftest() -> i32 {
         Ok("pong:qdbu"),
     );
     t.contem(
-        "meta: Api_Version identifica o produto",
+        "meta: Api_Version identifica o produto pela grafia oficial",
         hb.exec("Api_Meta_Version", ""),
-        "dbu-harbour",
+        "QDbu",
+    );
+    /*
+     * O RDD sai da DLL, e nao de um literal na tela.
+     *
+     * O diálogo de abrir arquivo mostra este valor. Um literal "DBFNTX" no
+     * HTML seria uma segunda verdade -- e no dia em que um segundo RDD for
+     * linkado, a que envelheceria calada.
+     */
+    t.contem(
+        "meta: Api_Version diz qual RDD foi linkado",
+        hb.exec("Api_Meta_Version", ""),
+        "\"rdd\":\"DBFNTX\"",
     );
     t.contem(
         "meta: funcao inexistente vira recusa, nao crash",
@@ -1786,6 +1798,127 @@ fn selftest() -> i32 {
         }
     } else {
         saida("  --   TA: fixture TIPOS.DBF ausente, pulando (rode tests/fixtures/fixtures.bat)");
+    }
+
+    /*
+     * ---- Somente leitura (RO) ------------------------------------------
+     *
+     * A garantia e do RDD, nao da tela: a work area e aberta com o 6o
+     * parametro do dbUseArea, entao QUALQUER caminho de escrita bate nela.
+     * O que se afirma aqui e que a recusa chega como RECUSA DE NEGOCIO e nao
+     * como "ERR:", que neste projeto significa bug -- e que ler continua
+     * funcionando, senao o modo nao serviria para nada.
+     */
+    saida("");
+    {
+        // A fixture e resolvida de novo aqui: `origem_s` do bloco T8 morre com
+        // ele, e depender do escopo de outro teste amarraria os dois.
+        let fonte_ro = raiz_projeto()
+            .map(|raiz| raiz.join("tests").join("fixtures").join("TIPOS.DBF"))
+            .filter(|p| p.exists());
+        let ro = dir_run().join("selftest_ro.dbf");
+        let ro_s = ro.to_string_lossy().replace('\\', "/");
+        let _ = std::fs::remove_file(&ro);
+
+        let copiou = match &fonte_ro {
+            Some(p) => {
+                let fonte_s = p.to_string_lossy().replace('\\', "/");
+                rpc_bruto(
+                    &hb,
+                    "meta.copyfile",
+                    &format!(r#"{{"source":"{fonte_s}","dest":"{ro_s}","shared":true}}"#),
+                )
+                .map(|r| r.contains("\"ok\":true"))
+                .unwrap_or(false)
+            }
+            None => false,
+        };
+
+        // O CONJUNTO, nao so o .DBF: TIPOS.DBF tem memo, e `file.open` recusa
+        // (com razao) um DBF com a flag de memo ligada e nenhum .dbt ao lado.
+        let ro_memo = ro.with_extension("dbt");
+        let _ = std::fs::remove_file(&ro_memo);
+        if let Some(p) = &fonte_ro {
+            let memo = p.with_extension("dbt");
+            if memo.exists() {
+                let _ = std::fs::copy(&memo, &ro_memo);
+            }
+        }
+
+        if copiou {
+            // A resposta CRUA e guardada: sem ela a falha diria so "file.open
+            // falhou", que e a categoria e nao o fato -- a mesma armadilha que
+            // ErroTexto() existe para evitar do outro lado.
+            let bruta = rpc_bruto(&hb, "file.open", &format!(r#"{{"path":"{ro_s}","readOnly":true}}"#))
+                .unwrap_or_else(|e| format!("erro de ponte: {e}"));
+            let hro = serde_json::from_str::<serde_json::Value>(&bruta)
+                .ok()
+                .as_ref()
+                .and_then(|v| v.pointer("/result/h"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            match hro {
+                Some(h) => {
+                    let info = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h}"}}"#))
+                        .unwrap_or_default();
+                    t.ok(
+                        "RO: file.info devolve readOnly true",
+                        info.contains("\"readOnly\":true"),
+                        &info,
+                    );
+
+                    let pag = rpc_bruto(
+                        &hb, "data.page",
+                        &format!(r#"{{"h":"{h}","anchor":"top","count":3}}"#),
+                    ).unwrap_or_default();
+                    t.ok(
+                        "RO: LER continua funcionando -- o modo trava a escrita, nao o uso",
+                        pag.contains("\"ok\":true"),
+                        &pag,
+                    );
+
+                    // A recusa: negocio, com codigo estavel. NAO "ERR:".
+                    for m in ["data.update", "data.append", "data.delete", "bulk.pack", "bulk.zap"] {
+                        let r = rpc_bruto(
+                            &hb, m,
+                            &format!(r#"{{"h":"{h}","recno":1,"values":{{}},"backup":false}}"#),
+                        ).unwrap_or_default();
+                        t.ok(
+                            &format!("RO: {m} recusa com ERROR_FILE_READ_ONLY, nao ERR:"),
+                            r.contains("ERROR_FILE_READ_ONLY") && !r.starts_with("ERR:"),
+                            &r,
+                        );
+                    }
+
+                    /*
+                     * Exportar NAO e recusado, e isso e a distincao inteira:
+                     * somente leitura e uma promessa sobre ESTE arquivo, e
+                     * export.csv escreve outro. Recusar aqui confundiria
+                     * "nao mudo este" com "nao produzo nada".
+                     */
+                    let saida_csv = dir_run().join("selftest_ro.csv");
+                    let csv_s = saida_csv.to_string_lossy().replace('\\', "/");
+                    let exp = rpc_bruto(
+                        &hb, "export.csv",
+                        &format!(r#"{{"h":"{h}","path":"{csv_s}"}}"#),
+                    ).unwrap_or_default();
+                    t.ok(
+                        "RO: exportar CONTINUA valendo -- cria arquivo novo, nao muda este",
+                        exp.contains("\"ok\":true"),
+                        &exp,
+                    );
+                    let _ = std::fs::remove_file(&saida_csv);
+
+                    let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h}"}}"#));
+                }
+                None => t.ok("RO: abrir somente leitura", false, &bruta),
+            }
+        } else {
+            t.ok("RO: preparar a copia", false, "meta.copyfile falhou");
+        }
+        let _ = std::fs::remove_file(&ro);
+        let _ = std::fs::remove_file(&ro_memo);
     }
 
     /*

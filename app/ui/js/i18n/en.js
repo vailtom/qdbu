@@ -1034,4 +1034,19 @@
   ERROR_DROP_NOT_A_DBF: "'{file}' is not a .DBF.",
   ERROR_DROP_NOT_A_FILE:
     "'{file}' is not a .DBF file. If it is a folder, register it under + Connection.",
+  // ------------------------------------------------------------ open file
+  UI_OPEN_FILE: "Open file",
+  UI_OPEN_FILE_TITLE: "Open file",
+  UI_OPEN_FILE_EXPLAIN:
+    "A single DBF, without registering its folder. To come back to it later, register the folder as a connection.",
+  UI_OPEN_DIALOG_TITLE: "Choose a DBF file",
+  UI_BROWSE: "Browse…",
+  UI_OPEN: "Open",
+  UI_READ_ONLY: "Read-only",
+  UI_EXCLUSIVE: "Exclusive use",
+  UI_OPEN_MODE_EXPLAIN:
+    "Read-only refuses every write to this file — the refusal comes from the driver, not from the screen. Exclusive use stops another program from opening it while you have it.",
+  UI_RDD: "Driver",
+  ERROR_FILE_READ_ONLY:
+    "'{file}' was opened read-only, so {method} cannot write to it. Close the tab and open it again without that option.",
 };

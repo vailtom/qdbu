@@ -75,15 +75,21 @@
     <button type="button" id="btn-config" class="icone" data-i18n-title="UI_PREFERENCES">⚙</button>
     <div class="tema" id="tema"></div>
     <div class="idioma" id="idioma"></div>
-    <button id="btn-nova-conexao" class="primario" data-i18n="UI_NEW_CONNECTION"></button>
   </div>
 </header>
 
 <div class="corpo">
 
   <aside id="painel" class="painel">
+    <!-- O "+" mora AQUI e nao no topo direito: a arvore de conexoes e este
+         painel, entao o gesto de acrescentar uma pertence a ele. No canto
+         oposto da tela ele era um botao sem vizinhanca -- longe da unica coisa
+         que ele produz. -->
     <div class="busca">
       <input id="busca" type="search" data-i18n-ph="UI_SEARCH_PLACEHOLDER" autocomplete="off">
+      <button type="button" id="btn-nova-conexao" class="icone" data-i18n-title="UI_NEW_CONNECTION">
+        <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+      </button>
     </div>
     <div id="arvore" class="arvore" data-i18n-aria="UI_CONNECTIONS"></div>
   </aside>
@@ -92,7 +98,27 @@
        data-i18n-aria="UI_PANEL_WIDTH" tabindex="0" data-i18n-title="UI_DRAG_RESIZE"></div>
 
   <main class="area">
-    <div id="abas" class="abas" role="tablist"></div>
+    <!--
+      O "+" e IRMAO da faixa de abas, nao um filho dela.
+
+      Poderia ser `position: sticky` dentro de `#abas`, e seria pior: elemento
+      fixo sobre conteudo que rola precisa de fundo opaco, e o projeto ja pagou
+      por essa licao tres vezes (ver o guia). Fora do contentor nao ha
+      sobreposicao nenhuma a resolver.
+
+      Fica a ESQUERDA e nao no fim porque o fim rola para longe assim que ha
+      abas demais -- e e justamente com muitos arquivos abertos que alguem quer
+      abrir mais um.
+
+      `#abas` some quando nao ha arquivo (`cx.hidden` em desenharAbas) e o "+"
+      NAO some junto: e a hora em que ele mais importa.
+    -->
+    <div class="barra-abas">
+      <button type="button" id="btn-abrir" class="aba-mais" data-i18n-title="UI_OPEN_FILE">
+        <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
+      </button>
+      <div id="abas" class="abas" role="tablist"></div>
+    </div>
 
     <div id="vazio" class="estado-vazio">
       <p class="titulo" data-i18n="UI_NO_FILE_OPEN"></p>
@@ -1064,6 +1090,64 @@
 </dialog>
 
 <!-- diálogo: nova conexão -->
+<!--
+  ABRIR ARQUIVO SOLTO -- sem conexao, como o DBU fazia.
+
+  Os dois checkboxes NAO sao enfeite: viram os parametros 5 e 6 do `dbUseArea`,
+  entao quem recusa a escrita e o RDD e nao a tela. Uma trava so na interface
+  seria uma promessa que o primeiro caminho novo quebraria em silencio.
+
+  Os dois sao independentes: da para abrir exclusivo E somente leitura ao mesmo
+  tempo (ninguem mais mexe, e eu tambem nao).
+
+  Ambos nascem DESMARCADOS. Compartilhado e gravavel e o mesmo modo de quem
+  clica um arquivo na arvore -- o padrao do DBU era NetMode compartilhado, e um
+  utilitario que existe para PACK e ZAP nao pode abrir recusando escrita por
+  conta propria. Marcar e um ato deliberado, e e o que lhe da valor.
+
+  O RDD e TEXTO, nao combo. Hoje so DBFNTX esta linkado, e uma lista com uma
+  opcao que nao muda nada nao ensina nada -- pior, listar DBFCDX sem ele existir
+  seria o app prometendo o que nao faz. Dizer qual e a verdade, tem a cara certa,
+  e vira seletor no dia em que houver um segundo, sem redesenhar isto aqui.
+-->
+<dialog id="dlg-abrir">
+  <form method="dialog" id="form-abrir">
+    <h2 data-i18n="UI_OPEN_FILE_TITLE"></h2>
+    <p class="explica" data-i18n="UI_OPEN_FILE_EXPLAIN"></p>
+
+    <label>
+      <span data-i18n="UI_FILE"></span>
+      <span class="com-botao">
+        <input id="ab-path" name="path" placeholder="J:\bases\base03\NETCLI.DBF"
+               required spellcheck="false">
+        <button type="button" id="ab-procurar" class="ghost" data-i18n="UI_BROWSE"></button>
+      </span>
+    </label>
+
+    <label class="linha-check">
+      <input type="checkbox" id="ab-somente-leitura">
+      <span data-i18n="UI_READ_ONLY"></span>
+    </label>
+    <label class="linha-check">
+      <input type="checkbox" id="ab-exclusivo">
+      <span data-i18n="UI_EXCLUSIVE"></span>
+    </label>
+    <p class="explica" data-i18n="UI_OPEN_MODE_EXPLAIN"></p>
+
+    <p class="linha-info">
+      <span data-i18n="UI_RDD"></span>
+      <b id="ab-rdd">DBFNTX</b>
+    </p>
+
+    <p id="ab-erro" class="erro-campo" hidden></p>
+
+    <div class="acoes">
+      <button type="button" id="ab-cancelar" class="ghost" data-i18n="UI_CANCEL"></button>
+      <button type="submit" class="primario" data-i18n="UI_OPEN"></button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="dlg-conexao">
   <form method="dialog" id="form-conexao">
     <h2 data-i18n="UI_NEW_CONNECTION_TITLE"></h2>

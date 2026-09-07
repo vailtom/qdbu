@@ -1067,4 +1067,19 @@
   ERROR_DROP_NOT_A_DBF: "'{file}' não é um .DBF.",
   ERROR_DROP_NOT_A_FILE:
     "'{file}' não é um arquivo .DBF. Se for uma pasta, cadastre-a em + Conexão.",
+  // ------------------------------------------------------------ abrir arquivo
+  UI_OPEN_FILE: "Abrir arquivo",
+  UI_OPEN_FILE_TITLE: "Abrir arquivo",
+  UI_OPEN_FILE_EXPLAIN:
+    "Um DBF solto, sem cadastrar a pasta. Para voltar a ele depois, cadastre a pasta como conexão.",
+  UI_OPEN_DIALOG_TITLE: "Escolher arquivo DBF",
+  UI_BROWSE: "Procurar…",
+  UI_OPEN: "Abrir",
+  UI_READ_ONLY: "Somente leitura",
+  UI_EXCLUSIVE: "Uso exclusivo",
+  UI_OPEN_MODE_EXPLAIN:
+    "Somente leitura recusa qualquer gravação neste arquivo — a recusa é do driver, não da tela. Uso exclusivo impede que outro programa o abra enquanto você o usa.",
+  UI_RDD: "Driver",
+  ERROR_FILE_READ_ONLY:
+    "'{file}' foi aberto somente para leitura, então {method} não pode gravar nele. Feche a aba e abra de novo sem essa opção.",
 };

@@ -84,6 +84,28 @@ STATIC FUNCTION MetodosRegistrados()
       "mass.replace", "mass.delete", "mass.recall", "mass.appendfrom", ;
       "data.update", "data.append", "data.delete", "data.recall" }
 
+/*
+ * Os que escrevem NO ARQUIVO ABERTO -- o subconjunto que um handle somente
+ * leitura tem de recusar.
+ *
+ * E um SUBCONJUNTO da lista acima, e a diferenca e exatamente "cria arquivo
+ * novo" contra "muda este". `export.*` e `struct.create` produzem outro
+ * arquivo; `backup.run` copia; `index.create` escreve um .ntx ao lado e nao
+ * encosta no .DBF. Nenhum deles contraria a promessa de somente leitura, que e
+ * sobre ESTE arquivo.
+ *
+ * Fica aqui, e nao no dispatcher, para as duas listas viverem lado a lado: sao
+ * a mesma pergunta feita duas vezes -- "escreve?" e "escreve AQUI?" --, e
+ * separa-las por arquivo faria a segunda ser esquecida quando a primeira
+ * crescesse. Operacao destrutiva nova entra nas DUAS no mesmo commit.
+ */
+FUNCTION MetodosQueEscrevemNoArquivo()
+   RETURN { ;
+      "struct.modify", ;
+      "bulk.pack", "bulk.zap", ;
+      "mass.replace", "mass.delete", "mass.recall", "mass.appendfrom", ;
+      "data.update", "data.append", "data.delete", "data.recall" }
+
 /* <raiz>/.qdbu/log */
 FUNCTION DirLog()
 

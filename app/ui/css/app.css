@@ -141,6 +141,24 @@ header {
   fill: none; stroke: var(--amber); stroke-width: 1.5;
   stroke-linecap: round; stroke-linejoin: round; }
 
+/* Busca do painel: o campo estica, o "+" nao. */
+.busca { display: flex; align-items: center; gap: 6px; }
+.busca input { flex: 1; min-width: 0; }
+
+/* Campo com botao colado (o "Procurar" do diálogo de abrir). Dentro de um
+   <dialog> vale `dialog input { display:block; width:100% }`, que sozinha
+   empurraria o botao para a linha de baixo. */
+.com-botao { display: flex; gap: 6px; align-items: stretch; }
+.com-botao input { flex: 1; min-width: 0; }
+.com-botao button { flex: none; white-space: nowrap; }
+
+/* Linha de informacao num diálogo: rotulo e valor, sem virar campo. */
+.linha-info {
+  display: flex; gap: 8px; align-items: baseline;
+  margin: 14px 0 0; color: var(--dim); font-size: 12.5px;
+}
+.linha-info b { color: var(--fg); font-family: var(--mono); font-weight: normal; }
+
 .tema { position: relative; }
 
 .tema-btn {
@@ -469,11 +487,28 @@ dialog .acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 
 
 .area { display: flex; flex-direction: column; padding: 0; }
 
-.abas {
-  flex: none; display: flex; align-items: stretch; gap: 1px;
+/* A faixa e o "+": o que rola e SO a lista de abas.
+   `min-width: 0` no filho que rola e obrigatorio -- sem ele o flex adota a
+   largura do conteudo como minimo, `overflow-x` nunca entra em acao e a barra
+   inteira estica para fora da janela, levando o "+" junto. */
+.barra-abas {
+  flex: none; display: flex; align-items: stretch;
   background: var(--bg2); border-bottom: 1px solid var(--line);
+}
+.abas {
+  flex: 1; min-width: 0; display: flex; align-items: stretch; gap: 1px;
   overflow-x: auto; scrollbar-width: thin;
 }
+/* Sem borda inferior propria: ela vem da `.barra-abas`, senao o "+" ganharia
+   uma segunda linha um pixel acima da das abas. */
+.aba-mais {
+  flex: none; display: flex; align-items: center; justify-content: center;
+  min-width: 34px; padding: 0 10px; cursor: pointer;
+  background: var(--bg2); color: var(--dim);
+  border: none; border-right: 1px solid var(--line);
+}
+.aba-mais:hover { background: var(--bg4); color: var(--amber); }
+.aba-mais:focus-visible { outline: 1px solid var(--amber); outline-offset: -2px; }
 .aba {
   display: flex; align-items: center; gap: 8px;
   padding: 7px 10px 7px 13px; cursor: pointer; user-select: none;

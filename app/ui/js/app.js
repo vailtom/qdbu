@@ -410,6 +410,17 @@ function desenharAbas() {
 const MODO = { SHARED: "UI_MODE_SHARED", EXCLUSIVE: "UI_MODE_EXCLUSIVE" };
 const modoTexto = (m) => (MODO[m] ? T(MODO[m]) : String(m || "").toLowerCase());
 
+/*
+ * O modo COMPLETO: compartilhamento e somente-leitura sao dois eixos.
+ *
+ * Tem de estar a vista ANTES de alguem esbarrar na recusa. Um arquivo aberto
+ * somente leitura recusa a gravacao pelo RDD, o que e a garantia certa -- mas
+ * descobrir isso ao tentar salvar uma celula e descobrir tarde. O cartao de
+ * modo e o resumo da aba dizem os dois desde a abertura.
+ */
+const modoCompleto = (i) =>
+  !i ? "" : modoTexto(i.mode) + (i.readOnly ? " · " + T("UI_READ_ONLY") : "");
+
 function cartao(rotulo, valor, classe) {
   const d = elemento("div", "cartao" + (classe ? " " + classe : ""));
   d.appendChild(elemento("span", "c-rot", rotulo));
@@ -481,7 +492,9 @@ function desenharConteudo() {
   cx.appendChild(cartao(T("UI_CARD_RECORDS"), window.I.numero(i.records)));
   cx.appendChild(cartao(T("UI_CARD_FIELDS"), String(i.fieldCount)));
   cx.appendChild(cartao(T("UI_CARD_RECSIZE"), window.I.numero(i.recordSize)));
-  cx.appendChild(cartao(T("UI_CARD_MODE"), modoTexto(i.mode), i.exclusive ? "alerta" : ""));
+  cx.appendChild(
+    cartao(T("UI_CARD_MODE"), modoCompleto(i), i.exclusive || i.readOnly ? "alerta" : "")
+  );
   cx.appendChild(cartao("RDD", i.rdd));
   if (i.hasMemo) {
     cx.appendChild(cartao(T("UI_CARD_MEMO"), i.memoFile || T("UI_YES")));
@@ -1309,7 +1322,7 @@ async function garantirForm(aba) {
   carregarForm(aba.h, cursor);
 }
 
-async function abrirArquivo(caminho, conexao, exclusivo) {
+async function abrirArquivo(caminho, conexao, exclusivo, somenteLeitura) {
   // Windows mistura / e barra invertida no mesmo caminho; comparar cru erra.
   // fromCharCode(92) evita ter de escapar a barra invertida aqui.
   const SEP = String.fromCharCode(92);
@@ -1331,6 +1344,7 @@ async function abrirArquivo(caminho, conexao, exclusivo) {
     // e quem decide, hoje, e so o /E da linha de comando.
     const pedido = { path: caminho, connection: conexao };
     if (exclusivo) pedido.exclusive = true;
+    if (somenteLeitura) pedido.readOnly = true;
     const i = await QDBU.rpc("file.open", pedido);
     await repintarDoEstado();
 
@@ -1343,7 +1357,7 @@ async function abrirArquivo(caminho, conexao, exclusivo) {
     hint(
       i.file + " — " +
       T("UI_TAB_SUMMARY", { records: i.records, fields: i.fieldCount }) +
-      ", " + modoTexto(i.mode)
+      ", " + modoCompleto(i)
     );
   } catch (e) {
     // "Ja aberto" significa que a DLL tem o arquivo e a UI nao sabia: estado
@@ -5302,6 +5316,105 @@ $("busca").addEventListener("input", (ev) => {
 // -------------------------------------------------------- dialogo de conexao
 
 const dlg = $("dlg-conexao");
+
+// ------------------------------------------------------------ abrir arquivo
+
+/*
+ * Abrir um DBF SOLTO, sem conexao -- o que o DBU fazia e o que a linha de
+ * comando e o arrastar-e-soltar ja permitem. Este e o terceiro caminho, e o
+ * unico alcancavel por quem esta com o app aberto e o mouse na mao.
+ *
+ * O "+" fica a esquerda da faixa de abas, FORA do que rola: com quinze
+ * arquivos abertos um "+" no fim estaria fora da vista, e e justamente ai que
+ * alguem quer abrir mais um.
+ */
+/* O RDD vem da DLL (`meta.version`), uma vez. Um literal aqui seria uma
+   segunda verdade -- e no dia em que um segundo RDD for linkado, a que
+   envelheceria calada. Se a consulta falhar, o campo fica com o que o HTML
+   trouxe: melhor um valor provavel que um espaco vazio. */
+let rddPadrao = null;
+
+async function carregarRdd() {
+  if (rddPadrao) return;
+  try {
+    const v = await QDBU.rpc("meta.version", {});
+    if (v && v.rdd) {
+      rddPadrao = v.rdd;
+      $("ab-rdd").textContent = v.rdd;
+    }
+  } catch (e) {
+    /* fica o do HTML */
+  }
+}
+
+function abrirDialogoAbrir() {
+  carregarRdd();
+  $("ab-path").value = "";
+  // Os dois desmarcados: compartilhado e gravavel e o mesmo modo de quem clica
+  // um arquivo na arvore. Marcar e um ato deliberado -- e e o que lhe da valor.
+  $("ab-somente-leitura").checked = false;
+  $("ab-exclusivo").checked = false;
+  $("ab-erro").hidden = true;
+  $("dlg-abrir").showModal();
+  $("ab-path").focus();
+}
+
+$("btn-abrir").addEventListener("click", abrirDialogoAbrir);
+$("ab-cancelar").addEventListener("click", () => $("dlg-abrir").close());
+
+/* Diálogo nativo do sistema, pela mesma via de `escolherDestino()`: sem pacote
+   npm, porque o frontend e HTML/JS estatico. Ele resolve o que a UI nao tem
+   como saber -- quais pastas existem e o que ja esta la. */
+$("ab-procurar").addEventListener("click", async () => {
+  const inv = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+  if (!inv) {
+    $("ab-erro").textContent = T("ERROR_DIALOG_UNAVAILABLE");
+    $("ab-erro").hidden = false;
+    return;
+  }
+  try {
+    const escolhido = await inv("plugin:dialog|open", {
+      options: {
+        title: T("UI_OPEN_DIALOG_TITLE"),
+        multiple: false,
+        directory: false,
+        filters: [
+          { name: T("UI_FT_DBF"), extensions: ["dbf"] },
+          { name: T("UI_FT_ALL"), extensions: ["*"] },
+        ],
+      },
+    });
+    // Cancelar no diálogo do sistema volta null -- e cancelar, nao erro.
+    if (!escolhido) return;
+    // `multiple: false` devolve string, mas a API tambem sabe devolver lista;
+    // aceitar as duas formas custa uma linha e evita depender do formato.
+    $("ab-path").value = Array.isArray(escolhido) ? escolhido[0] : escolhido;
+    $("ab-erro").hidden = true;
+  } catch (e) {
+    $("ab-erro").textContent = msgErro(e);
+    $("ab-erro").hidden = false;
+  }
+});
+
+/*
+ * O diálogo fecha ANTES de abrir o arquivo, e nao depois.
+ *
+ * `file.open` de um DBF grande na rede leva tempo; deixar a caixa na tela
+ * durante a espera faria parecer que o clique nao pegou, e o segundo clique
+ * pediria o mesmo arquivo duas vezes. A recusa aparece na barra de status, que
+ * e onde todas as outras aparecem.
+ */
+$("form-abrir").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  const caminho = $("ab-path").value.trim();
+  if (!caminho) return;
+
+  const soLeitura = $("ab-somente-leitura").checked;
+  const exclusivo = $("ab-exclusivo").checked;
+
+  $("dlg-abrir").close();
+  await abrirArquivo(caminho, null, exclusivo, soLeitura);
+});
 
 $("btn-nova-conexao").addEventListener("click", () => {
   conEditando = null;

@@ -1030,4 +1030,19 @@
   ERROR_DROP_NOT_A_DBF: "'{file}' no es un .DBF.",
   ERROR_DROP_NOT_A_FILE:
     "'{file}' no es un archivo .DBF. Si es una carpeta, regístrela en + Conexión.",
+  // ------------------------------------------------------------ abrir archivo
+  UI_OPEN_FILE: "Abrir archivo",
+  UI_OPEN_FILE_TITLE: "Abrir archivo",
+  UI_OPEN_FILE_EXPLAIN:
+    "Un DBF suelto, sin registrar su carpeta. Para volver a él más tarde, registre la carpeta como conexión.",
+  UI_OPEN_DIALOG_TITLE: "Elegir archivo DBF",
+  UI_BROWSE: "Examinar…",
+  UI_OPEN: "Abrir",
+  UI_READ_ONLY: "Solo lectura",
+  UI_EXCLUSIVE: "Uso exclusivo",
+  UI_OPEN_MODE_EXPLAIN:
+    "Solo lectura rechaza cualquier escritura en este archivo — el rechazo viene del controlador, no de la pantalla. El uso exclusivo impide que otro programa lo abra mientras usted lo tiene.",
+  UI_RDD: "Controlador",
+  ERROR_FILE_READ_ONLY:
+    "'{file}' se abrió solo para lectura, así que {method} no puede escribir en él. Cierre la pestaña y ábralo de nuevo sin esa opción.",
 };

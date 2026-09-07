@@ -210,6 +210,28 @@ STATIC FUNCTION Despacha( cJson )
       RETURN Envelope( cId, xResp )
    ENDIF
 
+   /*
+    * SOMENTE LEITURA E RECUSA, NAO ERRO DE RUNTIME.
+    *
+    * Com a work area aberta somente-leitura, o RDD ja impede a escrita -- essa
+    * e a garantia de verdade, e ela vale para todo caminho sem nenhum deles
+    * precisar lembrar. Mas ela chega como erro de runtime, que sobe pelo
+    * RECOVER e vira "ERR:", e neste projeto "ERR:" significa BUG A CORRIGIR.
+    * Uma escolha deliberada da pessoa nao pode se anunciar assim.
+    *
+    * Entao a recusa e antecipada aqui, no mesmo funil do log e pela mesma
+    * razao: e o unico ponto por onde todas passam. A lista de quem escreve no
+    * arquivo aberto mora junto da lista do log (util/log.prg) porque as duas
+    * respondem a mesma pergunta.
+    */
+   IF EhSomenteLeitura( hParams ) .AND. ;
+      AScan( MetodosQueEscrevemNoArquivo(), {| c | c == cMetodo } ) > 0
+      xResp := Err( "ERROR_FILE_READ_ONLY", "file was opened read-only", , ;
+                    { "method" => cMetodo, "file" => ArquivoDoPedido( hParams ) } )
+      CdpNativa( cCdpAnt )
+      RETURN Envelope( cId, xResp )
+   ENDIF
+
    nInicio := hb_MilliSeconds()
 
    xResp := hb_ExecFromArray( cFuncao, { hParams } )
@@ -270,6 +292,22 @@ STATIC FUNCTION AceitaCodepageNoPedido( cMetodo )
  * CRUS do envelope -- `h`, `codepage`, `path` sao ASCII, entao ler antes do
  * ConvertDeep nao corrompe nada.
  */
+/* O handle do pedido foi aberto somente-leitura? Sem handle, nao ha o que
+   recusar -- metodo sem `h` nao escreve em arquivo aberto. */
+STATIC FUNCTION EhSomenteLeitura( hParams )
+
+   LOCAL hInfo
+
+   IF ! HB_ISHASH( hParams ) .OR. ! hb_HHasKey( hParams, "h" ) .OR. ;
+      ! HB_ISSTRING( hParams[ "h" ] )
+      RETURN .F.
+   ENDIF
+
+   hInfo := SessHandle( hParams[ "h" ] )
+
+   RETURN HB_ISHASH( hInfo ) .AND. hb_HHasKey( hInfo, "readOnly" ) .AND. ;
+          HB_ISLOGICAL( hInfo[ "readOnly" ] ) .AND. hInfo[ "readOnly" ]
+
 STATIC FUNCTION CdpDoPedido( cMetodo, hParams )
 
    LOCAL hInfo

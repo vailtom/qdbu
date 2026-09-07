@@ -142,6 +142,7 @@
  *     ERROR_HANDLE_DETACHED         handle, file, why
  *     ERROR_REOPEN_FAILED
  *     ERROR_CANNOT_LOCK_EXCLUSIVE   file
+ *     ERROR_FILE_READ_ONLY          method, file
  *     ERROR_CANNOT_OPEN_SHARED      file
  *     ERROR_BACKUP_UNVERIFIABLE     file
  *

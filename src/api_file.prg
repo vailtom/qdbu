@@ -23,6 +23,7 @@ FUNCTION Api_File_Open( hP )
 
    LOCAL cArq  := ParStr( hP, "path" )
    LOCAL lExcl := ParLog( hP, "exclusive", .F. )
+   LOCAL lLer  := ParLog( hP, "readOnly", .F. )
    LOCAL cConn := ParStr( hP, "connection" )
    LOCAL cCdp  := ParStr( hP, "codepage" )
    LOCAL cAlias, cH, hJa, nArea, cMotivo, oErr, cOrigem
@@ -80,7 +81,12 @@ FUNCTION Api_File_Open( hP )
    /* dbUseArea pode estourar por motivos previsiveis (arquivo travado por outro
       processo, permissao, memo corrompido). Erro previsivel e RECUSA. */
    BEGIN SEQUENCE WITH {| e | Break( e ) }
-      dbUseArea( .T.,, cArq, cAlias, ! lExcl, .F. )
+      /* O 6o parametro do dbUseArea E o somente-leitura, e estava `.F.` fixo
+         desde sempre. Nao e uma trava da UI: e o RDD que recusa a escrita, e a
+         recusa vale para todo caminho -- celula, REPLACE em massa, PACK, ZAP --
+         sem que nenhum deles precise lembrar de perguntar. Uma trava so na tela
+         seria uma promessa que o primeiro caminho novo quebraria em silencio. */
+      dbUseArea( .T.,, cArq, cAlias, ! lExcl, lLer )
    RECOVER USING oErr
       RETURN Err( "ERROR_OPEN_FAILED", "could not open the file", "path", ;
                   { "file" => hb_FNameNameExt( cArq ), ;
@@ -101,6 +107,7 @@ FUNCTION Api_File_Open( hP )
       "alias"      => cAlias, ;
       "wa"         => nArea, ;
       "exclusive"  => lExcl, ;
+      "readOnly"   => lLer, ;
       "connection" => cConn, ;
       "indexes"    => {}, ;
       "visible"    => {}, ;   /* colunas visiveis; vazio = todas (T4) */
@@ -545,6 +552,13 @@ FUNCTION FileState( cH, lWithFields )
    hRet[ "file" ]       := hb_FNameNameExt( hInfo[ "path" ] )
    hRet[ "connection" ] := hInfo[ "connection" ]
    hRet[ "exclusive" ]  := hInfo[ "exclusive" ]
+   /* Os dois eixos sao INDEPENDENTES: da para abrir exclusivo e somente
+      leitura ao mesmo tempo (ninguem mais mexe E eu nao mexo). Por isso
+      `readOnly` e campo proprio e nao um terceiro valor de `mode` -- juntar os
+      dois numa string obrigaria a UI a desmontar de novo o que ja veio
+      separado. Guardado com hb_HHasKey por causa de sessao gravada antes deste
+      campo existir: ela volta do disco sem ele. */
+   hRet[ "readOnly" ]   := hb_HHasKey( hInfo, "readOnly" ) .AND. hInfo[ "readOnly" ]
    hRet[ "mode" ]       := iif( hInfo[ "exclusive" ], "EXCLUSIVE", "SHARED" )
    hRet[ "records" ]    := LastRec()
    hRet[ "recno" ]      := RecNo()
@@ -652,12 +666,12 @@ FUNCTION Api_File_Reopen( hP )
 
    dbCloseArea()
 
-   nWa := AbreNaArea( cArq, cAlias, lExcl )
+   nWa := AbreNaArea( cArq, cAlias, lExcl, SoLeitura( hInfo ) )
 
    IF nWa == 0
       /* Nao conseguiu o modo pedido. Volta ao anterior AGORA, antes que a
          janela cresca. */
-      nWa := AbreNaArea( cArq, cAlias, hInfo[ "exclusive" ] )
+      nWa := AbreNaArea( cArq, cAlias, hInfo[ "exclusive" ], SoLeitura( hInfo ) )
 
       IF nWa == 0
          SessDetach( cH, "ERROR_REOPEN_FAILED" )
@@ -689,14 +703,27 @@ FUNCTION Api_File_Reopen( hP )
  * Nao levanta erro: quem chama precisa TENTAR e decidir, e um erro aqui viraria
  * um RECOVER no dispatcher -- que significa bug, e nao "o arquivo esta em uso".
  */
-FUNCTION AbreNaArea( cArq, cAlias, lExcl )
+/* O somente-leitura guardado num handle, tolerante a handle antigo que nao
+   tenha o campo (sessao gravada antes de ele existir). */
+FUNCTION SoLeitura( hInfo )
+   RETURN HB_ISHASH( hInfo ) .AND. hb_HHasKey( hInfo, "readOnly" ) .AND. ;
+          HB_ISLOGICAL( hInfo[ "readOnly" ] ) .AND. hInfo[ "readOnly" ]
+
+FUNCTION AbreNaArea( cArq, cAlias, lExcl, lLer )
 
    LOCAL nWa := 0
+
+   /* Opcional, e `.F.` por omissao: os oito chamadores existentes abrem para
+      escrever (PACK, ZAP, estrutura, religar estado) e continuam valendo sem
+      mudanca. So quem RELIGA um handle do usuario tem de repassar o que ele
+      tinha -- senao um arquivo aberto somente leitura voltaria gravavel depois
+      de um reopen, e a promessa se perderia sem ninguem ver. */
+   hb_default( @lLer, .F. )
 
    /* O RECOVER nao reatribui: `nWa` ja nasce 0, e se o dbUseArea estourar a
       atribuicao nunca completou. Reatribuir era codigo morto (W0032). */
    BEGIN SEQUENCE WITH {| e | Break( e ) }
-      dbUseArea( .T., , cArq, cAlias, ! lExcl, .F. )
+      dbUseArea( .T., , cArq, cAlias, ! lExcl, lLer )
       nWa := Select()
    RECOVER
    END SEQUENCE
@@ -736,7 +763,7 @@ FUNCTION Api_File_Reconnect( hP )
                   { "file" => hb_FNameNameExt( hInfo[ "path" ] ) } )
    ENDIF
 
-   nWa := AbreNaArea( hInfo[ "path" ], hInfo[ "alias" ], .F. )
+   nWa := AbreNaArea( hInfo[ "path" ], hInfo[ "alias" ], .F., SoLeitura( hInfo ) )
 
    IF nWa == 0
       RETURN Err( "ERROR_CANNOT_OPEN_SHARED", "still held by another program", "h", ;
@@ -791,10 +818,10 @@ FUNCTION Api_File_Reopenslow( hP )
    /* ---- A JANELA, aberta de par em par ---- */
    hb_idleSleep( nEspera )
 
-   nWa := AbreNaArea( cArq, cAlias, lExcl )
+   nWa := AbreNaArea( cArq, cAlias, lExcl, SoLeitura( hInfo ) )
 
    IF nWa == 0
-      nWa := AbreNaArea( cArq, cAlias, hInfo[ "exclusive" ] )
+      nWa := AbreNaArea( cArq, cAlias, hInfo[ "exclusive" ], SoLeitura( hInfo ) )
 
       IF nWa == 0
          SessDetach( cH, "ERROR_REOPEN_FAILED" )

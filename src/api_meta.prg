@@ -40,9 +40,24 @@ FUNCTION Api_Meta_Version( xArg )
 
    HB_SYMBOL_UNUSED( xArg )
 
-   hRet[ "produto" ]  := "dbu-harbour"
-   hRet[ "versao" ]   := "0.0.1"
+   /*
+    * NAO HA `versao` AQUI, e a ausencia e deliberada.
+    *
+    * Havia: um literal `"0.0.1"` que ninguem lia e que ja discordava da versao
+    * de verdade. A versao do produto e carimbada no binario pelo build.rs a
+    * partir do Cargo.toml, e chega a tela pelo `status` -- um lugar so. Um
+    * segundo numero aqui so poderia estar certo por coincidencia.
+    *
+    * O que esta funcao sabe, e ninguem mais sabe, e o que foi LINKADO nesta
+    * DLL: a build do Harbour, o compilador, a libxlsxwriter e o RDD padrao.
+    * E isso que ela responde.
+    */
+   hRet[ "produto" ]  := "QDbu"
    hRet[ "harbour" ]  := Version()
+   /* O RDD padrao do binario -- `rddSetDefault()` sem argumento so consulta.
+      A tela de abrir arquivo mostra este valor em vez de um literal proprio:
+      o dia em que houver um segundo RDD linkado, ela acerta sozinha. */
+   hRet[ "rdd" ]      := rddSetDefault()
    hRet[ "compiler" ] := hb_Compiler()
    hRet[ "build" ]    := hb_BuildDate()
 
