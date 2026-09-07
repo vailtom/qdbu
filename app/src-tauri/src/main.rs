@@ -164,6 +164,8 @@ struct Estado {
     /// `CloseRequested` dispara de novo quando a UI manda fechar de verdade, e
     /// sem este trinco a pergunta se repetiria para sempre.
     saida_confirmada: Mutex<bool>,
+    /// A UI acenou que a pergunta esta na tela? Ver `saida_perguntada`.
+    saida_respondeu: Mutex<bool>,
 }
 
 #[derive(Serialize)]
@@ -466,16 +468,44 @@ fn base_config() -> PathBuf {
 /// O que o webview pode saber da IA: endpoint, modelo, se ha chave, se o
 /// aviso ja foi lido. A chave nunca sai daqui.
 #[tauri::command]
-fn ia_status() -> ia::StatusIa {
-    ia::StatusIa::from(&ia::ler(base_config()))
+async fn ia_status() -> ia::StatusIa {
+    match ia::tentar_ler(base_config()) {
+        Ok(cfg) => ia::StatusIa::from(&cfg.unwrap_or_default()),
+        Err(msg) => {
+            log(&format!("[ia] configuracao ilegivel: {msg}"));
+            let mut s = ia::StatusIa::from(&ia::ConfigIa::default());
+            s.problema = msg;
+            s
+        }
+    }
 }
 
 /// Grava endpoint, modelo e chave. Chave vazia MANTEM a que esta: o campo
 /// da tela nao mostra a chave (e senha), entao "vazio" significa "nao mexi".
 #[tauri::command]
-fn ia_configurar(endpoint: String, modelo: String, chave: String, aviso_lido: Option<bool>) -> Result<ia::StatusIa, String> {
+async fn ia_configurar(endpoint: String, modelo: String, chave: String, aviso_lido: Option<bool>) -> Result<ia::StatusIa, String> {
     let base = base_config();
-    let mut cfg = ia::ler(base.clone());
+    /*
+     * ARQUIVO ILEGIVEL NAO VIRA CONFIGURACAO VAZIA.
+     *
+     * `ler()` devolvia o padrao para qualquer JSON quebrado, e a chave em
+     * branco significa "nao mexi" -- entao gravar por cima apagava a chave que
+     * estava la, sem uma palavra. Aqui a falha e distinguida: so da para
+     * seguir se a pessoa esta informando uma chave AGORA (nao ha o que
+     * preservar, e recriar o arquivo e o que ela quer). Campo vazio ou "-"
+     * sobre um arquivo ilegivel e recusado com o motivo.
+     */
+    let mut cfg = match ia::tentar_ler(base.clone()) {
+        Ok(c) => c.unwrap_or_default(),
+        Err(e) => {
+            let k = chave.trim();
+            if k.is_empty() || k == "-" {
+                return Err(e);
+            }
+            log(&format!("[ia] configuracao ilegivel, recriando: {e}"));
+            ia::ConfigIa::default()
+        }
+    };
     cfg.endpoint = endpoint.trim().to_string();
     cfg.modelo = modelo.trim().to_string();
     if chave.trim() == "-" {
@@ -569,8 +599,30 @@ async fn ia_sugerir(
 /// As ultimas chamadas, da mais recente para a mais antiga. Sincrono e barato:
 /// le de tras para a frente e para no limite, sem tocar na VM do Harbour.
 #[tauri::command]
-fn ia_historico(limite: Option<usize>) -> Vec<ia::Entrada> {
-    ia::historico(base_config(), limite.unwrap_or(100).clamp(1, 500))
+async fn ia_historico(limite: Option<usize>) -> Vec<ia::Entrada> {
+    let n = limite.unwrap_or(100).clamp(1, 500);
+    tauri::async_runtime::spawn_blocking(move || ia::historico(base_config(), n))
+        .await
+        .unwrap_or_default()
+}
+
+/// O prompt posto pelo cliente, ou "" quando nao ha. Ver `ia::prompt_do_cliente`.
+#[tauri::command]
+async fn ia_prompt() -> String {
+    tauri::async_runtime::spawn_blocking(|| ia::prompt_do_cliente(base_config()))
+        .await
+        .unwrap_or_default()
+}
+
+/// A UI avisando que a pergunta de saida chegou e esta na tela.
+///
+/// Existe porque `emit()` responde Ok tenha ou nao quem escute: sem este aceno
+/// o Rust nao distingue "a pessoa esta lendo" de "ninguem ouviu", e a janela
+/// que preveniu o fechamento nunca mais fecharia. Ver `saida_perguntada` no
+/// tratador de `CloseRequested`.
+#[tauri::command]
+fn saida_perguntada(estado: State<Estado>) {
+    *estado.saida_respondeu.lock().unwrap() = true;
 }
 
 /// A resposta "Sim" da pergunta de saida.
@@ -2768,6 +2820,7 @@ fn main() {
                 progresso: Mutex::new(leitor),
                 params: params.clone(),
                 saida_confirmada: Mutex::new(false),
+                saida_respondeu: Mutex::new(false),
             });
 
             /*
@@ -2874,18 +2927,40 @@ fn main() {
                  */
                 {
                     let estado = w.state::<Estado>();
-                    let mut confirmada = estado.saida_confirmada.lock().unwrap();
+                    let confirmada = estado.saida_confirmada.lock().unwrap();
                     if !*confirmada {
                         api.prevent_close();
-                        if let Err(e) = w.emit("pedido-de-saida", ()) {
-                            // A UI nao respondeu ao evento -- prender a pessoa
-                            // numa janela que nao fecha e pior que fechar sem
-                            // perguntar. Solta o trinco e deixa fechar.
-                            log(&format!("[qdbu] nao deu para perguntar sobre a saida: {e}"));
-                            *confirmada = true;
-                            drop(confirmada);
-                            let _ = w.destroy();
-                        }
+                        /*
+                         * `emit()` NAO DIZ SE ALGUEM OUVIU: ele responde Ok
+                         * tenha ou nao ouvinte, e so falha em erro de
+                         * serializacao -- que com payload vazio nunca
+                         * acontece. O `if let Err` que estava aqui era codigo
+                         * morto se passando por rede de seguranca, e um
+                         * app.js que morresse antes de registrar o ouvinte
+                         * (ja aconteceu tres vezes neste projeto) deixava a
+                         * janela impossivel de fechar.
+                         *
+                         * Quem diz e a propria UI: ela acena por
+                         * `saida_perguntada` assim que recebe o evento, ANTES
+                         * de desenhar a pergunta. Sem aceno em 3 s ninguem
+                         * ouviu, e fechar sem perguntar e melhor que prender
+                         * a pessoa numa janela que nao fecha.
+                         */
+                        *estado.saida_respondeu.lock().unwrap() = false;
+                        let _ = w.emit("pedido-de-saida", ());
+                        drop(confirmada);
+
+                        let janela = w.clone();
+                        std::thread::spawn(move || {
+                            std::thread::sleep(std::time::Duration::from_secs(3));
+                            let st = janela.state::<Estado>();
+                            if *st.saida_respondeu.lock().unwrap() {
+                                return; // a pergunta esta na tela; a pessoa decide
+                            }
+                            log("[qdbu] ninguem ouviu a pergunta de saida -- fechando");
+                            *st.saida_confirmada.lock().unwrap() = true;
+                            let _ = janela.destroy();
+                        });
                         return;
                     }
                 }
@@ -2954,7 +3029,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             status, executar, rpc, andamento, cancelar, abrir_pasta, confirmar_saida,
-            ia_status, ia_configurar, ia_sugerir, ia_historico
+            ia_status, ia_configurar, ia_sugerir, ia_historico, ia_prompt, saida_perguntada
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o app Tauri");

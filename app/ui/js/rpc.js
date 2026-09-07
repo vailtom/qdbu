@@ -3,6 +3,16 @@
 // A API do Tauri v2 chega de duas formas: `window.__TAURI__.core` (so com
 // "withGlobalTauri": true) e `window.__TAURI_INTERNALS__` (sempre presente).
 // Sem bundler nao da para importar @tauri-apps/api, entao aceitamos as duas.
+
+/*
+ * ESCOPO PROPRIO. Sem bundler, todo .js desta pasta e script classico e todos
+ * dividem UM escopo global -- e este arquivo declarava treze nomes soltos la
+ * (`status`, `rpc`, `invoke`, `rev`...), justamente os mais provaveis de
+ * alguem repetir. Um `const` de mesmo nome em outro arquivo derruba o segundo
+ * arquivo INTEIRO na analise, sem erro na tela; ja mordeu tres vezes num dia
+ * so. So `window.QDBU` atravessa.
+ */
+(function () {
 const __core =
   (window.__TAURI__ && window.__TAURI__.core) ||
   window.__TAURI_INTERNALS__ ||
@@ -28,7 +38,7 @@ if (!__core || typeof __core.invoke !== "function") {
     document.body.appendChild(pre);
   });
 
-  throw new Error("API do Tauri indisponivel");
+  return; // o diagnostico acima ja e a mensagem; `window.QDBU` nao nasce
 }
 
 const invoke = __core.invoke;
@@ -107,6 +117,18 @@ async function aoEvento(nome, fn) {
 }
 
 /**
+ * Avisa o Rust de que a pergunta de saida CHEGOU e esta na tela.
+ *
+ * Sem este aceno o Rust nao teria como distinguir "a pessoa esta lendo a
+ * pergunta" de "ninguem ouviu o evento" -- e `emit()` responde Ok nos dois
+ * casos. Sem resposta em poucos segundos ele fecha, porque prender alguem
+ * numa janela que nao fecha e pior que fechar sem perguntar.
+ */
+async function saidaPerguntada() {
+  return invoke("saida_perguntada");
+}
+
+/**
  * Responde "sim" a pergunta de saida.
  *
  * O Rust levanta o trinco e manda fechar de novo; o resto do fechamento
@@ -138,9 +160,20 @@ async function iaSugerir(sistema, pedido, arquivo, uso) {
 async function iaHistorico(limite) {
   return invoke("ia_historico", { limite: limite == null ? null : limite });
 }
+/**
+ * O prompt posto pelo cliente em `<raiz>/.qdbu/prompts/construtor.md`, ou "".
+ *
+ * Nao da para busca-lo por `fetch`: o protocolo de dev serve `app/ui/`, e no
+ * app instalado os assets estao dentro do binario. Quem le o disco e o Rust.
+ */
+async function iaPrompt() {
+  return invoke("ia_prompt");
+}
 
 /** Contador de revisao da ultima resposta. Ver session.prg. */
 let ultimaRev = 0;
 const rev = () => ultimaRev;
 
-window.QDBU = { status, chamar, rpc, rev, abrirPasta, aoEvento, confirmarSaida, iaStatus, iaConfigurar, iaSugerir, iaHistorico, ErroQDbu };
+window.QDBU = { status, chamar, rpc, rev, abrirPasta, aoEvento, confirmarSaida, saidaPerguntada,
+                iaStatus, iaConfigurar, iaSugerir, iaHistorico, iaPrompt, ErroQDbu };
+})();

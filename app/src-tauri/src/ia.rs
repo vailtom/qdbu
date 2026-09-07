@@ -50,16 +50,58 @@ fn arquivo(base: PathBuf) -> PathBuf {
     dir.join("ia.json")
 }
 
-pub fn ler(base: PathBuf) -> ConfigIa {
-    std::fs::read_to_string(arquivo(base))
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
+/// A configuracao, ou o motivo de nao ter dado.
+///
+/// `Ok(None)` e "ainda nao existe", que e normal. `Err` e "existe e nao da
+/// para ler" -- e a diferenca entre os dois vale a chave da pessoa: engolindo
+/// o erro, `ia_status` dizia "(nao configurada)", ela abria Preferencias,
+/// clicava Gravar sem redigitar, e o campo vazio (que significa "nao mexi")
+/// gravava vazio por cima. Chave perdida sem uma palavra.
+pub fn tentar_ler(base: PathBuf) -> Result<Option<ConfigIa>, String> {
+    let arq = arquivo(base);
+    let txt = match std::fs::read_to_string(&arq) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("{}: {e}", arq.display())),
+    };
+    serde_json::from_str(&txt)
+        .map(Some)
+        .map_err(|e| format!("{}: {e}", arq.display()))
 }
 
+/// Para quem nao tem o que fazer com a falha (a propria chamada ao modelo, que
+/// ja recusa por falta de chave). Quem MEXE na configuracao usa `tentar_ler`.
+pub fn ler(base: PathBuf) -> ConfigIa {
+    tentar_ler(base).ok().flatten().unwrap_or_default()
+}
+
+/// Grava por arquivo temporario + rename.
+///
+/// `fs::write` trunca antes de escrever: uma queda no meio deixa um `ia.json`
+/// pela metade -- e era esse arquivo pela metade que fazia a chave sumir. O
+/// rename e a operacao que o sistema de arquivos trata como indivisivel: ou o
+/// arquivo antigo continua inteiro, ou o novo esta inteiro.
 pub fn gravar(base: PathBuf, cfg: &ConfigIa) -> Result<(), String> {
+    let alvo = arquivo(base);
     let txt = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
-    std::fs::write(arquivo(base), txt).map_err(|e| e.to_string())
+    let tmp = alvo.with_extension("json.novo");
+    std::fs::write(&tmp, txt).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    // Windows recusa rename por cima de arquivo existente.
+    let _ = std::fs::remove_file(&alvo);
+    std::fs::rename(&tmp, &alvo).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("{}: {e}", alvo.display())
+    })
+}
+
+/// O prompt que o cliente pos em `<raiz>/.qdbu/prompts/construtor.md`, ou "".
+///
+/// E a camada que permite ajustar a prosa numa maquina sem gerar release. Le
+/// daqui e nao do webview porque `fetch` alcanca `app/ui/` e mais nada: no app
+/// instalado os assets estao dentro do binario.
+pub fn prompt_do_cliente(base: PathBuf) -> String {
+    let arq = base.join(".qdbu").join("prompts").join("construtor.md");
+    std::fs::read_to_string(arq).unwrap_or_default()
 }
 
 /// O que o webview pode saber: tudo MENOS a chave. `chave_ok` diz se ha uma.
@@ -69,6 +111,10 @@ pub struct StatusIa {
     pub modelo: String,
     pub chave_ok: bool,
     pub aviso_lido: bool,
+    /// Vazio quando esta tudo bem. Preenchido quando o `ia.json` existe e nao
+    /// da para ler -- a UI precisa dizer isso, senao "(nao configurada)" e uma
+    /// mentira que leva a pessoa a apagar a propria chave.
+    pub problema: String,
 }
 
 impl From<&ConfigIa> for StatusIa {
@@ -78,6 +124,7 @@ impl From<&ConfigIa> for StatusIa {
             modelo: if c.modelo.is_empty() { MODELO_PADRAO.into() } else { c.modelo.clone() },
             chave_ok: !c.chave.trim().is_empty(),
             aviso_lido: c.aviso_lido,
+            problema: String::new(),
         }
     }
 }

@@ -66,6 +66,7 @@ FUNCTION ConfigGlobal()
 FUNCTION SalvaConfigGlobal( hCfg )
 
    LOCAL cDir := DirConfigQDbu()
+   LOCAL lOk
 
    s_hGlobal := hCfg
 
@@ -73,12 +74,16 @@ FUNCTION SalvaConfigGlobal( hCfg )
       IF ! hb_DirExists( cDir )
          hb_DirBuild( cDir )
       ENDIF
-      hb_MemoWrit( ArqGlobal(), hb_jsonEncode( hCfg, .T. ) )
+      /* O RETORNO DE hb_MemoWrit E O RESULTADO. Ele nao levanta erro numa
+         pasta somente-leitura ou num disco cheio: devolve .F. e segue, entao
+         descartar o valor fazia o RECOVER nunca disparar e a funcao mentir
+         "gravei". */
+      lOk := hb_MemoWrit( ArqGlobal(), hb_jsonEncode( hCfg, .T. ) )
    RECOVER
-      RETURN .F.
+      lOk := .F.
    END SEQUENCE
 
-   RETURN .T.
+   RETURN lOk
 
 /* Aplica na VM o que e estado do xBase (nao so dado guardado). Hoje, DELETED. */
 STATIC PROCEDURE AplicaGlobalNaVM()
@@ -185,6 +190,7 @@ FUNCTION SalvaCodepageArquivo( cArq, cCdp )
 
    LOCAL cDir := DirQPasta( cArq )
    LOCAL h, cNome := Upper( hb_FNameNameExt( cArq ) )
+   LOCAL lOk
 
    BEGIN SEQUENCE WITH {| e | Break( e ) }
       h := ConfigArquivos( cArq )
@@ -195,12 +201,12 @@ FUNCTION SalvaCodepageArquivo( cArq, cCdp )
       IF ! hb_DirExists( cDir )
          hb_DirBuild( cDir )
       ENDIF
-      hb_MemoWrit( ArqDaPasta( cArq ), hb_jsonEncode( h, .T. ) )
+      lOk := hb_MemoWrit( ArqDaPasta( cArq ), hb_jsonEncode( h, .T. ) )
    RECOVER
-      RETURN .F.
+      lOk := .F.
    END SEQUENCE
 
-   RETURN .T.
+   RETURN lOk
 
 /*
  * Desfixa: tira este arquivo do mapa da pasta.
@@ -218,6 +224,7 @@ FUNCTION SalvaCodepageArquivo( cArq, cCdp )
 FUNCTION RemoveCodepageArquivo( cArq )
 
    LOCAL h, cNome := Upper( hb_FNameNameExt( cArq ) )
+   LOCAL lOk
 
    /* Sem RETURN dentro do corpo do SEQUENCE: o compilador recusa (E0025), e a
       saida antecipada nao e necessaria -- nao estar no mapa ja e o estado
@@ -226,13 +233,17 @@ FUNCTION RemoveCodepageArquivo( cArq )
       h := ConfigArquivos( cArq )
       IF hb_HHasKey( h, cNome )
          hb_HDel( h, cNome )
-         hb_MemoWrit( ArqDaPasta( cArq ), hb_jsonEncode( h, .T. ) )
+         lOk := hb_MemoWrit( ArqDaPasta( cArq ), hb_jsonEncode( h, .T. ) )
+      ELSE
+         /* Nao estar no mapa JA E o estado pedido -- nada a escrever, e a
+            resposta honesta continua sendo .T. */
+         lOk := .T.
       ENDIF
    RECOVER
-      RETURN .F.
+      lOk := .F.
    END SEQUENCE
 
-   RETURN .T.
+   RETURN lOk
 
 /* ============================================================== a CASCATA */
 
@@ -307,6 +318,7 @@ FUNCTION GuardaHistoricoExpr( cNome, cExpr )
 
    LOCAL cDir := DirConfigQDbu()
    LOCAL h, a, n
+   LOCAL lOk
 
    /* Sem RETURN dentro do SEQUENCE (E0025). */
    BEGIN SEQUENCE WITH {| e | Break( e ) }
@@ -326,9 +338,9 @@ FUNCTION GuardaHistoricoExpr( cNome, cExpr )
       IF ! hb_DirExists( cDir )
          hb_DirBuild( cDir )
       ENDIF
-      hb_MemoWrit( ArqExpressoes(), hb_jsonEncode( h, .T. ) )
+      lOk := hb_MemoWrit( ArqExpressoes(), hb_jsonEncode( h, .T. ) )
    RECOVER
-      RETURN .F.
+      lOk := .F.
    END SEQUENCE
 
-   RETURN .T.
+   RETURN lOk

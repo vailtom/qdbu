@@ -209,7 +209,10 @@
         envolto = trechoAntesDoCursor(texto.slice(0, ini));
         if (envolto) ini -= envolto.length;
       }
-      if (envolto) corpo = trecho.replace(/«[^«»]*»/, envolto);
+      // Funcao, e nao string: numa string de substituicao `$&`, `` $` ``,
+      // `$'` e `$1` sao PADROES, e o dinheiro de uma base ("R$&D", "US$1")
+      // saia mutilado dentro do proprio texto que a pessoa acabou de marcar.
+      if (envolto) corpo = trecho.replace(/«[^«»]*»/, () => envolto);
     }
 
     const novo = texto.slice(0, ini) + corpo + texto.slice(fim);
@@ -519,9 +522,16 @@
       el.setSelectionRange(n, n);
 
       // O histórico chega depois, best-effort: abrir não espera o disco.
+      //
+      // A guarda compara a IDENTIDADE do diálogo, não só "há um diálogo": com
+      // um `.qdbu/expressoes.json` em rede, cancelar e reabrir em outro
+      // arquivo fazia a resposta atrasada encher a coluna Histórico com as
+      // expressões do arquivo anterior -- e a paleta oferecia campo que não
+      // existe aqui. É o mesmo `seqCheck` do status, por identidade.
       if (S.ctx.h && window.Paleta) {
-        window.QDBU.rpc("expr.history.get", { h: S.ctx.h })
-          .then((r) => { if (S) window.Paleta.historico(r.expressions || []); })
+        const meu = S;
+        window.QDBU.rpc("expr.history.get", { h: meu.ctx.h })
+          .then((r) => { if (S === meu) window.Paleta.historico(r.expressions || []); })
           .catch(() => {});
       }
     });
@@ -564,6 +574,12 @@
         if (ctrl && !ev.shiftKey && ev.key.toLowerCase() === "z") { ev.preventDefault(); desfazer(); return; }
         if (ctrl && (ev.key.toLowerCase() === "y" || (ev.shiftKey && ev.key.toLowerCase() === "z"))) { ev.preventDefault(); refazer(); return; }
         if (ctrl && ev.key === "Enter") { ev.preventDefault(); usar(); return; }
+        // O dropdown do IntelliSense tem precedência no Tab. Este ouvinte é
+        // de CAPTURA no diálogo, e captura desce do ancestral para o alvo --
+        // ou seja, ele roda ANTES do ouvinte do textarea, nunca depois. Sem
+        // esta guarda, Tab com a lista aberta pulava para o próximo
+        // placeholder e a sugestão escolhida jamais era aceita.
+        if (ev.key === "Tab" && !$("cx-sugestoes").hidden) return;
         if (ev.key === "Tab" && document.activeElement === ta() && PH.test(ta().value)) {
           PH.lastIndex = 0;
           ev.preventDefault();

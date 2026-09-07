@@ -52,24 +52,45 @@
   // ------------------------------------------------------------ o prompt
 
   async function carregarPrompt() {
-    if (promptBase !== null) return promptBase;
-    // A camada do cliente vem pela DLL? Não: é arquivo local, e o Rust já
-    // serve app/ui/ pelo protocolo dev. O .qdbu/prompts/ do cliente entra
-    // como caminho relativo que o mesmo servidor resolve. Falhou tudo, o
-    // prompt fica vazio e a IA recebe só os dados — pior, mas não trava.
-    for (const url of ["prompts/construtor.md"]) {
-      try {
-        const r = await fetch(url, { cache: "no-store" });
-        if (r.ok) {
-          promptBase = await r.text();
+    if (promptBase) return promptBase;
+
+    /*
+     * DUAS CAMADAS, da mais específica para a mais geral:
+     *
+     *   1. `<raiz>/.qdbu/prompts/construtor.md` — o ajuste do cliente, sem
+     *      release. Quem lê é o Rust: `fetch` não alcança, porque o protocolo
+     *      de dev serve `app/ui/` e no app instalado os assets estão dentro do
+     *      binário.
+     *   2. `prompts/construtor.md` — o que veio no programa. Em debug sai do
+     *      disco (editar + recarregar basta); em release, do binário.
+     *
+     * SÓ O SUCESSO É MEMOIZADO. Guardar "" fazia uma falha passageira de um
+     * `fetch` valer para a sessão inteira: dali em diante o modelo recebia os
+     * dados sem instrução nenhuma, respondia prosa, e a pessoa via "não
+     * consegui" para sempre — sem nada na tela dizendo por quê.
+     */
+    try {
+      const meu = await window.QDBU.iaPrompt();
+      if (meu && meu.trim()) {
+        promptBase = meu;
+        return promptBase;
+      }
+    } catch (e) {
+      /* sem override, ou o comando falhou: cai para o embutido */
+    }
+    try {
+      const r = await fetch("prompts/construtor.md", { cache: "no-store" });
+      if (r.ok) {
+        const t = await r.text();
+        if (t.trim()) {
+          promptBase = t;
           return promptBase;
         }
-      } catch (e) {
-        /* tenta a próxima */
       }
+    } catch (e) {
+      /* tenta de novo no próximo pedido, em vez de desistir para sempre */
     }
-    promptBase = "";
-    return promptBase;
+    return "";
   }
 
   /**

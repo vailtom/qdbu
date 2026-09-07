@@ -2238,6 +2238,15 @@ function atualizarBarraGrade(p) {
   if (!p) {
     pos.textContent = "—";
     ref.textContent = "";
+    // Sem pagina os quatro botoes ficavam como a grade os largou. Trocar para
+    // o formulario com "topo" e "anterior" desabilitados os deixava mortos
+    // numa visao onde eles SEMPRE valem -- o mesmo defeito que o `naGrade`
+    // abaixo existe para evitar, por outra porta.
+    const semPagina = visaoAtiva === "form";
+    $("pg-topo").disabled = !semPagina;
+    $("pg-anterior").disabled = !semPagina;
+    $("pg-proxima").disabled = !semPagina;
+    $("pg-fim").disabled = !semPagina;
     return;
   }
 
@@ -2938,7 +2947,14 @@ async function abrirConfig() {
       $("cfg-ia-endpoint").value = ia.endpoint || "";
       $("cfg-ia-modelo").value = ia.modelo || "";
       $("cfg-ia-chave").value = "";
-      $("cfg-ia-chave-estado").textContent = ia.chave_ok ? T("UI_IA_KEY_SET") : T("UI_IA_KEY_UNSET");
+      // "(nao configurada)" sobre um arquivo ILEGIVEL e mentira, e mentira
+      // que custa caro: a pessoa clicaria Gravar sem redigitar e o campo vazio
+      // ("nao mexi") gravaria vazio por cima da chave que esta la. O terceiro
+      // estado diz o que aconteceu e o que fazer.
+      $("cfg-ia-chave-estado").textContent = ia.problema
+        ? T("UI_IA_KEY_BROKEN")
+        : ia.chave_ok ? T("UI_IA_KEY_SET") : T("UI_IA_KEY_UNSET");
+      $("cfg-ia-chave-estado").title = ia.problema || "";
     } catch (e) {
       $("cfg-ia-chave-estado").textContent = "";
     }
@@ -3129,9 +3145,17 @@ async function trocarCodepage(id, persist) {
       await carregarPagina(abaAtiva, p && p.rows.length ? p.first : "top", 0);
     }
     desenharConteudo();
-    if (persist) {
+    // `persist === false` (DESFIXAR) tambem mexe no disco e tambem pode ser
+    // recusado -- e `if (persist)` era falso justamente para ele, entao uma
+    // desfixacao recusada saia como troca de lente bem-sucedida: a caixa
+    // desmarcada, a entrada ainda no arquivo e o pino de volta na proxima
+    // abertura. Os TRES estados sao tratados como tres.
+    if (persist === true) {
       hint(r.saved ? T("INFO_CODEPAGE_PINNED", { cp: rotuloCodepage(id) })
                    : T("WARN_CODEPAGE_NOT_PINNED", { cp: rotuloCodepage(id) }));
+    } else if (persist === false) {
+      hint(r.saved ? T("INFO_CODEPAGE_UNPINNED", { cp: rotuloCodepage(id) })
+                   : T("WARN_CODEPAGE_NOT_UNPINNED", { cp: rotuloCodepage(id) }));
     } else {
       hint(T("INFO_CODEPAGE_CHANGED", { cp: rotuloCodepage(id) }));
     }
@@ -5071,6 +5095,14 @@ async function salvarSessao() {
         // some sozinho quando o arquivo sai da sessao. Sai de `info.filter`,
         // que vem de dbFilter() -- a work area, nao um espelho no JS.
         filter: (a.info && a.info.filter) || "",
+        // O MODO DE ABERTURA viaja junto. Sem ele, um arquivo aberto somente
+        // leitura de proposito voltava GRAVAVEL no arranque seguinte: o
+        // `file.open` da restauracao nao mandava nada, `lLer` caia no .F. do
+        // RDD e `MetodosQueEscrevemNoArquivo()` deixava de recusar. E a mesma
+        // degradacao silenciosa que `reopen`/`reconnect` ja evitam -- faltava
+        // no unico caminho que atravessa um fechamento do app.
+        readOnly: !!(a.info && a.info.readOnly) || undefined,
+        exclusive: !!(a.info && a.info.exclusive) || undefined,
         // As condicoes do modo guiado. `filter` sozinho guarda o RESULTADO --
         // a expressao ja montada --, e dela nao da para remontar as linhas:
         // `Left(X, 3) == 'ABC'` pode ter vindo de "comeca com" ou ter sido
@@ -5172,10 +5204,12 @@ async function restaurarSessao() {
     try {
       // Sem codepage aqui: a cascata (arquivo > conexao > global > PT850)
       // resolve no file.open. A escolha persiste nesses niveis, nao na sessao.
-      const novo = await QDBU.rpc("file.open", {
-        path: p,
-        connection: item.connection || "",
-      });
+      const pedido = { path: p, connection: item.connection || "" };
+      // So viajam quando foram PEDIDOS, como em `abrirArquivo`: mandar `false`
+      // faria parecer que toda restauracao decide sobre o modo.
+      if (item.readOnly) pedido.readOnly = true;
+      if (item.exclusive) pedido.exclusive = true;
+      const novo = await QDBU.rpc("file.open", pedido);
 
       // Reaplica as colunas escolhidas. Se um campo sumiu porque a estrutura
       // mudou desde a ultima sessao, a DLL recusa a lista inteira -- entao os
@@ -5802,6 +5836,19 @@ let emSaida = false;
 async function perguntarSaida() {
   if (emSaida) return;
   emSaida = true;
+  /*
+   * O ACENO VEM PRIMEIRO, antes de desenhar a pergunta.
+   *
+   * `emit()` do lado do Rust responde Ok tenha ou nao alguem escutando -- so
+   * falha em erro de serializacao, que com payload vazio nunca acontece. Ou
+   * seja: o "se a UI nao responder, o Rust fecha" nao tinha como funcionar, e
+   * um app.js que morresse antes de registrar este ouvinte (ja aconteceu tres
+   * vezes neste projeto) deixava a janela impossivel de fechar.
+   *
+   * Com o aceno o Rust distingue "esta na tela" de "ninguem ouviu": sem ele em
+   * poucos segundos, fecha.
+   */
+  try { await QDBU.saidaPerguntada(); } catch (e) { /* segue e pergunta */ }
   try {
     const r = await Swal.fire(
       swalBase({
@@ -5865,15 +5912,19 @@ async function soltarArquivos(caminhos) {
 
   for (const p of caminhos) {
     const nome = paraExibir(p);
-    const ext = (p.split(".").pop() || "").toLowerCase();
+    // A extensao sai do NOME, nunca do caminho inteiro: uma pasta chamada
+    // "cliente 2.0" fazia `split(".").pop()` devolver "0\\arquivos", que nao e
+    // vazio nem igual ao caminho -- e a pasta levava "nao e um DBF" em vez da
+    // frase que aponta o "+ Conexao".
+    const base = p.split(/[\\/]/).pop() || p;
+    const ext = (base.includes(".") ? base.split(".").pop() : "").toLowerCase();
 
     if (ext === "dbf") dbf.push(p);
     else if (ext === "vew") hint(T("ERROR_CLI_VEW_UNSUPPORTED", { file: nome }));
     // Sem extensao quase sempre e pasta -- e pasta neste app nao e arquivo a
     // abrir, e conexao a cadastrar. Dizer ONDE se faz isso vale mais que
     // recusar sem mais.
-    else if (ext === "" || ext === p.toLowerCase())
-      hint(T("ERROR_DROP_NOT_A_FILE", { file: nome }));
+    else if (ext === "") hint(T("ERROR_DROP_NOT_A_FILE", { file: nome }));
     else hint(T("ERROR_DROP_NOT_A_DBF", { file: nome }));
   }
 

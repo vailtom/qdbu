@@ -248,8 +248,11 @@
     ta.addEventListener("blur", () => setTimeout(() => { if (document.activeElement !== ta) { esconderSugestoes(); $("cx-dica-flutuante").hidden = true; } }, 120));
     ta.addEventListener("scroll", () => { if (!$("cx-sugestoes").hidden) posicionar($("cx-sugestoes"), palavraIni); });
 
-    // Na fase de captura e ANTES do keydown do diálogo: com o dropdown
-    // aberto, setas/Tab/Enter/Esc são dele. Fechado, passam adiante.
+    // Com o dropdown aberto, setas/Tab/Enter/Esc são dele; fechado, passam
+    // adiante. Este ouvinte é de BOLHA no textarea, então o ouvinte de
+    // captura do diálogo roda antes dele -- quem cede o Tab é aquele lá,
+    // conferindo `#cx-sugestoes`. O `stopPropagation()` daqui serve ao que
+    // vem DEPOIS na bolha, não ao que já passou.
     ta.addEventListener("keydown", (ev) => {
       if (ev.ctrlKey && ev.key === " ") { ev.preventDefault(); mostrarSugestoes(true); return; }
       if ($("cx-sugestoes").hidden) return;

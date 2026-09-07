@@ -228,8 +228,25 @@ STATIC FUNCTION Despacha( cJson )
       AScan( MetodosQueEscrevemNoArquivo(), {| c | c == cMetodo } ) > 0
       xResp := Err( "ERROR_FILE_READ_ONLY", "file was opened read-only", , ;
                     { "method" => cMetodo, "file" => ArquivoDoPedido( hParams ) } )
+
+      /* A RECUSA ENTRA NO LOG como qualquer outra.
+         Toda destrutiva desta lista tambem esta em MetodosRegistrados(), e o
+         log guarda `p` e `ep` justamente para a linha se explicar sozinha --
+         "tentaram ZAP num arquivo aberto somente leitura" e exatamente o que
+         alguem procura meses depois. Sair por aqui sem registrar era o unico
+         buraco na trilha. */
+      LogOp( cMetodo, hParams, .F., xResp[ "error" ][ "code" ], 0, ;
+             ArquivoDoPedido( hParams ), xResp[ "error" ][ "params" ], NIL )
+
+      /* Envelope AINDA sob a codepage do arquivo -- e ela que converte a saida
+         para UTF-8. Restaurar antes encodava o nome do DBF (que vem em bytes
+         nativos) sob a lente do pedido ANTERIOR: acento quebrado na tela, ou
+         a resposta inteira recusada pelo `String::from_utf8` estrito da ponte,
+         e a recusa aparecendo como erro de ponte em vez de
+         ERROR_FILE_READ_ONLY. Mesma ordem do caminho normal, no fim. */
+      cSaida := Envelope( cId, xResp )
       CdpNativa( cCdpAnt )
-      RETURN Envelope( cId, xResp )
+      RETURN cSaida
    ENDIF
 
    nInicio := hb_MilliSeconds()
