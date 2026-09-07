@@ -230,7 +230,9 @@ function lerDocs(request, avisos) {
 function lerManual() {
   if (!existsSync(ARQ_MANUAL)) return { add: {}, patch: {}, alias: {}, ocultar: [] };
   const m = JSON.parse(readFileSync(ARQ_MANUAL, "utf8"));
-  return { add: m.add || {}, patch: m.patch || {}, alias: m.alias || {}, ocultar: m.ocultar || [] };
+  // Chaves que comecam com `_` sao comentario do autor do manual, nao entrada.
+  const semNotas = (o) => Object.fromEntries(Object.entries(o || {}).filter(([k]) => !k.startsWith("_")));
+  return { add: semNotas(m.add), patch: semNotas(m.patch), alias: semNotas(m.alias), ocultar: m.ocultar || [] };
 }
 
 function aplicarManual(funcoes, manual, request, erros, avisos) {

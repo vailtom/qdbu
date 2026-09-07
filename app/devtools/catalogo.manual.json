@@ -134,7 +134,20 @@
     "MEMOTRAN": { "args": { "cHard": { "opc": true }, "cSoft": { "opc": true } }, "_": "Clipper 5.3: MEMOTRAN(<cString>, [<cHard>], [<cSoft>]); confirmado no binario com MemoTran(\"a\")" },
     "ORDKEY": { "args": { "cOrderName": { "opc": true } }, "_": "sem argumento = ordem controladora; confirmado com OrdKey()" },
     "ORDFOR": { "args": { "xOrder": { "opc": true } }, "_": "idem; confirmado com OrdFor()" },
-    "ORDBAGNAME": { "args": { "nOrder": { "opc": true } }, "_": "idem; confirmado com OrdBagName()" }
+    "ORDBAGNAME": { "args": { "nOrder": { "opc": true } }, "_": "idem; confirmado com OrdBagName()" },
+
+    "_cat": "categoria e para NAVEGAR, nao para tipar: Val/Str/CToD sao conversoes ainda que a doc as ponha em Strings",
+    "LEN": { "cat": "TEXTO" },
+    "VAL": { "cat": "CONVERSAO" },
+    "STR": { "cat": "CONVERSAO" },
+    "STRZERO": { "cat": "CONVERSAO" },
+    "CTOD": { "cat": "CONVERSAO" },
+    "DTOC": { "cat": "CONVERSAO" },
+    "DTOS": { "cat": "CONVERSAO" },
+    "TRANSFORM": { "cat": "CONVERSAO" },
+    "TYPE": { "cat": "GERAL" },
+    "VALTYPE": { "cat": "GERAL" },
+    "DESCEND": { "cat": "GERAL" }
   },
 
   "alias": {

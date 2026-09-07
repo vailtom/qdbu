@@ -63,6 +63,13 @@ const IMPLICITAS = [
   // `"UI_MASS_EXPLAIN_" + op`, `"UI_MASS_CONFIRM_" + op` e
   // `"UI_MASS_DONE_" + r.action`, com op em REPLACE|DELETE|RECALL|APPENDFROM.
   /^UI_MASS_(EXPLAIN|CONFIRM|DONE)_[A-Z]+$/,
+  // Construtor de expressao: chaves montadas a partir do catalogo gerado
+  // (UI_FN_<NOME>, UI_ARG_<ARG>, UI_CAT_<ID>) e da tabela de operadores.
+  /^UI_FN_[A-Z0-9_]+(_DESC|_KW)?$/,
+  /^UI_ARG_[A-Z0-9_]+$/,
+  /^UI_CAT_[A-Z]+$/,
+  /^UI_OPX_[A-Z]+(_DESC)?$/,
+  /^UI_CX_(ELEM|CONST)_[A-Z_]+$/,
 ];
 
 const fontes = [];

@@ -379,7 +379,7 @@
       "CTOD": {
         "nome": "CToD",
         "ret": "D",
-        "cat": "DATA",
+        "cat": "CONVERSAO",
         "src": "core",
         "args": [
           {
@@ -473,7 +473,7 @@
       "DESCEND": {
         "nome": "Descend",
         "ret": "any",
-        "cat": "CONVERSAO",
+        "cat": "GERAL",
         "src": "core",
         "args": [
           {
@@ -520,7 +520,7 @@
       "DTOC": {
         "nome": "DToC",
         "ret": "C",
-        "cat": "DATA",
+        "cat": "CONVERSAO",
         "src": "core",
         "args": [
           {
@@ -534,7 +534,7 @@
       "DTOS": {
         "nome": "DToS",
         "ret": "C",
-        "cat": "DATA",
+        "cat": "CONVERSAO",
         "src": "core",
         "args": [
           {
@@ -924,7 +924,7 @@
       "LEN": {
         "nome": "Len",
         "ret": "N",
-        "cat": "NUMERO",
+        "cat": "TEXTO",
         "src": "core",
         "args": [
           {
@@ -1715,7 +1715,7 @@
       "STR": {
         "nome": "Str",
         "ret": "C",
-        "cat": "TEXTO",
+        "cat": "CONVERSAO",
         "src": "core",
         "args": [
           {
@@ -1773,7 +1773,7 @@
       "STRZERO": {
         "nome": "StrZero",
         "ret": "C",
-        "cat": "TEXTO",
+        "cat": "CONVERSAO",
         "src": "core",
         "args": [
           {
@@ -1858,7 +1858,7 @@
       "TRANSFORM": {
         "nome": "Transform",
         "ret": "C",
-        "cat": "TEXTO",
+        "cat": "CONVERSAO",
         "src": "core",
         "args": [
           {
@@ -1891,7 +1891,7 @@
       "TYPE": {
         "nome": "Type",
         "ret": "C",
-        "cat": "TEXTO",
+        "cat": "GERAL",
         "src": "core",
         "args": [
           {
@@ -1927,7 +1927,7 @@
       "VAL": {
         "nome": "Val",
         "ret": "N",
-        "cat": "TEXTO",
+        "cat": "CONVERSAO",
         "src": "core",
         "args": [
           {
@@ -1941,7 +1941,7 @@
       "VALTYPE": {
         "nome": "ValType",
         "ret": "C",
-        "cat": "TEXTO",
+        "cat": "GERAL",
         "src": "core",
         "args": [
           {
