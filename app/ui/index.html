@@ -44,6 +44,8 @@
     <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /> <path d="m9 12 2 2 4-4" /></symbol>
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /> <path d="M12 16v-4" /> <path d="M12 8h.01" /></symbol>
     <symbol id="i-file-plus" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /> <path d="M14 2v4a2 2 0 0 0 2 2h4" /> <path d="M9 15h6" /> <path d="M12 18v-6" /></symbol>
+    <symbol id="i-redo-2" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5" /> <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13" /></symbol>
+    <symbol id="i-square-function" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M9 17c2 0 2.8-1 2.8-2.8V10c0-2 1-3.3 3.2-3" /> <path d="M9 11.2h5.7" /></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14" /> <path d="M12 5v14" /></symbol>
     <symbol id="i-circle-minus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /> <path d="M8 12h8" /></symbol>
     <symbol id="i-undo-2" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /> <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></symbol>
@@ -205,6 +207,9 @@
           <div id="ff-texto" class="ff-linha" hidden>
             <input id="ff-expr" data-i18n-ph="UI_FILTER_PLACEHOLDER"
                    autocomplete="off" spellcheck="false">
+            <button type="button" id="ff-fx" class="cx-abrir" data-i18n-title="UI_CX_OPEN">
+              <svg class="ico" aria-hidden="true"><use href="#i-square-function" /></svg>
+            </button>
           </div>
 
           <div class="ff-acoes">
@@ -715,6 +720,36 @@
      A mesma modal serve para ALTERAR e para CRIAR: são a mesma tarefa -- montar
      uma lista de campos. Criar não precisa de aba nenhuma, e é por isso que
      criar deixou de sequestrar a aba ativa. -->
+<!--
+  CONSTRUTOR DE EXPRESSAO (docs/16). Um dialogo, seis portas. O rascunho e
+  texto e vive em js/construtor.js; a DLL so confere. As colunas de
+  Campos/Funcoes/Operadores chegam no passo seguinte -- este e o nucleo:
+  editor, desfazer, status, Usar.
+-->
+<dialog id="dlg-construtor">
+  <form method="dialog" id="form-construtor">
+    <h2><span data-i18n="UI_CX_TITLE"></span> <span id="cx-contexto" class="cx-contexto"></span></h2>
+
+    <div class="cx-barra">
+      <button type="button" id="cx-desfazer" class="icone" data-i18n-title="UI_CX_UNDO"><svg class="ico" aria-hidden="true"><use href="#i-undo-2" /></svg></button>
+      <button type="button" id="cx-refazer" class="icone" data-i18n-title="UI_CX_REDO"><svg class="ico" aria-hidden="true"><use href="#i-redo-2" /></svg></button>
+      <button type="button" id="cx-restaurar" class="ghost" data-i18n="UI_CX_RESTORE"></button>
+    </div>
+
+    <div class="cx-editor">
+      <textarea id="cx-expr" rows="3" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+    </div>
+
+    <p id="cx-status" class="cx-status"></p>
+
+    <div class="acoes">
+      <button type="button" id="cx-conferir" class="ghost" data-i18n="UI_CHECK"></button>
+      <button type="button" id="cx-cancelar" class="ghost" data-i18n="UI_CANCEL"></button>
+      <button type="button" id="cx-usar" class="primario" data-i18n="UI_CX_USE"></button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="dlg-estrutura">
   <form method="dialog" id="form-estrutura">
     <h2 id="ed-titulo"></h2>
@@ -1197,6 +1232,7 @@
 <script src="js/tema.js"></script>
 <script src="js/idioma.js"></script>
 <script src="js/rpc.js"></script>
+<script src="js/construtor.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

@@ -5333,6 +5333,47 @@ $("busca").addEventListener("input", (ev) => {
 
 const dlg = $("dlg-conexao");
 
+// ------------------------------------------------------- construtor de expressao
+
+/*
+ * Abre o construtor sobre um <input>, e devolve o resultado a ele.
+ *
+ * O texto volta pelo MESMO caminho que a digitacao: `value` + `input` +
+ * `change`, para os ouvintes que cada campo ja tem verem a mudanca como
+ * veriam uma tecla. Cancelar (null) nao toca no campo.
+ */
+async function abrirConstrutor(inputId, ctx) {
+  const el = $(inputId);
+  const r = await window.Construtor.abrir(el.value, ctx);
+  if (r === null) {
+    el.focus();
+    return false;
+  }
+  el.value = r;
+  el.dispatchEvent(new Event("input", { bubbles: true }));
+  el.dispatchEvent(new Event("change", { bubbles: true }));
+  el.focus();
+  return true;
+}
+
+/* Filtro, modo expressao: espera Logico. Os campos vem de colunasDe, a mesma
+   lista do modo guiado. Nao ha ouvinte de `input` no #ff-expr -- a sessao le o
+   valor ao gravar --, entao quem escreveu por aqui agenda a gravacao. */
+$("ff-fx").addEventListener("click", async () => {
+  if (!abaAtiva) return;
+  if (!colunasDe.has(abaAtiva)) await carregarColunas(abaAtiva);
+  const ok = await abrirConstrutor("ff-expr", {
+    h: abaAtiva,
+    rotulo: T("UI_CX_FROM_FILTER"),
+    expect: "L",
+    campos: colunasDe.get(abaAtiva) || [],
+  });
+  if (ok) {
+    msgFiltro("");
+    agendarSalvar();
+  }
+});
+
 // ------------------------------------------------------------ abrir arquivo
 
 /*

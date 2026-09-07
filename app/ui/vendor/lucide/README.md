@@ -31,6 +31,8 @@ rede.
 | `trash-2` | Esvaziar | a lixeira fica para o que destrói de verdade |
 | `info` | Sobre | identidade, versão e data de linkedição |
 | `file-plus` | alvo do arrastar-e-soltar | o arquivo ENTRA — ver abaixo |
+| `square-function` | abrir o construtor de expressão | o "fx" ao lado de cada campo de expressão |
+| `redo-2` | Refazer, no construtor | par do `undo-2` que já existia |
 
 **`file-plus` e não `file-output` no alvo do arrasto.** Os dois são um arquivo com uma seta, e a diferença é o SENTIDO dela: em `file-output` a seta sai — é o ícone de Exportar, o dado deixando a máquina. Num alvo onde se solta um arquivo para abrir, ele diz exatamente o contrário do que acontece. O `+` não tem sentido para inverter.
 
