@@ -2,18 +2,72 @@
 
 # QDbu
 
-A utility inspired by **DBU** (Clipper's DBF handling tool), built in
-**Harbour**, with a **Tauri + Rust + HTML/JS** front end.
+A DBF file utility for the people who **inherited** a DBF system — and never
+learned xBase.
 
-Harbour does the work: it opens, reads, locks, indexes, filters and writes the
-DBF, through the same RDD that has been holding production systems together for
-decades. The graphical layer exists to give that engine a window — not the other
-way around.
+**Describe the filter in plain words** — *"customers from SP or MG with a filled
+tax id"* — **and get the expression back, already checked against your own
+file:**
+
+```
+(CLI_EST == "SP" .OR. CLI_EST == "MG") .AND. !Empty(CLI_CGC)
+```
+
+Or build it by hand, from a catalogue carrying the file's own fields, 126
+functions and every operator — each with a plain-language name, one line saying
+what it is for, and search in three languages. Either way it tells you what the
+expression gives **for the record in front of you**, before anything is applied:
+
+> ✓ Valid expression. On record 270 the result is Yes.
+
+**[Download QDbu v00.75](https://github.com/vailtom/qdbu/releases/latest)**
+— two files, no installer: extract and run `qdbu.exe`. Windows, 32-bit.
+
+---
+
+Underneath it, **Harbour** does the work: it opens, reads, locks, indexes,
+filters and writes the DBF, through the same RDD that has been holding
+production systems together for decades. The interface is **Tauri + Rust +
+HTML/JS**, and it exists to give that engine a window — not the other way
+around.
 
 What DBU did by keyboard on an 80-column terminal, QDbu does on a modern screen,
 without giving up anything a customer's file demands: per-record locking, a
 backup before every destructive operation, and a log of everything that changes
 bytes on disk.
+
+## The expression builder
+
+Six fields in the program take an xBase expression: the filter, the index key
+and its FOR, and the WITH, FOR and WHILE of a bulk `REPLACE`. Typing into any of
+them used to mean knowing the language.
+
+The builder puts the file's fields, the functions and the operators in front of
+you, ranked by the type that particular field expects, and never hides the rest.
+A misspelled field is not a dead end either: it names the field that does not
+exist and suggests the closest one. The status line speaks to whoever is looking
+— *is it right, what does it give, and where did that come from* — instead of
+reciting types.
+
+### In plain words, if you have a key
+
+Beyond writing the expression for you, the assistant repairs one that will not
+compile — missing dots in `.AND.`, an unbalanced parenthesis — and changes one
+you already have (*"include MG as well"*). Three things it does not do, on
+purpose:
+
+- **It never applies anything.** The suggestion lands in the draft as a single
+  undo step and goes through the same check as text you typed yourself.
+- **No record leaves your machine.** Only your request, the field names and
+  types, and the function catalogue.
+- **It does not guess.** With no field for what you asked, it asks which one to
+  use instead of settling for a look-alike — a `CLI_PESS` holding `F`/`J` means
+  individual/company, not female/male, and that expression would compile, run,
+  and be wrong.
+
+It needs an API key of your own, entered in Preferences: OpenAI, a local Ollama,
+or any endpoint that speaks the *chat completions* format. Without a key the
+button says so, and everything else works the same.
 
 ## Notice
 
@@ -32,7 +86,9 @@ See [LICENSE](LICENSE).
 - **Opens and browses** DBFs of any size, with real pagination. A 421,000-record
   file opens as fast as a seven-record one.
 - **Edits** record by record, in the grid or in the form.
-- **Filters** by expression or through a guided builder.
+- **Filters** by expression or through a guided builder — with an [expression
+  builder](#the-expression-builder) that knows the file's
+  fields and checks the result before applying it.
 - **Indexes**: opens existing `.ntx` files, creates new ones, picks the active
   order.
 - **Changes structure**, packs (PACK) and empties (ZAP).

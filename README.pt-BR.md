@@ -2,17 +2,69 @@
 
 # QDbu
 
-Utilitário inspirado no **DBU** (o utilitário de manipulação de DBFs do Clipper),
-desenvolvido em **Harbour**, com interface em **Tauri + Rust + HTML/JS**.
+Um utilitário de DBF para quem **herdou** um sistema em DBF — e nunca aprendeu
+xBase.
 
-O Harbour é quem faz o trabalho: ele abre, lê, trava, indexa, filtra e grava o
-DBF, com o mesmo RDD que sustenta sistemas em produção há décadas. A camada
-gráfica existe para dar janela ao que ele já sabe fazer — e não o contrário.
+**Descreva o filtro em palavras** — *"clientes de SP ou MG com CGC preenchido"* —
+**e receba a expressão pronta, já conferida contra o seu próprio arquivo:**
+
+```
+(CLI_EST == "SP" .OR. CLI_EST == "MG") .AND. !Empty(CLI_CGC)
+```
+
+Ou monte à mão, num catálogo com os campos do próprio arquivo, 126 funções e
+todos os operadores — cada um com nome em linguagem comum, uma linha dizendo
+para que serve, e busca em três idiomas. De um jeito ou de outro ele diz o que a
+expressão dá **no registro que está na sua frente**, antes de aplicar qualquer
+coisa:
+
+> ✓ Expressão válida. No registro 270 o resultado é Sim.
+
+**[Baixar o QDbu v00.75](https://github.com/vailtom/qdbu/releases/latest)**
+— dois arquivos, sem instalador: descompacte e execute o `qdbu.exe`.
+Windows, 32-bit.
+
+---
+
+Por baixo, quem faz o trabalho é o **Harbour**: ele abre, lê, trava, indexa,
+filtra e grava o DBF, com o mesmo RDD que sustenta sistemas em produção há
+décadas. A interface é **Tauri + Rust + HTML/JS**, e existe para dar janela ao
+que ele já sabe fazer — e não o contrário.
 
 O que o DBU fazia por teclado num terminal de 80 colunas, o QDbu faz numa tela
 moderna, sem abrir mão de nada que um arquivo de cliente exige: trava por
 registro, backup antes de operação destrutiva, e log de tudo que muda bytes no
 disco.
+
+## O construtor de expressão
+
+Seis campos do programa aceitam expressão xBase: o filtro, a chave do índice e o
+FOR dele, e o WITH, o FOR e o WHILE do `REPLACE` em massa. Digitar em qualquer
+um deles significava conhecer a linguagem.
+
+O construtor põe na sua frente os campos do arquivo, as funções e os operadores,
+ordenados pelo tipo que aquele campo espera, e nunca esconde o resto. Campo
+digitado errado também não é beco sem saída: ele diz qual campo não existe e
+sugere o mais parecido. E a linha de status fala com quem está olhando — *está
+certa, o que ela dá, e de onde veio esse resultado* — em vez de recitar tipos.
+
+### Em palavras, se você tiver uma chave
+
+Além de escrever a expressão, o assistente conserta uma que não compila — pontos
+faltando no `.AND.`, um parêntese aberto — e altera uma que você já tem
+(*"inclua também MG"*). Três coisas que ele não faz, de propósito:
+
+- **Nunca aplica nada.** A sugestão cai no rascunho como um único passo de
+  desfazer e passa pela mesma conferência de um texto que você digitou.
+- **Nenhum registro sai da sua máquina.** Vai o seu pedido, os nomes e tipos dos
+  campos, e o catálogo de funções.
+- **Não chuta.** Sem campo para o que você pediu, ele pergunta qual usar em vez
+  de aceitar um parecido — um `CLI_PESS` com `F`/`J` é física/jurídica, não
+  feminino/masculino, e aquela expressão compilaria, rodaria e estaria errada.
+
+Exige uma chave de API sua, informada em Preferências: OpenAI, um Ollama local,
+ou qualquer endpoint que fale o formato *chat completions*. Sem chave o botão
+avisa, e todo o resto funciona igual.
 
 ## Aviso
 
@@ -31,7 +83,9 @@ Ver [LICENSE](LICENSE).
 - **Abre e navega** DBF de qualquer tamanho, com paginação real. Um arquivo de
   421 mil registros abre no mesmo tempo que um de sete.
 - **Edita** registro a registro, na grade ou no formulário.
-- **Filtra** por expressão ou por um construtor guiado.
+- **Filtra** por expressão ou por um construtor guiado — com um [construtor de
+  expressão](#o-construtor-de-expressão) que conhece os campos do
+  arquivo e confere o resultado antes de aplicar.
 - **Indexa**: abre `.ntx` existentes, cria novos, escolhe a ordem ativa.
 - **Altera estrutura**, compacta (PACK) e esvazia (ZAP).
 - **Exporta** para CSV, JSON, XLSX e DBF; **importa** de CSV e JSON.

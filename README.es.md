@@ -2,18 +2,71 @@
 
 # QDbu
 
-Utilidad inspirada en **DBU** (la herramienta de manipulación de DBF de Clipper),
-desarrollada en **Harbour**, con interfaz en **Tauri + Rust + HTML/JS**.
+Una utilidad de DBF para quienes **heredaron** un sistema en DBF — y nunca
+aprendieron xBase.
 
-Harbour es quien hace el trabajo: abre, lee, bloquea, indexa, filtra y graba el
-DBF, con el mismo RDD que sostiene sistemas en producción desde hace décadas. La
-capa gráfica existe para darle una ventana a lo que él ya sabe hacer, y no al
-revés.
+**Describa el filtro en palabras** — *"clientes de SP o MG con CGC completado"* —
+**y reciba la expresión lista, ya comprobada contra su propio archivo:**
+
+```
+(CLI_EST == "SP" .OR. CLI_EST == "MG") .AND. !Empty(CLI_CGC)
+```
+
+O ármela a mano, en un catálogo con los campos del propio archivo, 126 funciones
+y todos los operadores — cada uno con nombre en lenguaje común, una línea que
+dice para qué sirve, y búsqueda en tres idiomas. De una forma u otra, dice qué
+da la expresión **en el registro que usted tiene delante**, antes de aplicar
+nada:
+
+> ✓ Expresión válida. En el registro 270 el resultado es Sí.
+
+**[Descargar QDbu v00.75](https://github.com/vailtom/qdbu/releases/latest)**
+— dos archivos, sin instalador: descomprima y ejecute `qdbu.exe`.
+Windows, 32-bit.
+
+---
+
+Por debajo, quien hace el trabajo es **Harbour**: abre, lee, bloquea, indexa,
+filtra y graba el DBF, con el mismo RDD que sostiene sistemas en producción
+desde hace décadas. La interfaz es **Tauri + Rust + HTML/JS**, y existe para
+darle una ventana a lo que él ya sabe hacer, y no al revés.
 
 Lo que DBU hacía por teclado en una terminal de 80 columnas, QDbu lo hace en una
 pantalla moderna, sin renunciar a nada de lo que exige el archivo de un cliente:
 bloqueo por registro, copia de seguridad antes de toda operación destructiva, y
 registro de todo lo que cambia bytes en el disco.
+
+## El constructor de expresiones
+
+Seis campos del programa aceptan expresión xBase: el filtro, la clave del índice
+y su FOR, y el WITH, el FOR y el WHILE del `REPLACE` masivo. Escribir en
+cualquiera de ellos significaba conocer el lenguaje.
+
+El constructor pone delante suyo los campos del archivo, las funciones y los
+operadores, ordenados por el tipo que ese campo espera, y nunca esconde el
+resto. Un campo mal escrito tampoco es un callejón sin salida: dice qué campo no
+existe y sugiere el más parecido. Y la línea de estado le habla a quien está
+mirando — *si está bien, qué da, y de dónde salió ese resultado* — en vez de
+recitar tipos.
+
+### En palabras, si tiene una clave
+
+Además de escribir la expresión, el asistente repara una que no compila — puntos
+que faltan en `.AND.`, un paréntesis abierto — y modifica una que usted ya tiene
+(*"incluya también MG"*). Tres cosas que no hace, a propósito:
+
+- **Nunca aplica nada.** La sugerencia cae en el borrador como un único paso de
+  deshacer y pasa por la misma comprobación que un texto escrito por usted.
+- **Ningún registro sale de su máquina.** Va su pedido, los nombres y tipos de
+  los campos, y el catálogo de funciones.
+- **No adivina.** Sin un campo para lo que usted pidió, pregunta cuál usar en
+  lugar de aceptar uno parecido — un `CLI_PESS` con `F`/`J` es física/jurídica,
+  no femenino/masculino, y aquella expresión compilaría, se ejecutaría y estaría
+  equivocada.
+
+Requiere una clave de API propia, informada en Preferencias: OpenAI, un Ollama
+local, o cualquier endpoint que hable el formato *chat completions*. Sin clave
+el botón lo avisa, y todo lo demás funciona igual.
 
 ## Aviso
 
@@ -33,7 +86,9 @@ Ver [LICENSE](LICENSE).
 - **Abre y navega** DBF de cualquier tamaño, con paginación real. Un archivo de
   421.000 registros abre en el mismo tiempo que uno de siete.
 - **Edita** registro a registro, en la cuadrícula o en el formulario.
-- **Filtra** por expresión o mediante un constructor guiado.
+- **Filtra** por expresión o mediante un constructor guiado — con un
+  [constructor de expresiones](#el-constructor-de-expresiones) que conoce
+  los campos del archivo y comprueba el resultado antes de aplicarlo.
 - **Indexa**: abre `.ntx` existentes, crea nuevos, elige el orden activo.
 - **Cambia la estructura**, compacta (PACK) y vacía (ZAP).
 - **Exporta** a CSV, JSON, XLSX y DBF; **importa** de CSV y JSON.
