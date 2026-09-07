@@ -4104,6 +4104,15 @@ async function prepararFiltro() {
   marcarFiltroAtivo(atual, null);
   if (atual && !$("ff-expr").value) $("ff-expr").value = atual;
 
+  // O MODO vem da EVIDENCIA, nao de um flag guardado -- pela mesma razao que
+  // as condicoes vao para a sessao: `filter` sozinho guarda o RESULTADO e nao
+  // diz quem o montou. Se as condicoes recuperadas reproduzem o filtro ativo,
+  // ele veio do guiado; havendo filtro que elas nao reproduzem, veio da
+  // expressao. Sem isto, reabrir o app com um filtro escrito a mao mostrava o
+  // radio em "guiado" e um painel que nao descreve o que esta filtrando.
+  const enxuto = (t) => String(t || "").replace(/\s+/g, " ").trim();
+  aplicarModoFiltro(atual && enxuto(atual) !== enxuto(montarExpressao().expr) ? "texto" : "guiado");
+
   desenharCondicoes();
   await sugestoesPara(condicoes[0].campo);
 }
@@ -4135,13 +4144,24 @@ $("ff-limpar").addEventListener("click", limparFiltro);
 $("ff-check").addEventListener("click", conferirFiltro);
 $("ff-contar").addEventListener("click", contarFiltro);
 
+/* Liga o modo na tela: a variavel, o radio e os dois paineis.
+   E funcao porque agora ha DOIS caminhos que escolhem modo -- o clique da
+   pessoa e a restauracao da sessao --, e quando o mesmo trio e repetido na mao
+   um dos lugares esquece uma das partes. Mesma licao de `repintarDoEstado`. */
+function aplicarModoFiltro(modo) {
+  modoFiltro = modo;
+  const r = document.querySelector('input[name=ff-modo][value="' + modo + '"]');
+  if (r) r.checked = true;
+  $("ff-guiado").hidden = modo !== "guiado";
+  $("ff-texto").hidden = modo !== "texto";
+}
+
 for (const r of document.querySelectorAll("input[name=ff-modo]")) {
   r.addEventListener("change", (ev) => {
-    modoFiltro = ev.target.value;
-    $("ff-guiado").hidden = modoFiltro !== "guiado";
-    $("ff-texto").hidden = modoFiltro !== "texto";
+    aplicarModoFiltro(ev.target.value);
     // Leva o que estava montado para o modo texto: quem troca de modo quer
-    // continuar dali, nao recomecar.
+    // continuar dali, nao recomecar. So no clique -- na restauracao o texto ja
+    // vem do filtro ativo.
     if (modoFiltro === "texto" && !$("ff-expr").value) {
       $("ff-expr").value = montarExpressao().expr;
     }
