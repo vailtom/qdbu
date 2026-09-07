@@ -5659,6 +5659,10 @@ let identidade = null;
 (async () => {
   const s = await QDBU.status();
   identidade = { produto: s.produto, versao: s.versao, compilado: s.compilado };
+  // A tela de boas-vindas ja esta a vista neste instante, e o titulo dela sai
+  // daqui. Sem esta chamada ele so apareceria depois de abrir a janela Sobre
+  // ou trocar de idioma -- ou seja, quase nunca.
+  pintarSobre();
 
   const badge = $("badge");
   // Guardar a CHAVE no proprio elemento, e nao so o texto: o HTML nasce com
@@ -5737,19 +5741,24 @@ async function abrirDaLinhaDeComando(p) {
 // ------------------------------------------------------------------- sobre
 
 /*
- * A janela Sobre.
+ * A janela Sobre -- e a tela de boas-vindas, que mostra a mesma identidade.
  *
- * Os tres pedacos que mudam -- titulo, data de linkedicao e o rotulo do link --
- * sao pintados aqui e nao por `data-i18n`, porque carregam PARAMETRO. Por isso
- * `pintarSobre()` e chamada tambem no ouvinte de `idioma-mudou`: sem ela a
- * frase "Compilado em ..." ficaria no idioma anterior, que e exatamente o
- * defeito que o combo de ordem ja teve.
+ * Os pedacos que mudam -- titulo, data de linkedicao -- sao pintados aqui e nao
+ * por `data-i18n`, porque carregam PARAMETRO. Por isso `pintarSobre()` e
+ * chamada tambem no ouvinte de `idioma-mudou`: sem ela a frase "Compilado em
+ * ..." ficaria no idioma anterior, que e exatamente o defeito que o combo de
+ * ordem ja teve.
+ *
+ * A tela vazia usa AS MESMAS CHAVES da janela Sobre, e o titulo dela e pintado
+ * aqui pelo mesmo motivo: duas copias da mesma frase envelhecem separado.
  */
 function pintarSobre() {
   const id = identidade;
   if (!id) return;
-  $("sb-titulo").textContent = id.produto + " v" + id.versao;
+  const titulo = id.produto + " v" + id.versao;
+  $("sb-titulo").textContent = titulo;
   $("sb-compilado").textContent = T("UI_ABOUT_COMPILED", { when: id.compilado });
+  $("ev-titulo").textContent = titulo;
 }
 
 function abrirSobre() {

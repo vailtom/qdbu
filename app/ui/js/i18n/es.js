@@ -41,7 +41,6 @@
   UI_CONNECTIONS: "Conexiones",
   UI_PANEL_WIDTH: "Ancho del panel",
   UI_DRAG_RESIZE: "Arrastre para redimensionar (doble clic vuelve al valor por omisión)",
-  UI_NO_FILE_OPEN: "Ningún archivo abierto",
   UI_EMPTY_HINT:
     "Registre una conexión — una carpeta con archivos DBF — y haga doble clic " +
     "en un archivo a la izquierda.",

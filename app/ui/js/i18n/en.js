@@ -43,7 +43,6 @@
   UI_CONNECTIONS: "Connections",
   UI_PANEL_WIDTH: "Panel width",
   UI_DRAG_RESIZE: "Drag to resize (double click restores the default)",
-  UI_NO_FILE_OPEN: "No file open",
   UI_EMPTY_HINT:
     "Register a connection — a folder holding DBF files — then double click " +
     "a file on the left.",

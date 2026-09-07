@@ -119,8 +119,32 @@
       <div id="abas" class="abas" role="tablist"></div>
     </div>
 
+    <!--
+      Sem arquivo aberto, a maior area da tela ficava com duas linhas de texto
+      no meio do nada. Ela passa a ser a apresentacao do programa -- quem fez,
+      o que e, o aviso de garantia e onde estao os fontes.
+
+      Os textos sao AS MESMAS CHAVES da janela Sobre, nao copias: uma segunda
+      versao da mesma frase envelhece em silencio quando so uma e corrigida. E
+      a dica de como comecar fica por ultimo, que e o unico texto daqui com
+      algo a fazer.
+    -->
     <div id="vazio" class="estado-vazio">
-      <p class="titulo" data-i18n="UI_NO_FILE_OPEN"></p>
+      <img class="ev-logo" src="logo.png" alt="" width="96" height="96">
+      <p class="ev-titulo" id="ev-titulo"></p>
+      <p class="ev-autor">Vailton Renato &lt;vailtom@gmail.com&gt;</p>
+      <p class="ev-oque" data-i18n="UI_ABOUT_WHAT"></p>
+
+      <p class="ev-aviso">
+        <strong data-i18n="UI_NOTICE"></strong>
+        <span data-i18n="UI_ABOUT_WARRANTY"></span>
+      </p>
+
+      <p class="ev-fontes">
+        <span data-i18n="UI_ABOUT_SOURCES"></span><br>
+        <a href="https://github.com/vailtom/qdbu" id="ev-link">https://github.com/vailtom/qdbu</a>
+      </p>
+
       <p class="dica" data-i18n="UI_EMPTY_HINT"></p>
     </div>
 
