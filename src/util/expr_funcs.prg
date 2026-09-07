@@ -50,7 +50,7 @@ REQUEST ORDBAGEXT, ORDBAGNAME, ORDDESCEND, ORDFOR, ORDISUNIQUE, ORDKEY, ORDKEYCO
 REQUEST ORDKEYVAL, ORDNAME, ORDNUMBER, OS, PAD, PADC, PADL, PADR
 REQUEST PCOUNT, PROCLINE, PROCNAME, RAT, RDDNAME, RECCOUNT, RECNO, RECSIZE
 REQUEST REPLICATE, RIGHT, ROUND, RTRIM, SECONDS, SELECT, SOUNDEX, SPACE
-REQUEST SQRT, STR, STRTRAN, STRZERO, STUFF, SUBSTR, TIME, TRANSFORM
+REQUEST SQRT, STOD, STR, STRTRAN, STRZERO, STUFF, SUBSTR, TIME, TRANSFORM
 REQUEST TRIM, TYPE, UPDATED, UPPER, USED, VAL, VALTYPE, VERSION
 REQUEST WORD, YEAR
 
@@ -63,5 +63,37 @@ REQUEST WORD, YEAR
  * INIT PROCEDURE em vez de funcao solta: e chamada na subida da VM, entao o
  * linker nao tem como decidir que o modulo e dispensavel.
  */
+/*
+ * O ESPELHO DO REQUEST, para runtime.
+ *
+ * REQUEST exige identificador literal e a VM nao sabe enumera-lo. Esta lista
+ * existe para `expr.functions` responder o que linka, e para o gerador do
+ * catalogo (app/devtools/catalogo.mjs) conferir que oferece so o que existe.
+ * E a MESMA lista duas vezes, de proposito -- e o gerador FALHA se as duas
+ * divergirem, entao esquecer um lado nao passa em silencio.
+ *
+ * STOD entrou nas duas em 07/09/2026: o filtro guiado ja emitia SToD() e so
+ * linkava por acidente de outro modulo chamar hb_SToD.
+ */
+FUNCTION ExprFuncsLista()
+   RETURN { ;
+      "ABS", "ACLONE", "ACOPY", "AEVAL", "ALIAS", "ALLTRIM", "ARRAY", "ASC", ;
+      "ASCAN", "ASORT", "AT", "ATAIL", "ATNUM", "BIN2I", "BIN2L", "BIN2W", ;
+      "BOF", "CDOW", "CHR", "CMONTH", "CTOD", "CURDIR", "DATE", "DAY", ;
+      "DBFILTER", "DBRELATION", "DBRSELECT", "DELETED", "DESCEND", "DIRECTORY", "DISKNAME", "DOW", ;
+      "DTOC", "DTOS", "EMPTY", "EOF", "EVAL", "EXP", "FCOUNT", "FIELDBLOCK", ;
+      "FIELDGET", "FIELDNAME", "FIELDPOS", "FIELDWBLOCK", "FILE", "FKLABEL", "FKMAX", "FOUND", ;
+      "GETENV", "HARDCR", "HEADER", "I2BIN", "INDEXEXT", "INDEXKEY", "INDEXORD", "INT", ;
+      "ISALPHA", "ISDIGIT", "ISLOWER", "ISUPPER", "L2BIN", "LASTREC", "LEFT", "LEN", ;
+      "LOG", "LOWER", "LTRIM", "LUPDATE", "MAX", "MEMOLINE", "MEMOREAD", "MEMOTRAN", ;
+      "MEMVARBLOCK", "MIN", "MLCOUNT", "MOD", "MONTH", "NETERR", "NETNAME", "NUMAT", ;
+      "ORDBAGEXT", "ORDBAGNAME", "ORDDESCEND", "ORDFOR", "ORDISUNIQUE", "ORDKEY", "ORDKEYCOUNT", "ORDKEYNO", ;
+      "ORDKEYVAL", "ORDNAME", "ORDNUMBER", "OS", "PAD", "PADC", "PADL", "PADR", ;
+      "PCOUNT", "PROCLINE", "PROCNAME", "RAT", "RDDNAME", "RECCOUNT", "RECNO", "RECSIZE", ;
+      "REPLICATE", "RIGHT", "ROUND", "RTRIM", "SECONDS", "SELECT", "SOUNDEX", "SPACE", ;
+      "SQRT", "STOD", "STR", "STRTRAN", "STRZERO", "STUFF", "SUBSTR", "TIME", ;
+      "TRANSFORM", "TRIM", "TYPE", "UPDATED", "UPPER", "USED", "VAL", "VALTYPE", ;
+      "VERSION", "WORD", "YEAR" }
+
 INIT PROCEDURE ExprFuncsLink()
    RETURN

@@ -1,0 +1,145 @@
+{
+  "_": [
+    "O que a doc do Harbour NAO cobre, e o que ela cobre ERRADO. Mesmo formato",
+    "da saida do gerador (app/ui/js/catalogo.js). Assinaturas de `add` conferidas",
+    "pagina a pagina na referencia do CA-Clipper 5.3 em 07/09/2026",
+    "(itlnet.net/programming/program/reference/c53g01c). Se uma delas passar a",
+    "existir na doc do Harbour, o gerador falha com SOBRA: tire-a daqui.",
+    "",
+    "add     -> funcoes linkadas sem $DOC$ em lugar nenhum",
+    "patch   -> por argumento, so o que muda; NUNCA edite os .txt de hbdoc/",
+    "alias   -> sinonimos: nao aparecem duas vezes, mas a dica reconhece",
+    "ocultar -> LINKADAS e NAO OFERECIDAS: ficam no REQUEST para indice antigo",
+    "           que as cite abrir, e fora da tela porque nao fazem sentido numa",
+    "           expressao de dados (teclado, READ, rede, disco). Decisao do autor."
+  ],
+
+  "add": {
+    "IIF": {
+      "nome": "IIf", "ret": "any", "cat": "GERAL",
+      "one": "Return one of two values depending on a logical condition",
+      "args": [
+        { "n": "lCondition", "t": "L" },
+        { "n": "expTrue", "t": "any" },
+        { "n": "expFalse", "t": "any" }
+      ]
+    },
+    "STOD": {
+      "nome": "SToD", "ret": "D", "cat": "CONVERSAO",
+      "one": "Convert a date string in yyyymmdd format to a date value",
+      "args": [ { "n": "cDate", "t": "C", "opc": true } ]
+    },
+    "DBRELATION": {
+      "nome": "dbRelation", "ret": "C", "cat": "BANCO",
+      "one": "Return the linking expression of a specified relation",
+      "args": [ { "n": "nRelation", "t": "N" } ]
+    },
+    "DBRSELECT": {
+      "nome": "dbRSelect", "ret": "N", "cat": "BANCO",
+      "one": "Return the target work area number of a relation",
+      "args": [ { "n": "nRelation", "t": "N" } ]
+    },
+    "DIRECTORY": {
+      "nome": "Directory", "ret": "A", "cat": "AMBIENTE",
+      "one": "Create an array of directory and file information",
+      "args": [ { "n": "cDirSpec", "t": "C" }, { "n": "cAttributes", "t": "C", "opc": true } ]
+    },
+    "MEMOLINE": {
+      "nome": "MemoLine", "ret": "C", "cat": "TEXTO",
+      "one": "Extract a line of text from a character string or memo field",
+      "args": [
+        { "n": "cString", "t": "C" },
+        { "n": "nLineLength", "t": "N", "opc": true },
+        { "n": "nLineNumber", "t": "N", "opc": true },
+        { "n": "nTabSize", "t": "N", "opc": true },
+        { "n": "lWrap", "t": "L", "opc": true }
+      ]
+    },
+    "MLCOUNT": {
+      "nome": "MLCount", "ret": "N", "cat": "TEXTO",
+      "one": "Count the number of lines in a character string or memo field",
+      "args": [
+        { "n": "cString", "t": "C" },
+        { "n": "nLineLength", "t": "N", "opc": true },
+        { "n": "nTabSize", "t": "N", "opc": true },
+        { "n": "lWrap", "t": "L", "opc": true }
+      ]
+    },
+    "ORDDESCEND": {
+      "nome": "ordDescend", "ret": "L", "cat": "BANCO",
+      "one": "Return and optionally change the descending flag of an order",
+      "args": [
+        { "n": "cOrder", "t": "any", "opc": true },
+        { "n": "cIndexFile", "t": "C", "opc": true },
+        { "n": "lNewDescend", "t": "L", "opc": true }
+      ]
+    },
+    "ORDISUNIQUE": {
+      "nome": "ordIsUnique", "ret": "L", "cat": "BANCO",
+      "one": "Return the status of the unique flag for a given order",
+      "args": [ { "n": "cOrder", "t": "any", "opc": true }, { "n": "cIndexFile", "t": "C", "opc": true } ]
+    },
+    "ORDKEYCOUNT": {
+      "nome": "ordKeyCount", "ret": "N", "cat": "BANCO",
+      "one": "Return the number of keys in an order",
+      "args": [ { "n": "cOrder", "t": "any", "opc": true }, { "n": "cIndexFile", "t": "C", "opc": true } ]
+    },
+    "ORDKEYNO": {
+      "nome": "ordKeyNo", "ret": "N", "cat": "BANCO",
+      "one": "Return the logical record number of the current key in an order",
+      "args": [ { "n": "cOrder", "t": "any", "opc": true }, { "n": "cIndexFile", "t": "C", "opc": true } ]
+    },
+    "ORDKEYVAL": {
+      "nome": "ordKeyVal", "ret": "any", "cat": "BANCO",
+      "one": "Return the key value of the current record from the controlling order",
+      "args": []
+    },
+    "ORDNAME": {
+      "nome": "ordName", "ret": "C", "cat": "BANCO",
+      "one": "Return the name of an order in the order list",
+      "args": [ { "n": "nOrder", "t": "N" }, { "n": "cOrderBagName", "t": "C", "opc": true } ]
+    },
+    "ORDNUMBER": {
+      "nome": "ordNumber", "ret": "N", "cat": "BANCO",
+      "one": "Return the position of an order in the order list",
+      "args": [ { "n": "cOrderName", "t": "C" }, { "n": "cOrderBagName", "t": "C", "opc": true } ]
+    },
+    "RDDNAME": {
+      "nome": "rddName", "ret": "C", "cat": "BANCO",
+      "one": "Return the name of the RDD active in the current work area",
+      "args": []
+    },
+    "SOUNDEX": {
+      "nome": "Soundex", "ret": "C", "cat": "TEXTO",
+      "one": "Convert a character string to a sound-alike code",
+      "args": [ { "n": "cString", "t": "C" } ]
+    },
+    "STUFF": {
+      "nome": "Stuff", "ret": "C", "cat": "TEXTO",
+      "one": "Delete and insert characters in a string",
+      "args": [
+        { "n": "cString", "t": "C" },
+        { "n": "nStart", "t": "N" },
+        { "n": "nDelete", "t": "N" },
+        { "n": "cInsert", "t": "C" }
+      ]
+    }
+  },
+
+  "patch": {
+    "PADR": { "args": { "cFill": { "opc": true } } },
+    "PADL": { "args": { "cFill": { "opc": true } } },
+    "PADC": { "args": { "cFill": { "opc": true } } },
+    "RECNO": { "ret": "N", "_": "a doc diz `--> Identity`, fora da notacao; num DBF e sempre numero" },
+    "MEMOTRAN": { "args": { "cHard": { "opc": true }, "cSoft": { "opc": true } }, "_": "Clipper 5.3: MEMOTRAN(<cString>, [<cHard>], [<cSoft>]); confirmado no binario com MemoTran(\"a\")" },
+    "ORDKEY": { "args": { "cOrderName": { "opc": true } }, "_": "sem argumento = ordem controladora; confirmado com OrdKey()" },
+    "ORDFOR": { "args": { "xOrder": { "opc": true } }, "_": "idem; confirmado com OrdFor()" },
+    "ORDBAGNAME": { "args": { "nOrder": { "opc": true } }, "_": "idem; confirmado com OrdBagName()" }
+  },
+
+  "alias": {
+    "PAD": "PADR"
+  },
+
+  "ocultar": [ "UPDATED", "FKLABEL", "FKMAX", "NETNAME", "DISKNAME" ]
+}
