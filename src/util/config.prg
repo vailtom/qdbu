@@ -263,3 +263,72 @@ FUNCTION CodepageResolvido( cArq, cConn, cOrigem )
    cOrigem := "default"
 
    RETURN CdpPadrao()
+
+/* ================================================= historico de expressoes */
+
+/*
+ * <raiz>/.qdbu/expressoes.json    { "NETCLI.DBF": [ "...", "..." ] }
+ *
+ * Chaveado pelo NOME do arquivo, nao pelo caminho: NETCLI.DBF existe em
+ * centenas de pastas de cliente com a mesma estrutura, e uma expressao escrita
+ * num cliente vale em todos -- chavear por caminho jogaria fora justamente o
+ * caso em que o historico mais serve. Na raiz, e nao na pasta do cliente,
+ * porque o objetivo e ATRAVESSAR clientes.
+ *
+ * 20 por arquivo, mais recente primeiro, sem repetidas. Best-effort como o
+ * resto do modulo.
+ */
+#define HIST_EXPR_MAX 20
+
+STATIC FUNCTION ArqExpressoes()
+   RETURN hb_DirSepAdd( DirConfigQDbu() ) + "expressoes.json"
+
+STATIC FUNCTION LeExpressoes()
+
+   LOCAL cJson := hb_MemoRead( ArqExpressoes() ), x := NIL
+
+   IF ! Empty( cJson ) .AND. hb_jsonDecode( cJson, @x ) != 0 .AND. HB_ISHASH( x )
+      RETURN x
+   ENDIF
+
+   RETURN { => }
+
+FUNCTION HistoricoExpr( cNome )
+
+   LOCAL h := LeExpressoes()
+
+   IF hb_HHasKey( h, cNome ) .AND. HB_ISARRAY( h[ cNome ] )
+      RETURN h[ cNome ]
+   ENDIF
+
+   RETURN {}
+
+FUNCTION GuardaHistoricoExpr( cNome, cExpr )
+
+   LOCAL cDir := DirConfigQDbu()
+   LOCAL h, a, n
+
+   /* Sem RETURN dentro do SEQUENCE (E0025). */
+   BEGIN SEQUENCE WITH {| e | Break( e ) }
+      h := LeExpressoes()
+      hb_HKeepOrder( h, .T. )
+      a := iif( hb_HHasKey( h, cNome ) .AND. HB_ISARRAY( h[ cNome ] ), h[ cNome ], {} )
+      /* repetida sobe para o topo em vez de aparecer duas vezes */
+      n := AScan( a, {| c | HB_ISSTRING( c ) .AND. c == cExpr } )
+      IF n > 0
+         hb_ADel( a, n, .T. )
+      ENDIF
+      hb_AIns( a, 1, cExpr, .T. )
+      IF Len( a ) > HIST_EXPR_MAX
+         ASize( a, HIST_EXPR_MAX )
+      ENDIF
+      h[ cNome ] := a
+      IF ! hb_DirExists( cDir )
+         hb_DirBuild( cDir )
+      ENDIF
+      hb_MemoWrit( ArqExpressoes(), hb_jsonEncode( h, .T. ) )
+   RECOVER
+      RETURN .F.
+   END SEQUENCE
+
+   RETURN .T.

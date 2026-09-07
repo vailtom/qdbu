@@ -127,6 +127,9 @@ FUNCTION Api_Expr_Check( hP )
 
    hDiag := ExprDiagnostico( cH, cExpr, cEsp )
 
+   /* `symbol`, `value` e `recno` entraram para o construtor de expressao: a
+      linha de status dele diz "compila . Logico . no registro 1 vale Sim" e
+      "nao existe campo X" numa ida so, em vez de check + eval. */
    RETURN Ok( { ;
       "expr"      => cExpr, ;
       "ok"        => hDiag[ "ok" ] .AND. hDiag[ "typeOk" ], ;
@@ -135,7 +138,10 @@ FUNCTION Api_Expr_Check( hP )
       "typeOk"    => hDiag[ "typeOk" ], ;
       "evaluated" => hDiag[ "evaluated" ], ;
       "error"     => hDiag[ "error" ], ;
-      "warning"   => hDiag[ "warning" ] } )
+      "warning"   => hDiag[ "warning" ], ;
+      "symbol"    => hDiag[ "symbol" ], ;
+      "value"     => hDiag[ "value" ], ;
+      "recno"     => RecNo() } )
 
 /*
  * expr.eval {"h":"h7","expr":"..."} -> o valor no registro corrente.
@@ -165,7 +171,98 @@ FUNCTION Api_Expr_Eval( hP )
    ENDIF
 
    RETURN Ok( { "recno" => RecNo(), "ok" => .T., "error" => "", ;
-                "value" => ParaTexto( xVal ), "type" => ValType( xVal ) } )
+                "value" => ExprTexto( xVal ), "type" => ValType( xVal ) } )
+
+/* ------------------------------------------------------------- funcoes */
+
+/*
+ * expr.functions {"names":[...]}  -> o que LINKA neste binario.
+ *
+ * Sem `names`, responde por ExprFuncsLista() (util/expr_funcs.prg), o espelho
+ * do REQUEST. Com `names`, confere os pedidos -- e assim que o construtor de
+ * expressao garante que o catalogo (gerado da doc) nao oferece nada que morra
+ * em runtime com "Undefined function". `__dynsIsFun` e a pergunta honesta:
+ * existe simbolo de funcao com este nome na VM?
+ *
+ * IIF nao e funcao, e palavra-chave do compilador -- linkada por definicao.
+ */
+FUNCTION Api_Expr_Functions( hP )
+
+   LOCAL aNomes := iif( HB_ISHASH( hP ) .AND. hb_HHasKey( hP, "names" ) .AND. ;
+                        HB_ISARRAY( hP[ "names" ] ), hP[ "names" ], ExprFuncsLista() )
+   LOCAL aLinked := {}, aMissing := {}, aTodos := {}
+   LOCAL c
+
+   FOR EACH c IN aNomes
+      IF ! HB_ISSTRING( c ) .OR. Empty( c )
+         LOOP
+      ENDIF
+      c := Upper( AllTrim( c ) )
+      AAdd( aTodos, c )
+      IF c == "IIF" .OR. __dynsIsFun( c )
+         AAdd( aLinked, c )
+      ELSE
+         AAdd( aMissing, c )
+      ENDIF
+   NEXT
+
+   RETURN Ok( { "names" => aTodos, "linked" => aLinked, ;
+                "missing" => aMissing, "count" => Len( aTodos ) } )
+
+/* ----------------------------------------------------------- historico */
+
+/*
+ * expr.history.get {"h":"h7"} | {"file":"NETCLI.DBF"}
+ * expr.history.put {"h":"h7", "expr":"..."}
+ *
+ * Chaveado pelo NOME do arquivo, nao pelo caminho: NETCLI.DBF existe em
+ * centenas de pastas de cliente com a mesma estrutura, e uma expressao
+ * escrita num cliente vale em todos. Best-effort, como toda config: disco
+ * que recusa devolve saved:false e a expressao vale na sessao.
+ *
+ * Nao escreve DBF -> fora de MetodosRegistrados().
+ */
+STATIC FUNCTION NomeDoHistorico( hP )
+
+   LOCAL cH := ParStr( hP, "h" ), hInfo
+
+   IF ! Empty( cH )
+      hInfo := SessHandle( cH )
+      IF HB_ISHASH( hInfo ) .AND. hb_HHasKey( hInfo, "path" )
+         RETURN Upper( hb_FNameNameExt( hInfo[ "path" ] ) )
+      ENDIF
+      RETURN ""
+   ENDIF
+
+   RETURN Upper( AllTrim( ParStr( hP, "file" ) ) )
+
+FUNCTION Api_Expr_History_Get( hP )
+
+   LOCAL cNome := NomeDoHistorico( hP )
+
+   IF Empty( cNome )
+      RETURN Err( "ERROR_PARAM_REQUIRED", "h or file is required", "h", { "param" => "h" } )
+   ENDIF
+
+   RETURN Ok( { "file" => cNome, "expressions" => HistoricoExpr( cNome ) } )
+
+FUNCTION Api_Expr_History_Put( hP )
+
+   LOCAL cNome := NomeDoHistorico( hP )
+   LOCAL cExpr := AllTrim( ParStr( hP, "expr" ) )
+   LOCAL lSalvou
+
+   IF Empty( cNome )
+      RETURN Err( "ERROR_PARAM_REQUIRED", "h or file is required", "h", { "param" => "h" } )
+   ENDIF
+   IF Empty( cExpr )
+      RETURN Err( "ERROR_PARAM_REQUIRED", "expr is required", "expr", { "param" => "expr" } )
+   ENDIF
+
+   lSalvou := GuardaHistoricoExpr( cNome, cExpr )
+
+   RETURN Ok( { "file" => cNome, "saved" => lSalvou, ;
+                "expressions" => HistoricoExpr( cNome ) } )
 
 /* ------------------------------------------------------------------ contar */
 
@@ -278,7 +375,7 @@ FUNCTION Api_Filter_Values( hP )
    DO WHILE ! Eof() .AND. nLidos < QDBU_SUG_VARREDURA .AND. Len( aVals ) < QDBU_SUG_VALORES
       nLidos++
       xVal := FieldGet( nPos )
-      cTxt := ParaTexto( xVal )
+      cTxt := ExprTexto( xVal )
 
       IF ! Empty( cTxt ) .AND. ! hb_HHasKey( hVistos, cTxt )
          hVistos[ cTxt ] := .T.
@@ -326,17 +423,6 @@ FUNCTION EstadoFiltro( cH, cAviso )
  */
 
 /* Valor de campo -> texto comparavel. Data em ISO para ordenar como string. */
-STATIC FUNCTION ParaTexto( xVal )
-
-   DO CASE
-   CASE HB_ISSTRING( xVal )  ; RETURN RTrim( xVal )
-   CASE HB_ISNUMERIC( xVal ) ; RETURN hb_ntos( xVal )
-   CASE HB_ISDATE( xVal )    ; RETURN iif( Empty( xVal ), "", hb_DToC( xVal, "YYYY-MM-DD" ) )
-   CASE HB_ISLOGICAL( xVal ) ; RETURN iif( xVal, ".T.", ".F." )
-   ENDCASE
-
-   RETURN ""
-
 STATIC FUNCTION ParStr( hP, cChave )
 
    IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave )

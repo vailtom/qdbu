@@ -1922,6 +1922,109 @@ fn selftest() -> i32 {
     }
 
     /*
+     * ---- Construtor de expressao: o que a DLL entrega (EXP) --------------
+     *
+     * expr.functions e a ponte entre o catalogo (gerado da doc) e o binario:
+     * o que o catalogo oferece tem de existir aqui. expr.check ganhou symbol,
+     * value e recno para a linha de status do construtor. O historico e
+     * chaveado pelo NOME do arquivo.
+     */
+    saida("");
+    {
+        let fonte_exp = raiz_projeto()
+            .map(|raiz| raiz.join("tests").join("fixtures").join("TIPOS.DBF"))
+            .filter(|p| p.exists());
+        let ex = dir_run().join("selftest_exp.dbf");
+        let ex_s = ex.to_string_lossy().replace('\\', "/");
+        let ex_memo = ex.with_extension("dbt");
+        let _ = std::fs::remove_file(&ex);
+        let _ = std::fs::remove_file(&ex_memo);
+
+        let copiou = match &fonte_exp {
+            Some(p) => {
+                let fonte_s = p.to_string_lossy().replace('\\', "/");
+                let memo = p.with_extension("dbt");
+                if memo.exists() { let _ = std::fs::copy(&memo, &ex_memo); }
+                rpc_bruto(&hb, "meta.copyfile",
+                    &format!(r#"{{"source":"{fonte_s}","dest":"{ex_s}","shared":true}}"#))
+                    .map(|r| r.contains("\"ok\":true")).unwrap_or(false)
+            }
+            None => false,
+        };
+
+        // Sem arquivo aberto -- so precisa da DLL.
+        let fns = rpc_bruto(&hb, "expr.functions", "{}").unwrap_or_default();
+        t.ok("EXP: expr.functions -- tudo de ExprFuncsLista() linka (missing vazio)",
+             fns.contains("\"missing\":[]"), &fns);
+        t.ok("EXP: expr.functions -- STOD e PADR estao entre as linkadas",
+             fns.contains("\"STOD\"") && fns.contains("\"PADR\""), &fns);
+        let fns2 = rpc_bruto(&hb, "expr.functions",
+            r#"{"names":["PADR","IIF","NAO_EXISTE_XYZ"]}"#).unwrap_or_default();
+        t.ok("EXP: IIF conta como linkada (keyword) e nome inventado cai em missing",
+             fns2.contains("\"linked\":[\"PADR\",\"IIF\"]") && fns2.contains("\"missing\":[\"NAO_EXISTE_XYZ\"]"),
+             &fns2);
+
+        // Historico, chaveado pelo nome -- idempotente por construcao.
+        for i in 1..=21 {
+            let _ = rpc_bruto(&hb, "expr.history.put",
+                &format!(r#"{{"file":"SELFTEST_HIST.DBF","expr":"H{i}"}}"#));
+        }
+        let rep = rpc_bruto(&hb, "expr.history.put",
+            r#"{"file":"SELFTEST_HIST.DBF","expr":"H21"}"#).unwrap_or_default();
+        let hist: Vec<String> = serde_json::from_str::<serde_json::Value>(&rep).ok()
+            .and_then(|v| v.pointer("/result/expressions").cloned())
+            .and_then(|v| serde_json::from_value(v).ok()).unwrap_or_default();
+        t.ok("EXP: historico guarda 20, mais recente primeiro, sem repetir, e diz saved",
+             hist.len() == 20 && hist.first().map(|s| s == "H21").unwrap_or(false)
+                && hist.iter().filter(|s| *s == "H21").count() == 1
+                && !hist.iter().any(|s| s == "H1") && rep.contains("\"saved\":true"),
+             &format!("{} itens, primeiro {:?}: {}", hist.len(), hist.first(), rep));
+        let get = rpc_bruto(&hb, "expr.history.get", r#"{"file":"selftest_hist.dbf"}"#).unwrap_or_default();
+        t.ok("EXP: get pelo nome em minusculas acha o mesmo historico (chave em maiusculas)",
+             get.contains("\"H21\""), &get);
+
+        if copiou {
+            let hex = rpc_bruto(&hb, "file.open", &format!(r#"{{"path":"{ex_s}"}}"#))
+                .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                .as_ref().and_then(|v| v.pointer("/result/h")).and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+            match hex {
+                Some(h) => {
+                    let chk = |expr: &str, expect: &str| rpc_bruto(&hb, "expr.check",
+                        &format!(r#"{{"h":"{h}","expr":"{expr}","expect":"{expect}"}}"#)).unwrap_or_default();
+
+                    let r = chk("TXTT == 'A'", "L");
+                    t.ok("EXP: campo inexistente -- nao compila E devolve o simbolo (symbol)",
+                         r.contains("\"compiles\":false") && r.contains("\"symbol\":\"TXTT\""), &r);
+
+                    let r = chk("Upper(TXT)", "L");
+                    t.ok("EXP: tipo errado -- typeOk false, type C, e o valor veio junto",
+                         r.contains("\"typeOk\":false") && r.contains("\"type\":\"C\"") && r.contains("\"value\":\""), &r);
+
+                    let r = chk("Len(TXT) >= 0", "L");
+                    t.ok("EXP: expressao boa -- ok, value .T., recno presente",
+                         r.contains("\"ok\":true") && r.contains("\"value\":\".T.\"") && r.contains("\"recno\":"), &r);
+
+                    let r = chk("SToD('20260101')", "");
+                    t.ok("EXP: SToD linka (entrou no REQUEST) e devolve Data",
+                         r.contains("\"type\":\"D\""), &r);
+
+                    let r = chk("PadR(TXT, 5)", "C");
+                    t.ok("EXP: PadR com 2 argumentos avalia -- o patch cFill opcional e verdade no binario",
+                         r.contains("\"ok\":true"), &r);
+
+                    let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h}"}}"#));
+                }
+                None => t.ok("EXP: abrir a copia", false, "file.open falhou"),
+            }
+        } else {
+            t.ok("EXP: preparar a copia", false, "meta.copyfile falhou");
+        }
+        let _ = std::fs::remove_file(&ex);
+        let _ = std::fs::remove_file(&ex_memo);
+    }
+
+    /*
      * ---- Linha de comando, versao e titulo -----------------------------
      *
      * Nao precisam da DLL: sao funcoes puras. Ficam no fim para nao empurrar

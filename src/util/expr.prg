@@ -94,12 +94,13 @@ FUNCTION ExprCompila( cH, cExpr, cErro )
  * lFalhou distingue "deu NIL" de "estourou": uma expressao pode legitimamente
  * devolver NIL, e tratar as duas como a mesma coisa esconderia o erro.
  */
-FUNCTION ExprAvalia( bBloco, lFalhou, cErro )
+FUNCTION ExprAvalia( bBloco, lFalhou, cErro, cSimbolo )
 
    LOCAL xRet, oErr
 
    lFalhou := .F.
    cErro := ""
+   cSimbolo := ""
 
    BEGIN SEQUENCE WITH {| e | Break( e ) }
       xRet := Eval( bBloco )
@@ -109,10 +110,30 @@ FUNCTION ExprAvalia( bBloco, lFalhou, cErro )
          por engano vira "Variable does not exist" e a pessoa nao descobre que o
          culpado e o `W`. Ver ErroTexto() em util/err.prg -- padrao do projeto. */
       cErro := ErroTexto( oErr, "erro ao avaliar" )
+      /* E o NOME, como dado: "CLI_NOMEE" sozinho, para a UI montar "nao
+         existe campo CLI_NOMEE -- parecido: CLI_NOME". ErroSimbolo() existia
+         desde o inicio para isto e nunca tinha sido chamada. */
+      cSimbolo := ErroSimbolo( oErr )
       RETURN NIL
    END SEQUENCE
 
    RETURN xRet
+
+/*
+ * O valor de uma expressao como TEXTO, para a tela: data em ISO (quem formata
+ * e o JS), logico como .T./.F., numero sem zeros a esquerda. Publica porque
+ * expr.check e expr.eval (api_filter.prg) devolvem o mesmo campo `value`.
+ */
+FUNCTION ExprTexto( xVal )
+
+   DO CASE
+   CASE HB_ISSTRING( xVal )  ; RETURN RTrim( xVal )
+   CASE HB_ISNUMERIC( xVal ) ; RETURN hb_ntos( xVal )
+   CASE HB_ISDATE( xVal )    ; RETURN iif( Empty( xVal ), "", hb_DToC( xVal, "YYYY-MM-DD" ) )
+   CASE HB_ISLOGICAL( xVal ) ; RETURN iif( xVal, ".T.", ".F." )
+   ENDCASE
+
+   RETURN ""
 
 /*
  * Compila, avalia UMA vez no registro corrente e confere o tipo.
@@ -126,11 +147,14 @@ FUNCTION ExprAvalia( bBloco, lFalhou, cErro )
  *   typeOk    o tipo bate com cEsperado (ou cEsperado vazio)
  *   evaluated conseguiu avaliar no registro corrente
  *   error     motivo, quando nao compilou
- *   warning   compilou mas estourou NESTE registro -- nao impede o uso
+ *   warning   compilou mas estourou NESTE registro -- nao impede o uso.
+ *             E o motivo CRU (ErroTexto); a frase em volta e do dicionario.
+ *   symbol    o nome do campo/funcao ausente, quando essa e a causa
+ *   value     o resultado como texto (ExprTexto), quando avaliou
  */
 FUNCTION ExprDiagnostico( cH, cExpr, cEsperado )
 
-   LOCAL cErro := "", cAviso := ""
+   LOCAL cErro := "", cAviso := "", cSimbolo := ""
    LOCAL lFalhou := .F.
    LOCAL bBloco, xVal, cTipo
 
@@ -138,10 +162,11 @@ FUNCTION ExprDiagnostico( cH, cExpr, cEsperado )
 
    IF bBloco == NIL
       RETURN { "ok" => .F., "type" => "", "typeOk" => .F., ;
-               "evaluated" => .F., "error" => cErro, "warning" => "" }
+               "evaluated" => .F., "error" => cErro, "warning" => "", ;
+               "symbol" => "", "value" => "" }
    ENDIF
 
-   xVal := ExprAvalia( bBloco, @lFalhou, @cAviso )
+   xVal := ExprAvalia( bBloco, @lFalhou, @cAviso, @cSimbolo )
 
    IF lFalhou
 
@@ -160,19 +185,25 @@ FUNCTION ExprDiagnostico( cH, cExpr, cEsperado )
        */
       IF EhSimboloAusente( cAviso )
          RETURN { "ok" => .F., "type" => "", "typeOk" => .F., ;
-                  "evaluated" => .F., "error" => cAviso, "warning" => "" }
+                  "evaluated" => .F., "error" => cAviso, "warning" => "", ;
+                  "symbol" => cSimbolo, "value" => "" }
       ENDIF
 
+      /* So o motivo. Havia aqui uma frase em portugues nascendo na DLL
+         ("nao pode ser avaliada no registro atual: "), contra a regra de
+         que texto de usuario mora no dicionario -- a UI ja embrulha o aviso
+         em UI_EXPR_RESULT, entao a frase era dobrada e num idioma so. */
       RETURN { "ok" => .T., "type" => "", "typeOk" => .T., ;
-               "evaluated" => .F., "error" => "", ;
-               "warning" => "nao pode ser avaliada no registro atual: " + cAviso }
+               "evaluated" => .F., "error" => "", "warning" => cAviso, ;
+               "symbol" => "", "value" => "" }
    ENDIF
 
    cTipo := ValType( xVal )
 
    RETURN { "ok" => .T., "type" => cTipo, ;
             "typeOk" => Empty( cEsperado ) .OR. cTipo == cEsperado, ;
-            "evaluated" => .T., "error" => "", "warning" => "" }
+            "evaluated" => .T., "error" => "", "warning" => "", ;
+            "symbol" => "", "value" => ExprTexto( xVal ) }
 
 /* .T. quando a falha e "este nome nao existe" -- estrutural, nao de dado. */
 STATIC FUNCTION EhSimboloAusente( cMsg )
