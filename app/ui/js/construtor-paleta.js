@@ -203,6 +203,7 @@
         id: "fn:" + k,
         rotulo: rot === rk ? f.nome : rot,
         sub: f.nome + "()",
+        nomeNaFrente: true,
         ret: f.ret,
         termos: indiceDe(k, f),
         inserir: (o) => window.Construtor.inserir(textoDeInsercao(f), { envolver: f.args.length > 0 && !(o && o.semEnvolver) }),
@@ -217,6 +218,7 @@
       id: "op:" + o.id,
       rotulo: T("UI_OPX_" + o.id),
       sub: o.s,
+      nomeNaFrente: true,
       ret: o.ret,
       termos: [{ t: norm(T("UI_OPX_" + o.id)), peso: 80, visivel: true, cru: T("UI_OPX_" + o.id) }, { t: o.s, peso: 100, visivel: true, cru: o.s }],
       inserir: () => window.Construtor.inserir(o.pre ? o.s + " " : o.bin ? " " + o.s + " " : o.s),
@@ -229,6 +231,7 @@
       id: "const:" + c.id,
       rotulo: T("UI_CX_CONST_" + c.id),
       sub: c.s,
+      nomeNaFrente: true,
       ret: c.ret,
       termos: [{ t: norm(T("UI_CX_CONST_" + c.id)), peso: 80, visivel: true, cru: "" }, { t: norm(c.s), peso: 100, visivel: true, cru: c.s }],
       inserir: () => window.Construtor.inserir(c.s),
@@ -354,8 +357,19 @@
     } else {
       itens = valoresDe(S.elemento, S.categoria);
       // Sem busca: compatíveis primeiro, ordem original dentro de cada grupo.
-      itens.forEach((v, i) => { v.pontos = (compativel(v.ret) ? 1 : 0); v.ordem = i; });
-      itens.sort((a, b) => b.pontos - a.pontos || a.ordem - b.ordem);
+      // Compatíveis primeiro (o "trazer para cima"); dentro de cada grupo,
+      // ALFABÉTICO PELO NOME TÉCNICO (decisão do autor): com o nome na frente,
+      // quem já aprendeu o nome acha pela ordem, sem ler as explicações.
+      // Operadores ficam na ordem da tabela -- ela é didática (igual,
+      // exatamente igual, diferente...), e alfabética por símbolo não é nada.
+      const alfabetico = S.elemento === "FUNCOES" || S.elemento === "CAMPOS";
+      // `any` (IIf, Max, Eval...) PODE devolver o tipo esperado: fica entre
+      // os que devolvem com certeza e os que nao devolvem nunca. Com destino
+      // Logico, IIf e o caso mais comum -- nao pode ficar la embaixo.
+      itens.forEach((v, i) => { v.pontos = compativel(v.ret) ? 2 : v.ret === "any" ? 1 : 0; v.ordem = i; });
+      itens.sort((a, b) =>
+        b.pontos - a.pontos ||
+        (alfabetico ? (a.nomeNaFrente ? a.sub : a.rotulo).localeCompare(b.nomeNaFrente ? b.sub : b.rotulo, undefined, { sensitivity: "base" }) : a.ordem - b.ordem));
     }
     S.itens = itens;
 
@@ -366,15 +380,28 @@
 
     for (const v of itens) {
       const frag = document.createDocumentFragment();
-      const rot = document.createElement("span");
-      rot.className = "cx-rot";
-      rot.textContent = v.rotulo;
-      frag.appendChild(rot);
-      if (v.sub) {
-        const sub = document.createElement("span");
-        sub.className = "cx-sub";
-        sub.textContent = v.sub;
-        frag.appendChild(sub);
+      /*
+       * O NOME vem primeiro, a explicação depois (decisão do autor): o nome é
+       * o que a pessoa vai digitar da próxima vez, e vê-lo à esquerda, na
+       * mesma coluna, é como ela o aprende. Vale para função, operador e
+       * constante — em campo o "sub" é o tipo, e o nome já vai na frente.
+       */
+      const nome = document.createElement("span");
+      nome.className = "cx-rot";
+      const desc = document.createElement("span");
+      desc.className = "cx-sub";
+      if (v.nomeNaFrente && v.sub) {
+        nome.textContent = v.sub;
+        desc.textContent = v.rotulo;
+        frag.appendChild(nome);
+        frag.appendChild(desc);
+      } else {
+        nome.textContent = v.rotulo;
+        frag.appendChild(nome);
+        if (v.sub) {
+          desc.textContent = v.sub;
+          frag.appendChild(desc);
+        }
       }
       if (v.por) {
         const por = document.createElement("span");
