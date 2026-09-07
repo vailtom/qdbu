@@ -2206,6 +2206,11 @@ dialog select:focus { outline: none; border-color: var(--amber); }
 /* A selecao e o que mostra o placeholder ativo -- tem de ser visivel. */
 #cx-expr::selection { background: color-mix(in srgb, var(--amber) 45%, var(--bg)); }
 
+.cx-status-linha { display: flex; align-items: center; gap: 8px; }
+.cx-status-linha .cx-status { flex: 0 1 auto; min-width: 0; }
+/* O ✦ que aparece junto do erro: chama a IA para corrigir AQUELA expressão. */
+.cx-ia-corrigir { flex: none; padding: 1px 8px; margin-top: 8px; font-size: 13px; line-height: 1.4; color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, var(--line)); }
+.cx-ia-corrigir:hover { border-color: var(--amber); }
 .cx-status { min-height: 1.6em; margin: 8px 0 0; font-size: 12.5px; color: var(--dim); }
 .cx-status.ok { color: var(--ok); }
 .cx-status.aviso { color: var(--aviso); }

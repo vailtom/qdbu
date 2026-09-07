@@ -260,6 +260,9 @@
     const el = $("cx-status");
     el.textContent = texto;
     el.className = "cx-status " + (classe || "");
+    // Quem pendura algo na linha de status (o ✦ de corrigir, em
+    // construtor-ia.js) fica sabendo por evento, sem os dois se conhecerem.
+    window.dispatchEvent(new CustomEvent("construtor-status", { detail: { classe: classe || "", texto } }));
   }
 
   function valorNaTela(r) {
@@ -580,6 +583,13 @@
     return S ? S.ctx : null;
   }
 
+  /** O rascunho como está e o último veredito do expr.check (ou null): é o
+      que a IA recebe para CORRIGIR ou ALTERAR uma expressão existente. */
+  function atual() {
+    if (!S) return null;
+    return { texto: valor(), check: S.ultimoCheck, status: $("cx-status").textContent };
+  }
+
   /** Troca o rascunho INTEIRO por `texto`, como um passo de undo. É o que a
       IA usa: a sugestão substitui o que havia, e Ctrl+Z traz de volta. */
   function substituir(texto) {
@@ -590,5 +600,5 @@
     ta().focus();
   }
 
-  window.Construtor = { abrir, inserir, substituir, contexto, limpo, faltantes, trechoAntesDoCursor };
+  window.Construtor = { abrir, inserir, substituir, contexto, atual, limpo, faltantes, trechoAntesDoCursor };
 })();

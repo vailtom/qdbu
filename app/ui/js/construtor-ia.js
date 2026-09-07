@@ -118,7 +118,31 @@
    * O prompt de sistema: o .md + os dados deste pedido em JSON.
    * O JSON é GERADO — é a parte em que não pode haver mal-entendido, e não há.
    */
-  async function montarSistema(ctx) {
+  /**
+   * A expressão que JÁ está no rascunho, como dado: a IA tanto corrige
+   * ("faltam os pontos no .AND.") quanto altera ("inclua também MG"). Vai o
+   * veredito do expr.check quando houve um -- é o erro exato da DLL, não a
+   * frase traduzida da tela.
+   */
+  function atualDe(atual) {
+    if (!atual || !atual.texto.trim()) return null;
+    const c = { expression: atual.texto.trim() };
+    const r = atual.check;
+    if (r && !r.compiles) {
+      c.compiles = false;
+      c.error = r.symbol ? "unknown symbol: " + r.symbol : r.error || "does not compile";
+    } else if (r && r.evaluated && !r.typeOk) {
+      c.compiles = true;
+      c.returned_type = r.type;
+      c.error = "returns the wrong type";
+    } else if (r) {
+      c.compiles = true;
+      c.returned_type = r.type;
+    }
+    return c;
+  }
+
+  async function montarSistema(ctx, atual) {
     const base = await carregarPrompt();
     const cat = (window.CATALOGO && window.CATALOGO.funcoes) || {};
     const functions = Object.values(cat).map((f) => ({
@@ -134,6 +158,8 @@
       return o;
     });
     const dados = { target: alvoDe(ctx), fields, functions };
+    const current = atualDe(atual);
+    if (current) dados.current = current;
     return base.trim() + "\n\n" + JSON.stringify(dados, null, 1);
   }
 
@@ -175,8 +201,17 @@
     el.className = "cx-ia-estado " + (classe || "");
   }
 
-  async function pedir() {
-    const pedido = $("cx-ia-pedido").value.trim();
+  /* O pedido em palavras vai como MENSAGEM DO USUÁRIO, separada do prompt de
+     sistema -- e o prompt diz que ela é descrição, nunca instrução. No modo
+     corrigir (o ✦ junto do erro) a pessoa pode não ter escrito nada: aí a
+     mensagem é nossa, em inglês, e o que ela escreveu vai depois como
+     complemento. */
+  const PEDIDO_CORRIGIR = "Fix the current expression so that it compiles and returns the required type. Keep its evident intent; change as little as possible.";
+
+  async function pedir(corrigir) {
+    const escrito = $("cx-ia-pedido").value.trim();
+    let pedido = escrito;
+    if (corrigir) pedido = escrito ? PEDIDO_CORRIGIR + "\nThe person adds: " + escrito : PEDIDO_CORRIGIR;
     if (!pedido) return;
     const ctx = window.Construtor.contexto();
     if (!ctx) return;
@@ -187,7 +222,7 @@
     btn.disabled = true;
     estado(T("UI_IA_THINKING"), "");
     try {
-      const sistema = await montarSistema(ctx);
+      const sistema = await montarSistema(ctx, window.Construtor.atual());
       const r = await window.QDBU.iaSugerir(sistema, pedido);
       if (!r.expressao) {
         // Pergunta vale mais que chute: fica na caixa, e a pessoa completa
@@ -267,12 +302,22 @@
     window.ConstrutorIa = { montarSistema };
 
     $("cx-ia").addEventListener("click", () => mostrarCaixa($("cx-ia-caixa").hidden));
-    $("cx-ia-enviar").addEventListener("click", pedir);
+    $("cx-ia-enviar").addEventListener("click", () => pedir(false));
+    // O ✦ junto do erro: aparece quando o expr.check recusou, some quando
+    // passou. Clicar abre a caixa (que orienta, se não há chave) e pede a
+    // correção daquela expressão, sem a pessoa precisar descrever o erro.
+    window.addEventListener("construtor-status", (ev) => {
+      $("cx-ia-corrigir").hidden = ev.detail.classe !== "erro";
+    });
+    $("cx-ia-corrigir").addEventListener("click", () => {
+      mostrarCaixa(true);
+      if (temChave()) pedir(true);
+    });
     // Preferências abre por cima do construtor (top layer empilha); ao gravar,
     // `ia-mudou` chega aqui e a caixa destrava sozinha.
     $("cx-ia-config").addEventListener("click", () => window.abrirConfig && window.abrirConfig());
     $("cx-ia-pedido").addEventListener("keydown", (ev) => {
-      if (ev.key === "Enter") { ev.preventDefault(); ev.stopPropagation(); pedir(); }
+      if (ev.key === "Enter") { ev.preventDefault(); ev.stopPropagation(); pedir(false); }
       if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); mostrarCaixa(false); }
     });
   });
