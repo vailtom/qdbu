@@ -23,7 +23,7 @@
 // que todo mundo ignora.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const raiz = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -110,12 +110,23 @@ function semComentarios(s, arq) {
 // se escreve a especializacao por parametro (ERROR_PARAM_REQUIRED_path).
 const CHAVE = /"((?:UI|ERROR|WARN|INFO)_[A-Z0-9]+(?:_[A-Za-z0-9]+)*)"/g;
 
+// Os sufixos que i18n.js REALMENTE trata (aplicar()). Um atributo fora desta
+// lista e ignorado pelo motor sem erro nenhum -- e a chave dentro dele conta
+// como "usada" pela colheita de CHAVE acima, entao nem orfa nem morta a
+// denunciam. Foi assim que `data-i18n-placeholder` ficou meses em tres campos
+// do Em massa sem nunca renderizar (07/09/2026). Sufixo desconhecido e ERRO.
+const SUFIXOS = ["", "-ph", "-title", "-aria", "-value"];
+const ATRIBUTO = /data-i18n(-[a-z]+)?="([A-Za-z0-9_]+)"/g;
+
 const usadas = new Set();
+const atributos = [];
 for (const f of fontes) {
   const s = semComentarios(readFileSync(f, "utf8"), f);
   for (const m of s.matchAll(CHAVE)) usadas.add(m[1]);
-  for (const m of s.matchAll(/data-i18n(?:-ph|-title|-aria|-value)?="([A-Za-z0-9_]+)"/g)) {
-    usadas.add(m[1]);
+  for (const m of s.matchAll(ATRIBUTO)) {
+    const sufixo = m[1] || "";
+    if (SUFIXOS.includes(sufixo)) usadas.add(m[2]);
+    else atributos.push(`${relative(raiz, f)}: data-i18n${sufixo}="${m[2]}"`);
   }
 }
 
@@ -212,6 +223,16 @@ if (Object.keys(atrasados).length) {
   }
 } else {
   console.log("PARIDADE: todos os idiomas cobrem o dicionario de referencia");
+}
+
+console.log("");
+if (atributos.length) {
+  falhou = true;
+  console.log(`ATRIBUTOS -- data-i18n-* que o motor nao trata; a chave nunca chega a tela (${atributos.length}):`);
+  console.log(lista(atributos));
+  console.log("  (sufixos tratados: " + SUFIXOS.map((x) => "data-i18n" + x).join(", ") + ")");
+} else {
+  console.log("ATRIBUTOS: todos os data-i18n-* sao tratados pelo motor");
 }
 
 console.log("");
