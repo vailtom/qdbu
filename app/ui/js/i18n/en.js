@@ -1630,6 +1630,8 @@
   UI_IA_ANSWER_PH: "answer here — the question above and your request go together",
   UI_IA_HIST: "Reuse an earlier request",
   UI_IA_TOKENS: "{n} tokens",
+  UI_IA_HIST_USED: "Brought back that request and its expression, without calling the AI. Check it before using.",
+  UI_IA_HIST_USED_ASK: "Brought back that request. Click Suggest to generate the expression.",
   UI_IA_HIST_EMPTY: "No requests yet.",
   UI_IA_SEND: "Suggest",
   UI_IA_THINKING: "thinking…",

@@ -1626,6 +1626,8 @@
   UI_IA_ANSWER_PH: "responda aquí — la pregunta de arriba y su pedido van juntos",
   UI_IA_HIST: "Repetir un pedido anterior",
   UI_IA_TOKENS: "{n} tokens",
+  UI_IA_HIST_USED: "Recuperé el pedido y la expresión de aquella vez, sin consultar a la IA. Revise antes de usar.",
+  UI_IA_HIST_USED_ASK: "Recuperé el pedido de aquella vez. Haga clic en Sugerir para generar la expresión.",
   UI_IA_HIST_EMPTY: "Ningún pedido todavía.",
   UI_IA_SEND: "Sugerir",
   UI_IA_THINKING: "pensando…",

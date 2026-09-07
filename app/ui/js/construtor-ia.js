@@ -310,10 +310,25 @@
       const toks = it.tok_in || it.tok_out ? " · " + T("UI_IA_TOKENS", { n: it.tok_in + it.tok_out }) : "";
       meta.textContent = it.q + (it.arq ? " · " + it.arq : "") + toks + (saiu ? " · " + saiu : "");
       li.append(ped, meta);
+      /* Traz de volta O PEDIDO E A EXPRESSÃO daquela vez. Restaurar os dois
+         não perde nada: um Sugerir seguinte sobrescreve o rascunho de
+         qualquer jeito, e a expressão entra como UM passo de undo. E poupa a
+         chamada -- repetir um pedido para receber a mesma resposta é gastar
+         por nada.
+
+         Sem expressão (o item foi uma pergunta, ou um erro) só a frase volta,
+         e a linha de estado diz o que fazer em seguida. */
       const usar = () => {
         $("cx-ia-pedido").value = it.pedido;
         lista.hidden = true;
-        $("cx-ia-pedido").focus();
+        if (it.expr) {
+          window.Construtor.substituir(it.expr);
+          estado(T("UI_IA_HIST_USED"), "ok");
+          $("cx-expr").focus();
+        } else {
+          estado(T("UI_IA_HIST_USED_ASK"), "");
+          $("cx-ia-pedido").focus();
+        }
       };
       li.addEventListener("click", usar);
       li.addEventListener("keydown", (ev) => {

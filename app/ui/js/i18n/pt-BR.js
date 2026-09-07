@@ -1666,6 +1666,8 @@
   UI_IA_ANSWER_PH: "responda aqui — a pergunta acima e o seu pedido vão juntos",
   UI_IA_HIST: "Repetir um pedido anterior",
   UI_IA_TOKENS: "{n} tokens",
+  UI_IA_HIST_USED: "Trouxe de volta o pedido e a expressão daquela vez, sem consultar a IA. Confira antes de usar.",
+  UI_IA_HIST_USED_ASK: "Trouxe de volta o pedido daquela vez. Clique em Sugerir para gerar a expressão.",
   UI_IA_HIST_EMPTY: "Nenhum pedido ainda.",
   UI_IA_SEND: "Sugerir",
   UI_IA_THINKING: "pensando…",
