@@ -2,71 +2,134 @@
 
 # QDbu
 
-Una utilidad de DBF para quienes **heredaron** un sistema en DBF — y nunca
-aprendieron xBase.
+**QDbu** es una utilidad portátil para inspeccionar, editar y mantener archivos
+DBF de dBase y Clipper.
 
-**Describa el filtro en palabras** — *"clientes de SP o MG con CGC completado"* —
-**y reciba la expresión lista, ya comprobada contra su propio archivo:**
+Interfaz moderna, una aplicación sin límites con un constructor de expresiones
+integrado que conoce los campos de su archivo — con IA opcional para escribir,
+corregir y modificar la expresión.
 
-```
-(CLI_EST == "SP" .OR. CLI_EST == "MG") .AND. !Empty(CLI_CGC)
-```
+Abre archivos DBF directamente, trabaja registro por registro, maneja índices
+NTX, filtros, cambios de estructura, operaciones PACK y ZAP, e importa y exporta
+formatos de datos comunes. Está hecho para archivos que siguen en uso: incluidas
+tablas grandes, rutas de red, convenciones antiguas de nombres y distintos
+codepages.
 
-O ármela a mano, en un catálogo con los campos del propio archivo, 126 funciones
-y todos los operadores — cada uno con nombre en lenguaje común, una línea que
-dice para qué sirve, y búsqueda en tres idiomas. De una forma u otra, dice qué
-da la expresión **en el registro que usted tiene delante**, antes de aplicar
-nada:
+## Nuevo en 00.75: construya expresiones xBase en lugar de escribirlas a ciegas
+
+Seis lugares de QDbu aceptan expresiones xBase: el filtro de la tabla, la clave
+del índice, el FOR del índice y las expresiones WITH, FOR y WHILE utilizadas por
+el REPLACE masivo.
+
+El nuevo constructor de expresiones coloca junto al editor los campos del DBF
+actual, todos los operadores y un catálogo de **126 funciones Harbour/xBase**.
+Cada elemento tiene un nombre en lenguaje común, una explicación breve y términos
+de búsqueda en inglés, portugués y español.
+
+La lista se ordena según el tipo esperado por la expresión que se está editando,
+sin ocultar las demás opciones. IntelliSense sigue el cursor, muestra la firma de
+la función actual y resalta el argumento que se está introduciendo.
+
+El catálogo de funciones se genera a partir de los propios bloques de
+documentación `$DOC$` de Harbour. Notaciones de parámetros como `<cString>`,
+`<nStart>` y `[<nLen>]` se utilizan para determinar los tipos de argumentos y los
+parámetros opcionales.
+
+QDbu también comprueba la expresión antes de utilizarla. Un campo escrito
+incorrectamente recibe una sugerencia en lugar de convertirse en un callejón sin
+salida, y una expresión válida se evalúa sobre el registro que está actualmente
+en pantalla:
 
 > ✓ Expresión válida. En el registro 270 el resultado es Sí.
 
-**[Descargar QDbu v00.75](https://github.com/vailtom/qdbu/releases/latest)**
-— dos archivos, sin instalador: descomprima y ejecute `qdbu.exe`.
-Windows, 32-bit.
+Un asistente opcional de IA puede construir las mismas expresiones a partir de
+lenguaje natural. Por ejemplo:
 
----
+> clientes de SP o MG con CGC informado
 
-Por debajo, quien hace el trabajo es **Harbour**: abre, lee, bloquea, indexa,
-filtra y graba el DBF, con el mismo RDD que sostiene sistemas en producción
-desde hace décadas. La interfaz es **Tauri + Rust + HTML/JS**, y existe para
-darle una ventana a lo que él ya sabe hacer, y no al revés.
+se convierte en:
 
-Lo que DBU hacía por teclado en una terminal de 80 columnas, QDbu lo hace en una
-pantalla moderna, sin renunciar a nada de lo que exige el archivo de un cliente:
-bloqueo por registro, copia de seguridad antes de toda operación destructiva, y
-registro de todo lo que cambia bytes en el disco.
+```xbase
+(CLI_EST == "SP" .OR. CLI_EST == "MG") .AND. !Empty(CLI_CGC)
+```
 
-## El constructor de expresiones
+También puede corregir una expresión que no compila o modificar una expresión
+existente, como "incluya también MG".
 
-Seis campos del programa aceptan expresión xBase: el filtro, la clave del índice
-y su FOR, y el WITH, el FOR y el WHILE del `REPLACE` masivo. Escribir en
-cualquiera de ellos significaba conocer el lenguaje.
+El asistente nunca aplica un cambio por sí solo. La respuesta se convierte en un
+borrador editable, puede deshacerse en un paso y pasa por la misma validación que
+una expresión escrita manualmente.
 
-El constructor pone delante suyo los campos del archivo, las funciones y los
-operadores, ordenados por el tipo que ese campo espera, y nunca esconde el
-resto. Un campo mal escrito tampoco es un callejón sin salida: dice qué campo no
-existe y sugiere el más parecido. Y la línea de estado le habla a quien está
-mirando — *si está bien, qué da, y de dónde salió ese resultado* — en vez de
-recitar tipos.
+Ningún registro del DBF se envía al asistente. Solo salen de la máquina la
+petición, los nombres y tipos de los campos y el catálogo de funciones. Si lo
+solicitado no puede asociarse con un campo existente, el asistente pregunta qué
+campo debe utilizar en lugar de inventar uno.
 
-### En palabras, si tiene una clave
+El asistente es **opcional y requiere una clave de API del propio usuario**.
+Admite OpenAI, una instancia local de Ollama u otro endpoint compatible con el
+formato Chat Completions. Sin una clave configurada, el asistente no está
+disponible y el resto de QDbu funciona normalmente.
 
-Además de escribir la expresión, el asistente repara una que no compila — puntos
-que faltan en `.AND.`, un paréntesis abierto — y modifica una que usted ya tiene
-(*"incluya también MG"*). Tres cosas que no hace, a propósito:
+## Qué hace
 
-- **Nunca aplica nada.** La sugerencia cae en el borrador como un único paso de
-  deshacer y pasa por la misma comprobación que un texto escrito por usted.
-- **Ningún registro sale de su máquina.** Va su pedido, los nombres y tipos de
-  los campos, y el catálogo de funciones.
-- **No adivina.** Sin un campo para lo que usted pidió, pregunta cuál usar en
-  lugar de aceptar uno parecido — un `CLI_PESS` con `F`/`J` es física/jurídica,
-  no femenino/masculino, y aquella expresión compilaría, se ejecutaría y estaría
-  equivocada.
+- **Abre y navega** DBF de cualquier tamaño, con paginación real. Un archivo de
+  421.000 registros abre en el mismo tiempo que uno de siete.
+- **Edita** registro a registro, en la cuadrícula o en el formulario.
+- **Filtra** por expresión o mediante un constructor guiado.
+- **Indexa**: abre `.ntx` existentes, crea nuevos, elige el orden activo.
+- **Cambia la estructura**, compacta (PACK) y vacía (ZAP).
+- **Exporta** a CSV, JSON, XLSX y DBF; **importa** de CSV y JSON.
 
-Requiere una clave de API propia, informada en Preferencias: OpenAI, un Ollama
-local, o cualquier endpoint que hable el formato *chat completions*. Sin clave
-el botón lo avisa, y todo lo demás funciona igual.
+## Hecho para los DBF que existen en el mundo real
+
+QDbu trata la selección del codepage a nivel de archivo. Están disponibles CP850,
+Windows-1252, ISO-8859-1, CP860 y UTF-8, con resolución en el orden
+archivo → conexión → global. El byte del language driver del DBF, en el offset
+29, se utiliza como sugerencia y no como respuesta definitiva; muchos DBF de
+Clipper simplemente contienen `0x00`.
+
+Esta diferencia importa al editar. Leer un DBF escrito en Windows mediante un
+codepage DOS no es solo un problema de visualización: el siguiente REPLACE puede
+escribir de nuevo en disco el byte incorrecto.
+
+Los archivos NTX se asocian por la expresión de la clave y no por el nombre del
+archivo. Por tanto, un `NETCLI.DBF` puede utilizar `ID1CLI.NTX` o cualquier otra
+convención. QDbu lee la cabecera del índice y comprueba si los campos mencionados
+por su expresión existen en el DBF abierto.
+
+Las funciones utilizadas únicamente dentro de expresiones compiladas en runtime
+se enlazan explícitamente con el programa. Esto evita el caso clásico en el que
+una función válida de Clipper como `PADR()` aparece en una expresión de índice
+pero se considera indefinida porque el linker nunca encontró una llamada estática
+a ella. La lista de REQUEST se basa en la referencia de CA-Clipper 5.3.
+
+QDbu también rechaza los valores que no caben en el campo de destino en lugar de
+convertirlos silenciosamente. Un texto inválido no se convierte en un cero
+numérico plausible, una fecha inválida no borra una fecha existente y una cadena
+demasiado larga no se trunca sin aviso.
+
+El modo de solo lectura es impuesto por el RDD de Harbour al abrir el área de
+trabajo, y no únicamente por controles desactivados en la interfaz. La edición
+normal utiliza bloqueo por registro, por lo que abrir un DBF en QDbu no exige
+bloquear el archivo completo para el ERP que también está utilizando la base.
+
+Antes de las operaciones destructivas, QDbu ejecuta una lista de comprobación y
+verifica la copia de seguridad. Toda operación que modifica bytes en disco queda
+registrada en un log JSONL con la petición y su resultado.
+
+La sesión se restaura al volver a abrir QDbu, incluidas las pestañas abiertas,
+columnas ocultas, orden de índice activo, filtros y modo de apertura de cada
+archivo.
+
+## Descarga
+
+**QDbu 00.75** es una versión preliminar para Windows de 32 bits. Se distribuye
+como un paquete portátil: basta con descomprimirlo y ejecutar `qdbu.exe`.
+No requiere instalador.
+
+[Descargue la última versión](https://github.com/vailtom/qdbu/releases/latest)
+
+QDbu se distribuye bajo la **licencia MIT**.
 
 ## Aviso
 
@@ -81,92 +144,22 @@ apuntarlo a datos de producción.
 
 Ver [LICENSE](LICENSE).
 
-## Qué hace
+## De DBU a QDbu
 
-- **Abre y navega** DBF de cualquier tamaño, con paginación real. Un archivo de
-  421.000 registros abre en el mismo tiempo que uno de siete.
-- **Edita** registro a registro, en la cuadrícula o en el formulario.
-- **Filtra** por expresión o mediante un constructor guiado — con un
-  [constructor de expresiones](#el-constructor-de-expresiones) que conoce
-  los campos del archivo y comprueba el resultado antes de aplicarlo.
-- **Indexa**: abre `.ntx` existentes, crea nuevos, elige el orden activo.
-- **Cambia la estructura**, compacta (PACK) y vacía (ZAP).
-- **Exporta** a CSV, JSON, XLSX y DBF; **importa** de CSV y JSON.
+QDbu toma su nombre y parte de su propósito de **DBU**, la utilidad de bases de
+datos que acompañaba a Clipper en los años 80 y 90. También acepta la forma
+tradicional de línea de comandos de DBU, incluido el nombre del archivo DBF y las
+opciones `/E`, `/C` y `/M`. Las dos últimas se conservan por compatibilidad y se
+ignoran, de modo que un archivo batch antiguo puede seguir iniciando el programa
+sin necesidad de modificarlo.
 
-## Más allá del DBU original
+La lógica de base de datos está escrita en **Harbour**, el compilador xBase
+moderno que mantiene el programa cerca del lenguaje y de la semántica de runtime
+de las bases con las que trabaja.
 
-DBU resolvía lo esencial en una terminal de 80 columnas. QDbu mantiene lo que
-hacía y se ocupa de lo que quedó fuera:
-
-**Varias áreas de trabajo a la vez**
-
-- **Todas las carpetas registradas visibles en un árbol**, sin límite y sin
-  cambiar de directorio. Cada una con nombre propio y con búsqueda.
-- **Un archivo por pestaña**, cada una con su propio orden, filtro y selección de
-  campos.
-- **La sesión vuelve como estaba**: pestañas, campos ocultos, orden activo y
-  filtro de cada archivo.
-- **Cuadrícula y formulario sobre el mismo registro.** El formulario muestra
-  todos los campos, incluidos los que la cuadrícula oculta.
-- **La paginación es ancla + desplazamiento** (`dbGoTo` → `dbSkip`), nunca un
-  desplazamiento absoluto: "el registro 5000" no sobrevive a un cambio de orden o
-  de filtro.
-
-**Modo compartido de verdad**
-
-- **`RLock()` por registro, no `FLock()` sobre el archivo.** Editar una celda no
-  bloquea al ERP que tiene el DBF abierto.
-- **La grabación lleva `expect`**, comprobado dentro del `RLock`. La comparación
-  es sobre los bytes de `dbRecordInfo(DBRI_RAWRECORD)`, no sobre el valor: en un
-  `N(12,2)`, `FieldGet()` aplasta "nunca rellenado" (los blancos de
-  `APPEND BLANK`), `0.00` y "no cupo" (asteriscos) en el mismo `0`. Si el
-  registro cambió desde la lectura, QDbu muestra los dos lados y deja la decisión
-  a quien está delante.
-- **Relectura automática en reposo**, repintando solo lo que cambió y
-  conservando el desplazamiento.
-
-**No corromper el archivo**
-
-- **PACK, ZAP y cambio de estructura pasan por una lista de comprobación que se
-  ejecuta:** espacio para 3× el conjunto, copia del conjunto entero (DBF, memo y
-  `.ntx`), verificación del tamaño de esa copia, y solo entonces la operación.
-- **Estado reenlazado por una sola rutina.** Tras `dbPack()` los RecNo cambian,
-  así que el cursor vuelve por la clave **y** por el RecNo: solo por la clave
-  falla cuando hay homónimos, porque la búsqueda blanda se detiene en la primera
-  coincidencia. En cambios de estructura los índices se cierran antes, porque
-  pasarían a describir un archivo que ya no existe.
-- **Cancelación cooperativa**, siempre entre registros completos.
-- **Registro JSONL de las operaciones que cambian bytes**, con la petición y el
-  desenlace: el `backup: true` de la petición y el nombre del archivo creado.
-
-**Codificación y tipos**
-
-- **Codificación por archivo**, con cinco lentes: CP850, Windows-1252,
-  ISO-8859-1, CP860 y UTF-8, en cascada archivo › conexión › global. El byte del
-  controlador de idioma (desplazamiento 29) sugiere, pero no decide: la mayoría
-  de los DBF de Clipper graban `0x00`. Leer un DBF grabado en 1252 con la lente
-  de DOS muestra el acento equivocado, y graba el byte equivocado en el primer
-  `REPLACE`.
-- **El valor que no cabe en el tipo se rechaza, nunca se fuerza.** `Val("abc")`
-  daría `0`, y el cero es plausible; `CToD("31/02/2026")` daría una fecha vacía y
-  borraría la que ya estaba; un `C(40)` que recibe 60 caracteres se truncaría en
-  silencio.
-- **`.ntx` emparejado por la expresión de clave, no por el nombre.** En las bases
-  reales el índice de `NETCLI.DBF` se llama `ID1CLI.ntx`, y cada desarrollador
-  usa la convención que quiere. QDbu lee la cabecera del índice y comprueba que
-  los campos que menciona existan en el archivo.
-- **Las expresiones de índice y de filtro compilan en tiempo de ejecución**, así
-  que las funciones del lenguaje están enlazadas a propósito: sin eso, un
-  `PADR()` en una clave se rechaza con "Undefined function", para una función que
-  existe en Clipper desde siempre.
-- **El error trae `operation` y `args`, no solo `description`.** Una `W` tecleada
-  por error en un WHILE dice **qué** variable no existe.
-
-**Interfaz**
-
-- **Tres idiomas** — portugués, inglés y español — conmutables sin reiniciar.
-- **Doce temas**, uno de ellos claro, con contraste verificado con la fórmula del
-  WCAG.
+La interfaz de escritorio está construida con **Tauri, Rust y HTML/JavaScript**.
+QDbu sigue siendo una pequeña aplicación portátil para Windows mientras el
+trabajo con DBF permanece en Harbour.
 
 ## Cómo se arma
 
