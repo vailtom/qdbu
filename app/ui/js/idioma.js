@@ -146,9 +146,17 @@
     });
 
     // Escolher só ANOTA. Aplicar é do Gravar.
+    //
+    // O preventDefault é o que faz a lista FECHAR. O widget mora dentro de um
+    // <label>, e o comportamento padrão de um clique dentro de <label> é
+    // reenviá-lo ao primeiro controle rotulável que ele contém — o botão que
+    // abre a lista. Sem isto o item fechava a lista e o <label> a reabria no
+    // mesmo clique; achado pelo autor, não pelo teste, que conferiu a escolha
+    // e esqueceu de conferir a lista.
     lista.addEventListener("click", (ev) => {
       const li = ev.target.closest(".idioma-item");
       if (!li) return;
+      ev.preventDefault();
       escolhido = li.dataset.cod;
       pintarBotao();
       abrir(false);
