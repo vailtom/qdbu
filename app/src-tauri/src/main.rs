@@ -27,6 +27,9 @@ use tauri::{Emitter, Manager, State};
 ///
 /// 9333 e nao 9222 de proposito: a 9222 costuma estar ocupada pelo Chrome.
 /// Sobrescrevivel por QDBU_CDP_PORT; `QDBU_CDP_PORT=0` desliga.
+/// So existe em debug, como o `liga_cdp()` que a usa -- em release ela seria
+/// codigo morto e o compilador avisaria, num build que precisa sair limpo.
+#[cfg(debug_assertions)]
 const CDP_PORT_PADRAO: &str = "9333";
 
 /// Versao de exibicao, `NN.NN`, e a data de linkedicao -- carimbadas pelo
