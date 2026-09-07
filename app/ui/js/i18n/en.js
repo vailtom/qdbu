@@ -1629,6 +1629,7 @@
   UI_IA_FIX_TITLE: "Ask the AI to fix this expression",
   UI_IA_ANSWER_PH: "answer here — the question above and your request go together",
   UI_IA_HIST: "Reuse an earlier request",
+  UI_IA_TOKENS: "{n} tokens",
   UI_IA_HIST_EMPTY: "No requests yet.",
   UI_IA_SEND: "Suggest",
   UI_IA_THINKING: "thinking…",

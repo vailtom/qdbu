@@ -307,7 +307,8 @@
       meta.className = "meta";
       // O que aconteceu com aquele pedido: a expressão, a pergunta ou o erro.
       const saiu = it.erro ? "✗ " + it.erro : it.expr || it.pergunta || it.motivo || "";
-      meta.textContent = it.q + (it.arq ? " · " + it.arq : "") + (saiu ? " · " + saiu : "");
+      const toks = it.tok_in || it.tok_out ? " · " + T("UI_IA_TOKENS", { n: it.tok_in + it.tok_out }) : "";
+      meta.textContent = it.q + (it.arq ? " · " + it.arq : "") + toks + (saiu ? " · " + saiu : "");
       li.append(ped, meta);
       const usar = () => {
         $("cx-ia-pedido").value = it.pedido;

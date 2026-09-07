@@ -104,6 +104,26 @@ struct Pedido<'a> {
 #[derive(Deserialize)]
 struct Resposta {
     choices: Vec<Escolha>,
+    #[serde(default)]
+    usage: Option<Uso>,
+}
+
+/// O `usage` da resposta. OpenAI manda sempre; endpoints compativeis quase
+/// sempre. Quem nao mandar deixa zero -- e informacao, nao pode derrubar uma
+/// sugestao que ja veio.
+#[derive(Deserialize, Default)]
+struct Uso {
+    #[serde(default)]
+    prompt_tokens: u32,
+    #[serde(default)]
+    completion_tokens: u32,
+}
+
+/// O que a chamada devolveu: o texto e o que ela custou.
+pub struct RespostaIa {
+    pub texto: String,
+    pub tok_in: u32,
+    pub tok_out: u32,
 }
 #[derive(Deserialize)]
 struct Escolha {
@@ -116,7 +136,7 @@ struct Conteudo {
 
 /// Manda `sistema` + `usuario` ao endpoint e devolve o texto da resposta.
 /// Nao interpreta: quem extrai a expressao do JSON e o chamador.
-pub async fn perguntar(cfg: &ConfigIa, sistema: &str, usuario: &str) -> Result<String, String> {
+pub async fn perguntar(cfg: &ConfigIa, sistema: &str, usuario: &str) -> Result<RespostaIa, String> {
     if cfg.chave.trim().is_empty() {
         return Err("sem chave".into());
     }
@@ -163,11 +183,14 @@ pub async fn perguntar(cfg: &ConfigIa, sistema: &str, usuario: &str) -> Result<S
 
     let resp: Resposta = serde_json::from_str(&texto)
         .map_err(|e| format!("resposta fora do formato esperado: {e}"))?;
-    resp.choices
+    let u = resp.usage.unwrap_or_default();
+    let conteudo = resp
+        .choices
         .into_iter()
         .next()
         .map(|c| c.message.content)
-        .ok_or_else(|| "resposta sem conteudo".into())
+        .ok_or_else(|| "resposta sem conteudo".to_string())?;
+    Ok(RespostaIa { texto: conteudo, tok_in: u.prompt_tokens, tok_out: u.completion_tokens })
 }
 
 /// O JSON da resposta. Tolera o modelo ter posto cercas de codigo em volta,
@@ -223,6 +246,11 @@ pub struct Entrada {
     pub erro: String,
     #[serde(default)]
     pub ms: u64,
+    /// Tokens cobrados, ida e volta. Zero quando o endpoint nao informa.
+    #[serde(default)]
+    pub tok_in: u32,
+    #[serde(default)]
+    pub tok_out: u32,
     #[serde(default)]
     pub modelo: String,
 }

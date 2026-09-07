@@ -523,6 +523,8 @@ async fn ia_sugerir(
         pergunta: String::new(),
         erro: String::new(),
         ms: 0,
+        tok_in: 0,
+        tok_out: 0,
         modelo: ia::StatusIa::from(&cfg).modelo,
     };
     // Sem `?` aqui de proposito: a chamada que FALHOU tambem entra no
@@ -537,8 +539,18 @@ async fn ia_sugerir(
             ia::registrar(base_config(), &e);
             Err(msg)
         }
-        Ok(bruto) => {
-            log(&format!("[ia] resposta em {} ms, {} bytes", e.ms, bruto.len()));
+        Ok(resp) => {
+            e.tok_in = resp.tok_in;
+            e.tok_out = resp.tok_out;
+            let bruto = resp.texto;
+            log(&format!(
+                "[ia] resposta em {} ms, {} bytes, {} tokens ({} + {})",
+                e.ms,
+                bruto.len(),
+                e.tok_in + e.tok_out,
+                e.tok_in,
+                e.tok_out
+            ));
             let v = ia::json_de(&bruto);
             e.expr = ia::campo_de(&v, &["expression", "expressao"]);
             e.motivo = ia::campo_de(&v, &["reason", "motivo"]);

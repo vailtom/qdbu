@@ -1665,6 +1665,7 @@
   UI_IA_FIX_TITLE: "Pedir à IA que corrija esta expressão",
   UI_IA_ANSWER_PH: "responda aqui — a pergunta acima e o seu pedido vão juntos",
   UI_IA_HIST: "Repetir um pedido anterior",
+  UI_IA_TOKENS: "{n} tokens",
   UI_IA_HIST_EMPTY: "Nenhum pedido ainda.",
   UI_IA_SEND: "Sugerir",
   UI_IA_THINKING: "pensando…",
