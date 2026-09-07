@@ -241,15 +241,20 @@
       if (!r.expressao) {
         // Pergunta vale mais que chute: fica na caixa, e a pessoa completa
         // o pedido no mesmo campo.
-        if (r.pergunta) {
+        if (r.pergunta && !dialogo) {
+          // UMA pergunta, uma resposta, fim -- decisão do autor: isto não
+          // vira chat. A pergunta só abre diálogo quando não há um aberto.
           estado(T("UI_IA_QUESTION", { q: r.pergunta }), "pergunta");
-          // O pedido original é o PRIMEIRO da conversa: uma segunda pergunta
-          // não o substitui pela resposta parcial.
-          dialogo = { previous_request: dialogo ? dialogo.previous_request : pedido, question_asked: r.pergunta };
+          dialogo = { previous_request: pedido, question_asked: r.pergunta };
           $("cx-ia-pedido").value = "";
           trocarPh("UI_IA_ANSWER_PH");
         } else {
-          estado(r.motivo ? T("UI_IA_NO_RESULT_WHY", { why: r.motivo }) : T("UI_IA_NO_RESULT"), "erro");
+          // Segunda pergunta (o prompt proíbe, mas o modelo pode insistir)
+          // vira "não conseguiu", e o diálogo se encerra.
+          const why = r.motivo || r.pergunta;
+          estado(why ? T("UI_IA_NO_RESULT_WHY", { why }) : T("UI_IA_NO_RESULT"), "erro");
+          dialogo = null;
+          trocarPh("UI_IA_PEDIDO_PH");
         }
         $("cx-ia-pedido").focus();
         return;
