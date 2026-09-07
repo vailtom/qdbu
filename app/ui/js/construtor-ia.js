@@ -35,6 +35,19 @@
 
   let status = null; // último ia_status
   let promptBase = null; // o .md, carregado uma vez
+  // A pergunta pendente da IA e o pedido que a provocou. Cada envio é uma
+  // chamada nova, sem memória; sem isto a resposta "use CLI_VALTO" chegaria
+  // solta, sem o pedido nem a pergunta. Some quando uma expressão volta, ou
+  // quando o construtor reabre.
+  let dialogo = null; // { previous_request, question_asked }
+
+  /* Troca o placeholder pela CHAVE, não pelo texto: assim a troca de idioma
+     (que repinta por data-i18n-ph) mantém a frase certa. */
+  function trocarPh(chave) {
+    const el = $("cx-ia-pedido");
+    el.dataset.i18nPh = chave;
+    el.placeholder = T(chave);
+  }
 
   // ------------------------------------------------------------ o prompt
 
@@ -160,6 +173,7 @@
     const dados = { target: alvoDe(ctx), fields, functions };
     const current = atualDe(atual);
     if (current) dados.current = current;
+    if (dialogo) dados.dialogue = dialogo;
     return base.trim() + "\n\n" + JSON.stringify(dados, null, 1);
   }
 
@@ -227,11 +241,21 @@
       if (!r.expressao) {
         // Pergunta vale mais que chute: fica na caixa, e a pessoa completa
         // o pedido no mesmo campo.
-        if (r.pergunta) estado(T("UI_IA_QUESTION", { q: r.pergunta }), "pergunta");
-        else estado(r.motivo ? T("UI_IA_NO_RESULT_WHY", { why: r.motivo }) : T("UI_IA_NO_RESULT"), "erro");
+        if (r.pergunta) {
+          estado(T("UI_IA_QUESTION", { q: r.pergunta }), "pergunta");
+          // O pedido original é o PRIMEIRO da conversa: uma segunda pergunta
+          // não o substitui pela resposta parcial.
+          dialogo = { previous_request: dialogo ? dialogo.previous_request : pedido, question_asked: r.pergunta };
+          $("cx-ia-pedido").value = "";
+          trocarPh("UI_IA_ANSWER_PH");
+        } else {
+          estado(r.motivo ? T("UI_IA_NO_RESULT_WHY", { why: r.motivo }) : T("UI_IA_NO_RESULT"), "erro");
+        }
         $("cx-ia-pedido").focus();
         return;
       }
+      dialogo = null;
+      trocarPh("UI_IA_PEDIDO_PH");
       // UM passo de undo: Ctrl+Z volta ao que estava antes de pedir. E o
       // texto entra pelo mesmo `inserir()` da paleta -- que já conferirá.
       window.Construtor.substituir(r.expressao);
@@ -293,6 +317,8 @@
     window.addEventListener("construtor-aberto", () => {
       $("cx-ia-caixa").hidden = true;
       $("cx-ia-pedido").value = "";
+      trocarPh("UI_IA_PEDIDO_PH");
+      dialogo = null;
       estado("", "");
       atualizarBotao();
     });

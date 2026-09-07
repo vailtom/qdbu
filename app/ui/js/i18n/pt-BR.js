@@ -1663,6 +1663,7 @@
   UI_IA_ASK_TITLE: "Descrever em palavras o que a expressão deve fazer",
   UI_IA_PEDIDO_PH: "ex.: clientes de SP com CGC preenchido — ou: inclua também MG",
   UI_IA_FIX_TITLE: "Pedir à IA que corrija esta expressão",
+  UI_IA_ANSWER_PH: "responda aqui — a pergunta acima e o seu pedido vão juntos",
   UI_IA_SEND: "Sugerir",
   UI_IA_THINKING: "pensando…",
   UI_IA_DONE: "sugestão pronta — confira o resultado antes de usar",
