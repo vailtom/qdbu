@@ -188,3 +188,96 @@ pub fn campo_de(v: &Option<serde_json::Value>, nomes: &[&str]) -> String {
         .map(|s| s.trim().to_string())
         .unwrap_or_default()
 }
+
+// ------------------------------------------------------------- historico
+
+/// Uma chamada, como ela foi -- vira uma linha JSONL em
+/// `<raiz>/.qdbu/ia/AAAAMMDD.jsonl`. Mesmo formato e mesmo por-dia do log de
+/// alteracoes, pelo mesmo motivo: e o arquivo que responde "o que rodou por
+/// aqui" meses depois, e um arquivo por dia nunca vira um monolito.
+///
+/// SEPARADO do log de alteracoes de proposito. Aquele so registra o que muda
+/// bytes no disco -- criterio unico e verificavel. Pedido e resposta nao mudam
+/// byte nenhum; juntar os dois encheria a auditoria de linhas que nao tocaram
+/// arquivo, que e exatamente o erro que aquele log ja cometeu uma vez.
+///
+/// A chamada que FALHOU entra tambem: "o que rodou por ali" inclui o que nao
+/// deu certo, e o erro do servico e a unica pista quando alguem pergunta por
+/// que nao veio sugestao naquele dia.
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Entrada {
+    /// Hora local, `AAAA-MM-DD HH:MM:SS`.
+    pub q: String,
+    #[serde(default)]
+    pub arq: String,
+    #[serde(default)]
+    pub uso: String,
+    pub pedido: String,
+    #[serde(default)]
+    pub expr: String,
+    #[serde(default)]
+    pub motivo: String,
+    #[serde(default)]
+    pub pergunta: String,
+    #[serde(default)]
+    pub erro: String,
+    #[serde(default)]
+    pub ms: u64,
+    #[serde(default)]
+    pub modelo: String,
+}
+
+pub fn agora() -> String {
+    chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
+fn pasta_hist(base: PathBuf) -> PathBuf {
+    let dir = base.join(".qdbu").join("ia");
+    let _ = std::fs::create_dir_all(&dir);
+    dir
+}
+
+/// Best-effort, como o log de alteracoes: disco cheio ou pasta somente-leitura
+/// nao podem derrubar uma sugestao que ja foi produzida.
+pub fn registrar(base: PathBuf, e: &Entrada) {
+    use std::io::Write;
+    let dia = chrono::Local::now().format("%Y%m%d").to_string();
+    let arq = pasta_hist(base).join(format!("{dia}.jsonl"));
+    if let Ok(linha) = serde_json::to_string(e) {
+        if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(arq) {
+            let _ = writeln!(f, "{linha}");
+        }
+    }
+}
+
+/// As `limite` chamadas mais recentes, da mais nova para a mais velha.
+///
+/// Le de tras para a frente -- dias do mais recente ao mais antigo, e dentro do
+/// dia a ultima linha primeiro -- e para assim que enche. Ler o historico
+/// inteiro para descartar 90% dele seria o mesmo desperdicio que a grade evita
+/// paginando.
+pub fn historico(base: PathBuf, limite: usize) -> Vec<Entrada> {
+    let mut dias: Vec<PathBuf> = std::fs::read_dir(pasta_hist(base))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "jsonl"))
+        .collect();
+    dias.sort(); // AAAAMMDD ordena como data
+    dias.reverse();
+
+    let mut fora: Vec<Entrada> = Vec::new();
+    for dia in dias {
+        let Ok(txt) = std::fs::read_to_string(&dia) else { continue };
+        for linha in txt.lines().rev() {
+            if let Ok(e) = serde_json::from_str::<Entrada>(linha) {
+                fora.push(e);
+                if fora.len() >= limite {
+                    return fora;
+                }
+            }
+        }
+    }
+    fora
+}

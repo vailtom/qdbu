@@ -1624,6 +1624,8 @@
   UI_IA_PEDIDO_PH: "ej.: clientes de SP con CGC completado — o: incluya también MG",
   UI_IA_FIX_TITLE: "Pedir a la IA que corrija esta expresión",
   UI_IA_ANSWER_PH: "responda aquí — la pregunta de arriba y su pedido van juntos",
+  UI_IA_HIST: "Repetir un pedido anterior",
+  UI_IA_HIST_EMPTY: "Ningún pedido todavía.",
   UI_IA_SEND: "Sugerir",
   UI_IA_THINKING: "pensando…",
   UI_IA_DONE: "sugerencia lista — revise el resultado antes de usarlo",

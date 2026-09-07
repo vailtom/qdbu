@@ -505,16 +505,60 @@ struct SugestaoIa {
 }
 
 #[tauri::command]
-async fn ia_sugerir(sistema: String, pedido: String) -> Result<SugestaoIa, String> {
+async fn ia_sugerir(
+    sistema: String,
+    pedido: String,
+    arquivo: Option<String>,
+    uso: Option<String>,
+) -> Result<SugestaoIa, String> {
     let cfg = ia::ler(base_config());
     let t0 = std::time::Instant::now();
-    let bruto = ia::perguntar(&cfg, &sistema, &pedido).await?;
-    log(&format!("[ia] resposta em {} ms, {} bytes", t0.elapsed().as_millis(), bruto.len()));
-    let v = ia::json_de(&bruto);
-    let expressao = ia::campo_de(&v, &["expression", "expressao"]);
-    let motivo = ia::campo_de(&v, &["reason", "motivo"]);
-    let pergunta = ia::campo_de(&v, &["question", "pergunta"]);
-    Ok(SugestaoIa { expressao, motivo, pergunta, bruto })
+    let mut e = ia::Entrada {
+        q: ia::agora(),
+        arq: arquivo.unwrap_or_default(),
+        uso: uso.unwrap_or_default(),
+        pedido: pedido.clone(),
+        expr: String::new(),
+        motivo: String::new(),
+        pergunta: String::new(),
+        erro: String::new(),
+        ms: 0,
+        modelo: ia::StatusIa::from(&cfg).modelo,
+    };
+    // Sem `?` aqui de proposito: a chamada que FALHOU tambem entra no
+    // historico, e o erro do servico e a unica pista de por que nao veio
+    // sugestao.
+    let r = ia::perguntar(&cfg, &sistema, &pedido).await;
+    e.ms = t0.elapsed().as_millis() as u64;
+    match r {
+        Err(msg) => {
+            log(&format!("[ia] falhou em {} ms: {msg}", e.ms));
+            e.erro = msg.clone();
+            ia::registrar(base_config(), &e);
+            Err(msg)
+        }
+        Ok(bruto) => {
+            log(&format!("[ia] resposta em {} ms, {} bytes", e.ms, bruto.len()));
+            let v = ia::json_de(&bruto);
+            e.expr = ia::campo_de(&v, &["expression", "expressao"]);
+            e.motivo = ia::campo_de(&v, &["reason", "motivo"]);
+            e.pergunta = ia::campo_de(&v, &["question", "pergunta"]);
+            ia::registrar(base_config(), &e);
+            Ok(SugestaoIa {
+                expressao: e.expr,
+                motivo: e.motivo,
+                pergunta: e.pergunta,
+                bruto,
+            })
+        }
+    }
+}
+
+/// As ultimas chamadas, da mais recente para a mais antiga. Sincrono e barato:
+/// le de tras para a frente e para no limite, sem tocar na VM do Harbour.
+#[tauri::command]
+fn ia_historico(limite: Option<usize>) -> Vec<ia::Entrada> {
+    ia::historico(base_config(), limite.unwrap_or(100).clamp(1, 500))
 }
 
 /// A resposta "Sim" da pergunta de saida.
@@ -2898,7 +2942,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             status, executar, rpc, andamento, cancelar, abrir_pasta, confirmar_saida,
-            ia_status, ia_configurar, ia_sugerir
+            ia_status, ia_configurar, ia_sugerir, ia_historico
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o app Tauri");

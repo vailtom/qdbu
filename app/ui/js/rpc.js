@@ -132,12 +132,15 @@ async function iaStatus() {
 async function iaConfigurar(endpoint, modelo, chave, avisoLido) {
   return invoke("ia_configurar", { endpoint, modelo, chave, avisoLido: avisoLido == null ? null : !!avisoLido });
 }
-async function iaSugerir(sistema, pedido) {
-  return invoke("ia_sugerir", { sistema, pedido });
+async function iaSugerir(sistema, pedido, arquivo, uso) {
+  return invoke("ia_sugerir", { sistema, pedido, arquivo: arquivo || "", uso: uso || "" });
+}
+async function iaHistorico(limite) {
+  return invoke("ia_historico", { limite: limite == null ? null : limite });
 }
 
 /** Contador de revisao da ultima resposta. Ver session.prg. */
 let ultimaRev = 0;
 const rev = () => ultimaRev;
 
-window.QDBU = { status, chamar, rpc, rev, abrirPasta, aoEvento, confirmarSaida, iaStatus, iaConfigurar, iaSugerir, ErroQDbu };
+window.QDBU = { status, chamar, rpc, rev, abrirPasta, aoEvento, confirmarSaida, iaStatus, iaConfigurar, iaSugerir, iaHistorico, ErroQDbu };

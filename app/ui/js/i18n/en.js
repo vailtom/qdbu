@@ -1628,6 +1628,8 @@
   UI_IA_PEDIDO_PH: "e.g.: customers from SP with a filled CGC — or: also include MG",
   UI_IA_FIX_TITLE: "Ask the AI to fix this expression",
   UI_IA_ANSWER_PH: "answer here — the question above and your request go together",
+  UI_IA_HIST: "Reuse an earlier request",
+  UI_IA_HIST_EMPTY: "No requests yet.",
   UI_IA_SEND: "Suggest",
   UI_IA_THINKING: "thinking…",
   UI_IA_DONE: "suggestion ready — check the result before using it",

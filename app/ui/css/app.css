@@ -2303,6 +2303,17 @@ dialog select:focus { outline: none; border-color: var(--amber); }
 .cx-ia-estado.ok { color: var(--ok); }
 .cx-ia-estado.erro { color: var(--erro); }
 .cx-ia-estado.pergunta { color: var(--amber); }
+.cx-ia-hist { flex: none; padding: 2px 8px; font-size: 13px; line-height: 1.4; }
+/* Os pedidos anteriores. Ocupa a linha inteira e rola -- sao ate 100, e a
+   caixa nao pode empurrar o editor para fora da tela. */
+.cx-ia-lista { flex: 1 1 100%; max-height: 190px; overflow-y: auto; margin: 0; padding: 4px;
+  list-style: none; border: 1px solid var(--line); border-radius: 6px; background: var(--bg2); }
+.cx-ia-lista li { padding: 4px 6px; border-radius: 4px; cursor: pointer; }
+.cx-ia-lista li:hover, .cx-ia-lista li:focus { background: color-mix(in srgb, var(--amber) 12%, transparent); outline: none; }
+.cx-ia-lista .ped { display: block; font-size: 12.5px; color: var(--fg); }
+.cx-ia-lista .meta { display: block; font-size: 11px; color: var(--dim); }
+.cx-ia-lista .vazio { color: var(--dim); cursor: default; }
+.cx-ia-lista .vazio:hover { background: none; }
 .cfg-ia { margin: 14px 0 0; padding: 10px 12px 4px; border: 1px solid var(--line); border-radius: 6px; }
 .cfg-ia legend { padding: 0 6px; color: var(--dim); font-size: 12px; }
 .cfg-ia label { margin-bottom: 8px; }

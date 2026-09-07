@@ -237,7 +237,7 @@
     estado(T("UI_IA_THINKING"), "");
     try {
       const sistema = await montarSistema(ctx, window.Construtor.atual());
-      const r = await window.QDBU.iaSugerir(sistema, pedido);
+      const r = await window.QDBU.iaSugerir(sistema, pedido, ctx.arquivo || "", ctx.uso || "");
       if (!r.expressao) {
         // Pergunta vale mais que chute: fica na caixa, e a pessoa completa
         // o pedido no mesmo campo.
@@ -272,6 +272,57 @@
     }
   }
 
+  // -------------------------------------------------------- histórico
+
+  /* Os pedidos anteriores, do Rust (`.qdbu/ia/AAAAMMDD.jsonl`). Não é o
+     histórico de EXPRESSÕES da paleta -- aquele guarda o resultado, por
+     arquivo; este guarda a FRASE, que é o que a pessoa quer repetir e o que
+     ela não consegue reescrever igual. */
+  async function abrirHistorico() {
+    const lista = $("cx-ia-lista");
+    if (!lista.hidden) {
+      lista.hidden = true;
+      return;
+    }
+    lista.textContent = "";
+    let itens = [];
+    try {
+      itens = await window.QDBU.iaHistorico(100);
+    } catch (e) {
+      /* sem histórico legível: a lista vazia já diz */
+    }
+    if (!itens.length) {
+      const li = document.createElement("li");
+      li.className = "vazio";
+      li.textContent = T("UI_IA_HIST_EMPTY");
+      lista.appendChild(li);
+    }
+    for (const it of itens) {
+      const li = document.createElement("li");
+      li.tabIndex = 0;
+      const ped = document.createElement("span");
+      ped.className = "ped";
+      ped.textContent = it.pedido;
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      // O que aconteceu com aquele pedido: a expressão, a pergunta ou o erro.
+      const saiu = it.erro ? "✗ " + it.erro : it.expr || it.pergunta || it.motivo || "";
+      meta.textContent = it.q + (it.arq ? " · " + it.arq : "") + (saiu ? " · " + saiu : "");
+      li.append(ped, meta);
+      const usar = () => {
+        $("cx-ia-pedido").value = it.pedido;
+        lista.hidden = true;
+        $("cx-ia-pedido").focus();
+      };
+      li.addEventListener("click", usar);
+      li.addEventListener("keydown", (ev) => {
+        if (ev.key === "Enter") { ev.preventDefault(); usar(); }
+      });
+      lista.appendChild(li);
+    }
+    lista.hidden = false;
+  }
+
   function temChave() {
     return !!(status && status.chave_ok);
   }
@@ -280,6 +331,7 @@
     const caixa = $("cx-ia-caixa");
     caixa.hidden = !sim;
     if (!sim) {
+      $("cx-ia-lista").hidden = true;
       $("cx-expr").focus();
       return;
     }
@@ -340,6 +392,7 @@
     window.addEventListener("construtor-status", (ev) => {
       $("cx-ia-corrigir").hidden = ev.detail.classe !== "erro";
     });
+    $("cx-ia-hist").addEventListener("click", abrirHistorico);
     $("cx-ia-corrigir").addEventListener("click", () => {
       mostrarCaixa(true);
       if (temChave()) pedir(true);
@@ -349,7 +402,13 @@
     $("cx-ia-config").addEventListener("click", () => window.abrirConfig && window.abrirConfig());
     $("cx-ia-pedido").addEventListener("keydown", (ev) => {
       if (ev.key === "Enter") { ev.preventDefault(); ev.stopPropagation(); pedir(false); }
-      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); mostrarCaixa(false); }
+      if (ev.key === "Escape") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        // Esc fecha a lista primeiro; só depois recolhe a caixa.
+        if (!$("cx-ia-lista").hidden) $("cx-ia-lista").hidden = true;
+        else mostrarCaixa(false);
+      }
     });
   });
 })();

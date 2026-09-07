@@ -23,6 +23,10 @@ tauri-plugin-dialog = "2.0.0-rc.8"
 # Windows), nenhum build em C. A alternativa, rustls 0.23, arrasta aws-lc-rs
 # compilado por CMake -- um poco num alvo i686, para ganhar nada aqui.
 reqwest = { version = "0.13", default-features = false, features = ["json", "native-tls"] }
+# Hora local para o historico da IA (`.qdbu/ia/AAAAMMDD.jsonl`). O Rust so tinha
+# tempo RELATIVO (o "[t+0.687s]" do log), que nao data uma linha que alguem vai
+# ler meses depois. Mesmo chrono do build.rs, sem download novo.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [profile.release]
 opt-level = "s"
