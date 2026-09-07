@@ -510,11 +510,17 @@ dialog .acoes { display: flex; justify-content: flex-end; gap: 8px; margin-top: 
 }
 /* Sem borda inferior propria: ela vem da `.barra-abas`, senao o "+" ganharia
    uma segunda linha um pixel acima da das abas. */
+/* A CAIXA VERTICAL E A MESMA DA `.aba` -- mesmo padding, mesma borda superior
+   transparente. Sem isso o botao nao tinha altura propria: com abas ele
+   esticava ate a altura delas e parecia certo, mas SEM nenhuma aberta a faixa
+   colapsava e ele virava uma fatia de 14px. Altura de controle nao pode
+   depender do que esta do lado. */
 .aba-mais {
   flex: none; display: flex; align-items: center; justify-content: center;
-  min-width: 34px; padding: 0 10px; cursor: pointer;
+  min-width: 34px; padding: 7px 10px; cursor: pointer;
   background: var(--bg2); color: var(--dim);
-  border: none; border-right: 1px solid var(--line);
+  border: none; border-top: 2px solid transparent;
+  border-right: 1px solid var(--line);
 }
 .aba-mais:hover { background: var(--bg4); color: var(--amber); }
 .aba-mais:focus-visible { outline: 1px solid var(--amber); outline-offset: -2px; }

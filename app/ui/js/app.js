@@ -5092,17 +5092,32 @@ async function salvarSessao() {
  * foi movido, os outros continuam abrindo e o usuario fica sabendo qual falhou.
  */
 async function restaurarSessao() {
+  /*
+   * O TRINCO FECHA ANTES DA LEITURA, e nao depois.
+   *
+   * Estava depois, e a janela entre uma coisa e outra apagava a sessao: o
+   * `repintarDoEstado()` do arranque deixa um `agendarSalvar()` de pe com 400
+   * ms de respiro, e `session.load` e um ida-e-volta ate a VM do Harbour. Se
+   * ele demorar mais que o respiro -- e com a VM ocupada demora --, o timer
+   * dispara DENTRO desta espera, com `restaurando` ainda falso e a lista de
+   * abas vazia, e grava `openFiles: []` por cima da sessao boa. A restauracao
+   * seguiria com o que ja tinha lido e reabriria tudo na tela, entao nada
+   * pareceria errado; o estrago so apareceria no arranque SEGUINTE, sem
+   * arquivo nenhum. E a mesma razao de o `restaurando` ser conferido dentro de
+   * `salvarSessao()`, levada ate o comeco da funcao.
+   */
+  restaurando = true;
+  clearTimeout(salvarPendente);
+
   let est;
   try {
     est = await QDBU.rpc("session.load");
   } catch (e) {
+    // Sem soltar o trinco aqui, gravacao nenhuma voltaria a acontecer nesta
+    // sessao inteira -- e a lista de abertos deixaria de ser guardada.
+    restaurando = false;
     return;
   }
-
-  restaurando = true;
-  // E o agendamento que o `repintarDoEstado()` do arranque deixou de pe some
-  // junto: nao ha o que gravar antes de a restauracao terminar.
-  clearTimeout(salvarPendente);
 
   larguraPainel(est.panelWidth || PAINEL_PADRAO);
 
