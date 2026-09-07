@@ -471,7 +471,12 @@
    * Devolve o texto pronto (sem placeholders opcionais, uma linha) ou null.
    */
   function abrir(texto, ctx) {
-    if (S) return Promise.reject(new Error("construtor ja aberto"));
+    // Já aberto: traz o foco de volta ao que está na tela em vez de rejeitar
+    // em silêncio -- foi assim que um teste "abriu a chave" e recebeu o FOR.
+    if (S) {
+      ta().focus();
+      return Promise.resolve(null);
+    }
     return new Promise((resolver) => {
       S = {
         ctx: Object.assign({ expect: "any", campos: [] }, ctx || {}),

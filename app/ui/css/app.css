@@ -2220,6 +2220,8 @@ dialog select:focus { outline: none; border-color: var(--amber); }
 }
 .cx-abrir:hover { color: var(--amber); border-color: var(--amber); }
 .cx-abrir .ico { width: 16px; height: 16px; }
+/* Dentro de .com-botao o fx tem a altura do input ao lado. */
+.com-botao .cx-abrir { align-self: stretch; }
 
 /* As tres colunas do construtor. `details` aberto por padrao; o summary
    mostra "Menos" aberto e "Mais" fechado, pelo CSS e nao por JS. */

@@ -1050,6 +1050,8 @@
   ERROR_FILE_READ_ONLY:
     "'{file}' was opened read-only, so {method} cannot write to it. Close the tab and open it again without that option.",
   // ---------------------------------------------------- expression builder (T18)
+  UI_PH_INDEX_KEY: "CLI_NOME",
+  UI_PH_INDEX_FOR: "!Deleted()",
   UI_CX_TITLE: "Expression builder",
   UI_CX_OPEN: "Build the expression",
   UI_CX_UNDO: "Undo (Ctrl+Z)",

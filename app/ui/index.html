@@ -264,14 +264,20 @@
                  que já está ali. -->
             <form id="pi-form" class="pi-form" hidden>
               <label><span data-i18n="UI_KEY"></span>
-                <input id="pi-chave" placeholder="CLI_NOME" autocomplete="off" spellcheck="false" required>
+                <span class="com-botao">
+                  <input id="pi-chave" data-i18n-ph="UI_PH_INDEX_KEY" autocomplete="off" spellcheck="false" required>
+                  <button type="button" id="pi-chave-fx" class="cx-abrir" data-i18n-title="UI_CX_OPEN"><svg class="ico" aria-hidden="true"><use href="#i-square-function" /></svg></button>
+                </span>
               </label>
               <label><span data-i18n="UI_FILE"></span>
                 <input id="pi-arquivo" placeholder="MEUIDX.ntx" autocomplete="off" spellcheck="false" required>
               </label>
               <label><span data-i18n="UI_ONLY_RECORDS_THAT"></span>
                 <span class="pi-opc" data-i18n="UI_OPTIONAL"></span>
-                <input id="pi-for" placeholder="!Deleted()" autocomplete="off" spellcheck="false">
+                <span class="com-botao">
+                  <input id="pi-for" data-i18n-ph="UI_PH_INDEX_FOR" autocomplete="off" spellcheck="false">
+                  <button type="button" id="pi-for-fx" class="cx-abrir" data-i18n-title="UI_CX_OPEN"><svg class="ico" aria-hidden="true"><use href="#i-square-function" /></svg></button>
+                </span>
               </label>
               <label class="pi-check">
                 <input type="checkbox" id="pi-unico"> <span data-i18n="UI_UNIQUE_KEYS"></span>
@@ -632,8 +638,11 @@
         <select id="ms-campo"></select>
       </label>
       <label class="ms-linha"><span id="ms-with-rotulo"></span>
-        <input id="ms-with" autocomplete="off" spellcheck="false"
-               data-i18n-ph="UI_MASS_WITH_HINT">
+        <span class="com-botao">
+          <input id="ms-with" autocomplete="off" spellcheck="false"
+                 data-i18n-ph="UI_MASS_WITH_HINT">
+          <button type="button" id="ms-with-fx" class="cx-abrir" data-i18n-title="UI_CX_OPEN"><svg class="ico" aria-hidden="true"><use href="#i-square-function" /></svg></button>
+        </span>
       </label>
     </div>
 
@@ -686,12 +695,18 @@
       <p class="ms-partida" id="ms-partida" hidden></p>
 
       <label class="ms-linha"><span>FOR</span>
-        <input id="ms-for" autocomplete="off" spellcheck="false"
-               data-i18n-ph="UI_MASS_FOR_HINT">
+        <span class="com-botao">
+          <input id="ms-for" autocomplete="off" spellcheck="false"
+                 data-i18n-ph="UI_MASS_FOR_HINT">
+          <button type="button" id="ms-for-fx" class="cx-abrir" data-i18n-title="UI_CX_OPEN"><svg class="ico" aria-hidden="true"><use href="#i-square-function" /></svg></button>
+        </span>
       </label>
       <label class="ms-linha"><span>WHILE</span>
-        <input id="ms-while" autocomplete="off" spellcheck="false"
-               data-i18n-ph="UI_MASS_WHILE_HINT">
+        <span class="com-botao">
+          <input id="ms-while" autocomplete="off" spellcheck="false"
+                 data-i18n-ph="UI_MASS_WHILE_HINT">
+          <button type="button" id="ms-while-fx" class="cx-abrir" data-i18n-title="UI_CX_OPEN"><svg class="ico" aria-hidden="true"><use href="#i-square-function" /></svg></button>
+        </span>
       </label>
 
       <ul class="ms-regras">

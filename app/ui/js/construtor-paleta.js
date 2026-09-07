@@ -167,13 +167,17 @@
       }));
   }
 
+  // `Nome( a, b )` com argumentos; `Nome()` sem -- `Deleted(  )` era o que
+  // saía antes, e é o que o Check vê.
+  const chamada = (nome, args) => (args.length ? nome + "( " + args.join(", ") + " )" : nome + "()");
+
   function assinatura(f, comMarcas) {
     const args = f.args.map((a) => {
       const r = T("UI_ARG_" + a.n.toUpperCase());
       const nome = r === "UI_ARG_" + a.n.toUpperCase() ? tipo(a.t) || a.n : r;
       return a.opc ? (comMarcas ? "[" + nome + "]" : nome) : nome;
     });
-    return f.nome + "( " + args.join(", ") + " )";
+    return chamada(f.nome, args);
   }
 
   function textoDeInsercao(f) {
@@ -183,7 +187,7 @@
       const nome = r === k ? tipo(a.t) || a.n : r;
       return "«" + nome + (a.opc ? "?" : "") + "»";
     });
-    return f.nome + "( " + args.join(", ") + " )";
+    return chamada(f.nome, args);
   }
 
   function valoresFuncoes(cat) {

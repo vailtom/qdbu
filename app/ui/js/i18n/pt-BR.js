@@ -1083,6 +1083,8 @@
   ERROR_FILE_READ_ONLY:
     "'{file}' foi aberto somente para leitura, então {method} não pode gravar nele. Feche a aba e abra de novo sem essa opção.",
   // --------------------------------------------- construtor de expressão (T18)
+  UI_PH_INDEX_KEY: "CLI_NOME",
+  UI_PH_INDEX_FOR: "!Deleted()",
   UI_CX_TITLE: "Construtor de expressão",
   UI_CX_OPEN: "Construir a expressão",
   UI_CX_UNDO: "Desfazer (Ctrl+Z)",

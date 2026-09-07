@@ -5374,6 +5374,54 @@ $("ff-fx").addEventListener("click", async () => {
   }
 });
 
+/* Indice: a chave aceita qualquer tipo (C, N ou D -- quem recusa e o
+   conferirIndice, pelo tipo que voltar); o FOR espera Logico. Depois de
+   escrever a chave, o `blur` de sempre deriva o nome do .ntx. */
+$("pi-chave-fx").addEventListener("click", async () => {
+  if (!abaAtiva) return;
+  if (!colunasDe.has(abaAtiva)) await carregarColunas(abaAtiva);
+  const ok = await abrirConstrutor("pi-chave", {
+    h: abaAtiva, rotulo: T("UI_CX_FROM_KEY"), expect: "any",
+    campos: colunasDe.get(abaAtiva) || [],
+  });
+  if (ok) {
+    $("pi-chave").dispatchEvent(new Event("blur"));
+    msgIndice("");
+  }
+});
+$("pi-for-fx").addEventListener("click", async () => {
+  if (!abaAtiva) return;
+  if (!colunasDe.has(abaAtiva)) await carregarColunas(abaAtiva);
+  const ok = await abrirConstrutor("pi-for", {
+    h: abaAtiva, rotulo: T("UI_CX_FROM_FOR"), expect: "L",
+    campos: colunasDe.get(abaAtiva) || [],
+  });
+  if (ok) msgIndice("");
+});
+
+/* Em massa. O WITH espera o TIPO DO CAMPO escolhido em #ms-campo, e leva o
+   campo como alvo (tipo e tamanho) -- e o que faz o status dizer
+   "'MARIA' (5 de 50)". FOR e WHILE esperam Logico. Os campos vem de
+   aba.fields, a mesma lista que povoou o <select>. */
+async function fxEmMassa(inputId, rotulo, expect, alvo) {
+  const aba = abas.find((a) => a.h === msAlvo);
+  if (!aba) return;
+  await garantirEstrutura(aba);
+  const ok = await abrirConstrutor(inputId, {
+    h: msAlvo, rotulo, expect, alvo, campos: aba.fields || [],
+  });
+  if (ok) msMsg("");
+}
+$("ms-with-fx").addEventListener("click", () => {
+  const aba = abas.find((a) => a.h === msAlvo);
+  const f = aba && (aba.fields || []).find((x) => x.name === $("ms-campo").value);
+  if (!f) return;
+  fxEmMassa("ms-with", T("UI_CX_FROM_REPLACE", { field: f.name }), f.type,
+    { campo: f.name, tipo: f.type, tamanho: f.len, dec: f.dec });
+});
+$("ms-for-fx").addEventListener("click", () => fxEmMassa("ms-for", T("UI_CX_FROM_FOR"), "L"));
+$("ms-while-fx").addEventListener("click", () => fxEmMassa("ms-while", T("UI_CX_FROM_WHILE"), "L"));
+
 // ------------------------------------------------------------ abrir arquivo
 
 /*

@@ -1046,6 +1046,8 @@
   ERROR_FILE_READ_ONLY:
     "'{file}' se abrió solo para lectura, así que {method} no puede escribir en él. Cierre la pestaña y ábralo de nuevo sin esa opción.",
   // ------------------------------------------- constructor de expresiones (T18)
+  UI_PH_INDEX_KEY: "CLI_NOME",
+  UI_PH_INDEX_FOR: "!Deleted()",
   UI_CX_TITLE: "Constructor de expresiones",
   UI_CX_OPEN: "Construir la expresión",
   UI_CX_UNDO: "Deshacer (Ctrl+Z)",
