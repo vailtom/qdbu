@@ -64,17 +64,16 @@
     <span class="sub" data-i18n="UI_SUBTITLE"></span>
   </div>
   <div class="acoes-topo">
-    <!-- Seletor de idioma antes do botao de acao: e configuracao, nao tarefa.
-         Montado por js/idioma.js -- a bandeira e SVG embutido, nao emoji, porque
-         no Windows os pares de indicador regional saem como as letras "BR". -->
-    <!-- Tema antes do idioma: os dois sao preferencia de quem olha, e o de
-         cores e o mais mexido dos dois. Montado por js/tema.js. -->
-    <!-- Sobre antes de Preferencias: um diz o que este programa E, o outro
-         como ele se comporta. Quem procura versao procura identidade. -->
+    <!-- Da esquerda para a direita: Sobre, Tema, Preferencias -- ordem fixada
+         pelo autor em 07/09/2026. Sobre diz o que o programa E; Tema e a
+         preferencia mais mexida; Preferencias fecha a fila com o que muda
+         raramente. O tema e montado por js/tema.js.
+         O IDIOMA NAO MORA MAIS AQUI: e escolhido uma vez e nunca mais, entao
+         foi para dentro de Preferencias. Um controle que se usa uma vez nao
+         ganha lugar permanente no cabecalho. -->
     <button type="button" id="btn-sobre" class="icone" data-i18n-title="UI_ABOUT"><svg class="ico" aria-hidden="true"><use href="#i-info" /></svg></button>
-    <button type="button" id="btn-config" class="icone" data-i18n-title="UI_PREFERENCES">⚙</button>
     <div class="tema" id="tema"></div>
-    <div class="idioma" id="idioma"></div>
+    <button type="button" id="btn-config" class="icone" data-i18n-title="UI_PREFERENCES">⚙</button>
   </div>
 </header>
 
@@ -1065,6 +1064,14 @@
     <h2 data-i18n="UI_PREFERENCES"></h2>
     <p class="explica" data-i18n="UI_CONFIG_EXPLAIN"></p>
 
+    <!-- Idioma em primeiro: e o que decide como todo o resto deste dialogo se
+         le. Nao viaja no config.set -- o idioma e do computador (localStorage,
+         ver i18n.js), nao da instalacao. Aplica-se ao Salvar, como os demais;
+         Cancelar deixa como estava. -->
+    <label>
+      <span data-i18n="UI_LANGUAGE"></span>
+      <select id="cfg-idioma"></select>
+    </label>
     <label>
       <span data-i18n="UI_DEFAULT_CODEPAGE"></span>
       <select id="cfg-codepage"></select>
@@ -1184,7 +1191,6 @@
 <script src="vendor/sweetalert2/sweetalert2.all.min.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/tema.js"></script>
-<script src="js/idioma.js"></script>
 <script src="js/rpc.js"></script>
 <script src="js/app.js"></script>
 </body>

@@ -377,4 +377,16 @@
     idiomas,
     mudarIdioma,
   };
+
+  /*
+   * A PRIMEIRA PINTURA E DAQUI.
+   *
+   * Ela morava no fim de idioma.js, atras de `if (!raiz) return` -- o widget
+   * do cabecalho. Quando o seletor saiu do cabecalho (07/09/2026), esse
+   * `return` passaria a ser sempre tomado e o app subiria inteiro sem
+   * traducao, com os <span data-i18n> vazios. A pintura inicial nunca foi
+   * responsabilidade de um botao; e do motor, e agora esta onde sempre devia
+   * estar. Os scripts ficam no fim do <body>, entao o DOM ja existe aqui.
+   */
+  aplicar();
 })();
