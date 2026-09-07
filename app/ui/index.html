@@ -742,6 +742,22 @@
 
     <p id="cx-status" class="cx-status"></p>
 
+    <!-- ABERTO por padrao (decisao do autor): para este publico, esconder as
+         colunas seria esconder o construtor. "Menos" recolhe. -->
+    <details id="cx-navegador" open>
+      <summary><span data-i18n="UI_CX_MORE" class="cx-mais"></span><span data-i18n="UI_CX_LESS" class="cx-menos"></span></summary>
+      <div class="cx-busca">
+        <input id="cx-busca" type="search" data-i18n-ph="UI_CX_SEARCH" autocomplete="off" spellcheck="false">
+        <span id="cx-encontrado" class="cx-encontrado"></span>
+      </div>
+      <div class="cx-colunas">
+        <ul id="cx-elementos" role="listbox"></ul>
+        <ul id="cx-categorias" role="listbox"></ul>
+        <ul id="cx-valores" role="listbox"></ul>
+      </div>
+      <div id="cx-dica-fixa" class="cx-dica-fixa"></div>
+    </details>
+
     <div class="acoes">
       <button type="button" id="cx-conferir" class="ghost" data-i18n="UI_CHECK"></button>
       <button type="button" id="cx-cancelar" class="ghost" data-i18n="UI_CANCEL"></button>
@@ -1233,6 +1249,7 @@
 <script src="js/idioma.js"></script>
 <script src="js/rpc.js"></script>
 <script src="js/construtor.js"></script>
+<script src="js/construtor-paleta.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

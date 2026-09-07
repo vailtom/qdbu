@@ -431,7 +431,10 @@
       irParaPlaceholder(false);
       return;
     }
-    fechar(limpo(valor()));
+    const pronto = limpo(valor());
+    const h = S.ctx.h;
+    fechar(pronto);
+    if (h) window.QDBU.rpc("expr.history.put", { h, expr: pronto }).catch(() => {});
   }
 
   /* Esc e Cancelar passam pela mesma porta. Com alteração, pergunta — mesma
@@ -485,10 +488,18 @@
       $("cx-status").textContent = "";
       atualizarBotoes();
       pintarCromo();
+      if (window.Paleta) window.Paleta.montar(S.ctx, []);
       $("dlg-construtor").showModal();
       el.focus();
       const n = S.original.length;
       el.setSelectionRange(n, n);
+
+      // O histórico chega depois, best-effort: abrir não espera o disco.
+      if (S.ctx.h && window.Paleta) {
+        window.QDBU.rpc("expr.history.get", { h: S.ctx.h })
+          .then((r) => { if (S) window.Paleta.historico(r.expressions || []); })
+          .catch(() => {});
+      }
     });
   }
 
