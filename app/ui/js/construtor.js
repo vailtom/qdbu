@@ -79,6 +79,9 @@
   }
 
   function fecharGrupo() {
+    // Pode chegar com o diálogo já fechado (timer da digitação, clique que
+    // sobreviveu ao close): sem estado não há grupo a fechar.
+    if (!S) return;
     if (S.grupo) {
       clearTimeout(S.grupo);
       S.grupo = null;
@@ -434,6 +437,7 @@
   }
 
   function usar() {
+    if (!S) return;
     fecharGrupo();
     const falta = faltantes(valor());
     if (falta.length) {
@@ -451,6 +455,7 @@
      regra do editor de estrutura (esDescartar): fechar sem aviso é barato de
      programar e caro para quem montou vinte cliques. */
   async function sair() {
+    if (!S) return;
     fecharGrupo();
     if (!temMudanca()) {
       fechar(null);
@@ -505,6 +510,7 @@
       pintarCromo();
       if (window.Paleta) window.Paleta.montar(S.ctx, []);
       $("dlg-construtor").showModal();
+      window.dispatchEvent(new CustomEvent("construtor-aberto"));
       el.focus();
       const n = S.original.length;
       el.setSelectionRange(n, n);
@@ -569,5 +575,20 @@
     window.addEventListener("idioma-mudou", pintarCromo);
   });
 
-  window.Construtor = { abrir, inserir, limpo, faltantes, trechoAntesDoCursor };
+  /** O contexto do diálogo aberto (para a IA montar o prompt), ou null. */
+  function contexto() {
+    return S ? S.ctx : null;
+  }
+
+  /** Troca o rascunho INTEIRO por `texto`, como um passo de undo. É o que a
+      IA usa: a sugestão substitui o que havia, e Ctrl+Z traz de volta. */
+  function substituir(texto) {
+    if (!S) return;
+    fecharGrupo();
+    snapshot();
+    fixar(texto, [texto.length, texto.length]);
+    ta().focus();
+  }
+
+  window.Construtor = { abrir, inserir, substituir, contexto, limpo, faltantes, trechoAntesDoCursor };
 })();

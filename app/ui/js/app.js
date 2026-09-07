@@ -2932,6 +2932,16 @@ async function abrirConfig() {
     // Monta uma vez; nas seguintes so ressincroniza com o idioma vigente, para
     // o Cancelar de uma abertura anterior nao deixar escolha pendurada.
     window.Idioma.montar($("cfg-idioma"));
+    // A IA: endpoint e modelo vem do Rust; a chave NUNCA vem -- so se existe.
+    try {
+      const ia = await QDBU.iaStatus();
+      $("cfg-ia-endpoint").value = ia.endpoint || "";
+      $("cfg-ia-modelo").value = ia.modelo || "";
+      $("cfg-ia-chave").value = "";
+      $("cfg-ia-chave-estado").textContent = ia.chave_ok ? T("UI_IA_KEY_SET") : T("UI_IA_KEY_UNSET");
+    } catch (e) {
+      $("cfg-ia-chave-estado").textContent = "";
+    }
     $("dlg-config").showModal();
   } catch (e) {
     hint(msgErro(e));
@@ -2947,6 +2957,15 @@ async function gravarConfig() {
    */
   const idiomaNovo = window.Idioma.valor();
   if (idiomaNovo && idiomaNovo !== window.I.idioma()) window.I.mudarIdioma(idiomaNovo);
+
+  // A IA vai para o Rust (ia.json), nao para a DLL: destino proprio, falha
+  // propria. Chave vazia = "nao mexi"; "-" = apagar.
+  try {
+    const ia = await QDBU.iaConfigurar($("cfg-ia-endpoint").value, $("cfg-ia-modelo").value, $("cfg-ia-chave").value, null);
+    window.dispatchEvent(new CustomEvent("ia-mudou", { detail: ia }));
+  } catch (e) {
+    hint(T("ERROR_IA_CONFIG", { detail: String(e) }));
+  }
 
   try {
     const r = await QDBU.rpc("config.set", {
@@ -5364,6 +5383,7 @@ $("ff-fx").addEventListener("click", async () => {
   if (!colunasDe.has(abaAtiva)) await carregarColunas(abaAtiva);
   const ok = await abrirConstrutor("ff-expr", {
     h: abaAtiva,
+    uso: "filter", arquivo: nomeDaAba(abaAtiva),
     rotulo: T("UI_CX_FROM_FILTER"),
     expect: "L",
     campos: colunasDe.get(abaAtiva) || [],
@@ -5381,7 +5401,8 @@ $("pi-chave-fx").addEventListener("click", async () => {
   if (!abaAtiva) return;
   if (!colunasDe.has(abaAtiva)) await carregarColunas(abaAtiva);
   const ok = await abrirConstrutor("pi-chave", {
-    h: abaAtiva, rotulo: T("UI_CX_FROM_KEY"), expect: "any",
+    h: abaAtiva, uso: "index_key", arquivo: nomeDaAba(abaAtiva),
+    rotulo: T("UI_CX_FROM_KEY"), expect: "any",
     campos: colunasDe.get(abaAtiva) || [],
   });
   if (ok) {
@@ -5393,7 +5414,8 @@ $("pi-for-fx").addEventListener("click", async () => {
   if (!abaAtiva) return;
   if (!colunasDe.has(abaAtiva)) await carregarColunas(abaAtiva);
   const ok = await abrirConstrutor("pi-for", {
-    h: abaAtiva, rotulo: T("UI_CX_FROM_FOR"), expect: "L",
+    h: abaAtiva, uso: "index_for", arquivo: nomeDaAba(abaAtiva),
+    rotulo: T("UI_CX_FROM_FOR"), expect: "L",
     campos: colunasDe.get(abaAtiva) || [],
   });
   if (ok) msgIndice("");
@@ -5403,12 +5425,12 @@ $("pi-for-fx").addEventListener("click", async () => {
    campo como alvo (tipo e tamanho) -- e o que faz o status dizer
    "'MARIA' (5 de 50)". FOR e WHILE esperam Logico. Os campos vem de
    aba.fields, a mesma lista que povoou o <select>. */
-async function fxEmMassa(inputId, rotulo, expect, alvo) {
+async function fxEmMassa(inputId, uso, rotulo, expect, alvo) {
   const aba = abas.find((a) => a.h === msAlvo);
   if (!aba) return;
   await garantirEstrutura(aba);
   const ok = await abrirConstrutor(inputId, {
-    h: msAlvo, rotulo, expect, alvo, campos: aba.fields || [],
+    h: msAlvo, uso, arquivo: nomeDaAba(msAlvo), rotulo, expect, alvo, campos: aba.fields || [],
   });
   if (ok) msMsg("");
 }
@@ -5416,11 +5438,19 @@ $("ms-with-fx").addEventListener("click", () => {
   const aba = abas.find((a) => a.h === msAlvo);
   const f = aba && (aba.fields || []).find((x) => x.name === $("ms-campo").value);
   if (!f) return;
-  fxEmMassa("ms-with", T("UI_CX_FROM_REPLACE", { field: f.name }), f.type,
+  fxEmMassa("ms-with", "replace", T("UI_CX_FROM_REPLACE", { field: f.name }), f.type,
     { campo: f.name, tipo: f.type, tamanho: f.len, dec: f.dec });
 });
-$("ms-for-fx").addEventListener("click", () => fxEmMassa("ms-for", T("UI_CX_FROM_FOR"), "L"));
-$("ms-while-fx").addEventListener("click", () => fxEmMassa("ms-while", T("UI_CX_FROM_WHILE"), "L"));
+$("ms-for-fx").addEventListener("click", () => fxEmMassa("ms-for", "mass_for", T("UI_CX_FROM_FOR"), "L"));
+$("ms-while-fx").addEventListener("click", () => fxEmMassa("ms-while", "mass_while", T("UI_CX_FROM_WHILE"), "L"));
+
+/* O nome do DBF de um handle, para o construtor dizer a IA "o campo NOME do
+   arquivo NETCLI" -- o `uso` diz o comando, este diz o arquivo. */
+function nomeDaAba(h) {
+  const aba = abas.find((a) => a.h === h);
+  if (!aba || !aba.caminho) return "";
+  return aba.caminho.split(/[\\/]/).pop();
+}
 
 // ------------------------------------------------------------ abrir arquivo
 

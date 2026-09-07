@@ -116,8 +116,28 @@ async function confirmarSaida() {
   return invoke("confirmar_saida");
 }
 
+/**
+ * A IA do construtor de expressao -- tres comandos Tauri, nenhum pela DLL.
+ *
+ * A chave NUNCA chega aqui: `iaStatus()` diz se ha uma (`chave_ok`), e so.
+ * `iaConfigurar()` manda a chave uma vez, para o Rust gravar em
+ * <raiz>/.qdbu/ia.json; um campo vazio significa "nao mexi", e "-" apaga.
+ * `iaSugerir()` leva o prompt ja montado e o pedido, e volta com a
+ * expressao -- que cai no rascunho do construtor e passa pelo expr.check
+ * antes de a pessoa poder Usar. A IA nunca aplica nada.
+ */
+async function iaStatus() {
+  return invoke("ia_status");
+}
+async function iaConfigurar(endpoint, modelo, chave, avisoLido) {
+  return invoke("ia_configurar", { endpoint, modelo, chave, avisoLido: avisoLido == null ? null : !!avisoLido });
+}
+async function iaSugerir(sistema, pedido) {
+  return invoke("ia_sugerir", { sistema, pedido });
+}
+
 /** Contador de revisao da ultima resposta. Ver session.prg. */
 let ultimaRev = 0;
 const rev = () => ultimaRev;
 
-window.QDBU = { status, chamar, rpc, rev, abrirPasta, aoEvento, confirmarSaida, ErroQDbu };
+window.QDBU = { status, chamar, rpc, rev, abrirPasta, aoEvento, confirmarSaida, iaStatus, iaConfigurar, iaSugerir, ErroQDbu };

@@ -17,6 +17,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 libloading = "0.8"
 tauri-plugin-dialog = "2.0.0-rc.8"
+# A chamada ao modelo de linguagem (src/ia.rs). O reqwest ja vinha pelo Tauri,
+# mas SEM TLS -- e https://api.openai.com nao fala sem. `native-tls` e o
+# schannel do proprio Windows: nenhuma DLL a mais no pacote (o alvo e so
+# Windows), nenhum build em C. A alternativa, rustls 0.23, arrasta aws-lc-rs
+# compilado por CMake -- um poco num alvo i686, para ganhar nada aqui.
+reqwest = { version = "0.13", default-features = false, features = ["json", "native-tls"] }
 
 [profile.release]
 opt-level = "s"

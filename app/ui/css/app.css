@@ -2283,3 +2283,27 @@ dialog select:focus { outline: none; border-color: var(--amber); }
 #cx-sugestoes li.ativa, #cx-sugestoes li:hover { background: var(--bg4); box-shadow: inset 2px 0 0 var(--amber); }
 #cx-dica-flutuante { padding: 6px 10px; pointer-events: none; }
 #cx-dica-flutuante .cx-dica-ass b { color: var(--amber); font-weight: bold; }
+
+/* A IA no construtor: o botao ✦ na barra (so com chave), a caixa do pedido
+   entre a barra e o editor, e o bloco em Preferencias. */
+.cx-ia { margin-left: auto; color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, var(--line)); }
+.cx-ia:hover { border-color: var(--amber); }
+.cx-ia-caixa { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 0 0 8px; }
+.cx-ia-caixa input { flex: 1 1 240px; min-width: 0; width: auto; margin: 0; }
+.cx-ia-caixa button { flex: none; white-space: nowrap; }
+/* O estado ocupa uma linha inteira, abaixo do pedido -- uma pergunta da IA
+   pode ter duas linhas, e apertar o input por causa dela seria pior. */
+.cx-ia-estado { flex: 1 1 100%; font-size: 12px; line-height: 1.4; color: var(--dim); }
+.cx-ia-estado:empty { display: none; }
+.cx-ia-estado.ok { color: var(--ok); }
+.cx-ia-estado.erro { color: var(--erro); }
+.cx-ia-estado.pergunta { color: var(--amber); }
+.cfg-ia { margin: 14px 0 0; padding: 10px 12px 4px; border: 1px solid var(--line); border-radius: 6px; }
+.cfg-ia legend { padding: 0 6px; color: var(--dim); font-size: 12px; }
+.cfg-ia label { margin-bottom: 8px; }
+#dlg-ia-aviso { width: min(560px, 92vw); }
+#dlg-ia-aviso p { font-size: 13px; line-height: 1.5; }
+/* "Não mostrar mais" à esquerda, na linha dos botões. As duas regras de
+   checkbox desfazem `dialog input { display:block; width:100% }`. */
+#dlg-ia-aviso .ia-aviso-nao { display: flex; align-items: center; gap: 6px; margin: 0 auto 0 0; font-size: 12px; color: var(--dim); cursor: pointer; }
+#dlg-ia-aviso .ia-aviso-nao input[type=checkbox] { display: inline-block; width: auto; margin: 0; padding: 0; accent-color: var(--amber); cursor: pointer; flex: none; }

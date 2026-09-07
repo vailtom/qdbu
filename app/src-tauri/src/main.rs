@@ -4,6 +4,7 @@
 // `log()` abaixo e o campo `log` de StatusDll, que a UI mostra no rodape.
 #![windows_subsystem = "windows"]
 
+mod ia;
 mod qdbudll;
 
 use std::env;
@@ -454,6 +455,66 @@ fn abrir_pasta(caminho: String) -> Result<(), String> {
         .spawn()
         .map(|_| ())
         .map_err(|e| format!("nao foi possivel abrir o Explorer: {e}"))
+}
+
+// ---------------------------------------------------------------- IA
+
+fn base_config() -> PathBuf {
+    raiz_projeto().unwrap_or_else(base_instalado)
+}
+
+/// O que o webview pode saber da IA: endpoint, modelo, se ha chave, se o
+/// aviso ja foi lido. A chave nunca sai daqui.
+#[tauri::command]
+fn ia_status() -> ia::StatusIa {
+    ia::StatusIa::from(&ia::ler(base_config()))
+}
+
+/// Grava endpoint, modelo e chave. Chave vazia MANTEM a que esta: o campo
+/// da tela nao mostra a chave (e senha), entao "vazio" significa "nao mexi".
+#[tauri::command]
+fn ia_configurar(endpoint: String, modelo: String, chave: String, aviso_lido: Option<bool>) -> Result<ia::StatusIa, String> {
+    let base = base_config();
+    let mut cfg = ia::ler(base.clone());
+    cfg.endpoint = endpoint.trim().to_string();
+    cfg.modelo = modelo.trim().to_string();
+    if chave.trim() == "-" {
+        cfg.chave.clear(); // o jeito explicito de APAGAR a chave
+    } else if !chave.trim().is_empty() {
+        cfg.chave = chave.trim().to_string();
+    }
+    if let Some(l) = aviso_lido {
+        cfg.aviso_lido = l;
+    }
+    ia::gravar(base, &cfg)?;
+    log("[ia] configuracao gravada");
+    Ok(ia::StatusIa::from(&cfg))
+}
+
+/// Pede uma expressao. `sistema` e o prompt (o .md com os dados ja
+/// preenchidos pela UI); `pedido` e o que a pessoa escreveu. Devolve a
+/// expressao extraida, ou o motivo -- e a UI decide o que fazer com ela.
+#[derive(Serialize)]
+struct SugestaoIa {
+    expressao: String,
+    motivo: String,
+    /// A IA nao entendeu e devolve UMA pergunta em vez de chutar -- e a
+    /// resposta certa para "clientes inativos importantes".
+    pergunta: String,
+    bruto: String,
+}
+
+#[tauri::command]
+async fn ia_sugerir(sistema: String, pedido: String) -> Result<SugestaoIa, String> {
+    let cfg = ia::ler(base_config());
+    let t0 = std::time::Instant::now();
+    let bruto = ia::perguntar(&cfg, &sistema, &pedido).await?;
+    log(&format!("[ia] resposta em {} ms, {} bytes", t0.elapsed().as_millis(), bruto.len()));
+    let v = ia::json_de(&bruto);
+    let expressao = ia::campo_de(&v, &["expression", "expressao"]);
+    let motivo = ia::campo_de(&v, &["reason", "motivo"]);
+    let pergunta = ia::campo_de(&v, &["question", "pergunta"]);
+    Ok(SugestaoIa { expressao, motivo, pergunta, bruto })
 }
 
 /// A resposta "Sim" da pergunta de saida.
@@ -2299,6 +2360,7 @@ fn mime_de(caminho: &str) -> &'static str {
         "css" => "text/css; charset=utf-8",
         "js" | "mjs" => "text/javascript; charset=utf-8",
         "json" => "application/json; charset=utf-8",
+        "md" | "txt" => "text/plain; charset=utf-8",
         "svg" => "image/svg+xml",
         "png" => "image/png",
         "ico" => "image/x-icon",
@@ -2835,7 +2897,8 @@ fn main() {
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
-            status, executar, rpc, andamento, cancelar, abrir_pasta, confirmar_saida
+            status, executar, rpc, andamento, cancelar, abrir_pasta, confirmar_saida,
+            ia_status, ia_configurar, ia_sugerir
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o app Tauri");

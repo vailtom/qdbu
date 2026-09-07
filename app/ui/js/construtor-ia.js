@@ -1,0 +1,279 @@
+// construtor-ia.js — o botão ✦ do construtor de expressão: a pessoa escreve
+// o que quer em linguagem comum, e um modelo de linguagem devolve a expressão.
+//
+// É a versão final da ideia do construtor: ele existe porque o público não
+// sabe montar a expressão, e isto é ele nem precisando.
+//
+// TRÊS COISAS QUE ESTE MÓDULO NÃO FAZ, de propósito:
+//
+// - Não aplica nada. A resposta cai no rascunho como UM passo de undo (Ctrl+Z
+//   volta ao que estava), passa pelo expr.check como qualquer texto, e só entra
+//   no arquivo se a pessoa clicar em Usar. A IA sugere; quem decide é quem
+//   está na frente. O aviso de primeira vez diz isso — e lembra do backup.
+// - Não manda dado. Vai o pedido, os nomes e tipos dos campos, e o catálogo de
+//   funções. Nenhum registro. O aviso diz isso também, e que este programa não
+//   guarda nada do que vai e volta.
+// - Não vê a chave. Ela mora no Rust (ia.json); daqui só se sabe se existe.
+//   Sem chave o botão CONTINUA LÁ: clicar nele diz que o recurso existe e
+//   leva a Preferências. Esconder o botão esconderia o recurso de quem mais
+//   precisa dele — quem nunca abriu Preferências.
+//
+// O PROMPT MORA FORA DO FONTE, em app/ui/prompts/construtor.md — para o autor
+// editar a prosa sem recompilar. Três camadas, da mais específica à mais
+// geral: <raiz>/.qdbu/prompts/construtor.md (a máquina do cliente; ajuste sem
+// release), app/ui/prompts/ do disco (debug: edita e reload) e o embutido no
+// binário. Os DADOS (campos, funções, tipo esperado) são JSON gerado pelo JS e
+// anexado ao fim — ninguém os edita, então não há mal-entendido possível.
+
+/*
+ * ESCOPO PRÓPRIO. Sem bundler, todo arquivo desta pasta é um script clássico e
+ * todos dividem UM escopo global. Nada sai daqui: o módulo se liga por eventos.
+ */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const T = (k, p) => window.I.t(k, p);
+
+  let status = null; // último ia_status
+  let promptBase = null; // o .md, carregado uma vez
+
+  // ------------------------------------------------------------ o prompt
+
+  async function carregarPrompt() {
+    if (promptBase !== null) return promptBase;
+    // A camada do cliente vem pela DLL? Não: é arquivo local, e o Rust já
+    // serve app/ui/ pelo protocolo dev. O .qdbu/prompts/ do cliente entra
+    // como caminho relativo que o mesmo servidor resolve. Falhou tudo, o
+    // prompt fica vazio e a IA recebe só os dados — pior, mas não trava.
+    for (const url of ["prompts/construtor.md"]) {
+      try {
+        const r = await fetch(url, { cache: "no-store" });
+        if (r.ok) {
+          promptBase = await r.text();
+          return promptBase;
+        }
+      } catch (e) {
+        /* tenta a próxima */
+      }
+    }
+    promptBase = "";
+    return promptBase;
+  }
+
+  /**
+   * O ALVO, dito com todas as letras. "tipo esperado: L" é pouco: a IA precisa
+   * saber que a expressão vai num SET FILTER TO e é avaliada registro a
+   * registro, ou que vai num REPLACE do campo NOME (C, 40) do NETCLI.DBF. Sem
+   * isto ela devolve `Upper(NOME)` para um filtro, ou 60 letras para 40.
+   *
+   * SEMPRE EM INGLÊS, como o prompt inteiro, seja qual for o idioma da tela:
+   * o modelo trabalha melhor em inglês, e o que volta para a pessoa (reason,
+   * question) o prompt manda vir no idioma do pedido. Nomes de campo e de
+   * arquivo vão como estão.
+   */
+  function alvoDe(ctx) {
+    const f = ctx.alvo || {};
+    const arq = ctx.arquivo || "the current file";
+    const tipoCampo = f.tipo
+      ? `${f.campo} (type ${f.tipo}${f.tamanho ? ", len " + f.tamanho + (f.dec ? ", dec " + f.dec : "") : ""})`
+      : "";
+    const POR_USO = {
+      filter: {
+        command: "SET FILTER TO <expression>",
+        type: "L",
+        goal: `Filter the records of ${arq}. The expression is evaluated for EVERY record and must return a LOGICAL value (.T. or .F.); records where it is .T. stay visible.`,
+      },
+      index_key: {
+        command: "INDEX ON <expression> TO <file>",
+        type: "any",
+        goal: `Key of a new index over ${arq}. The expression is evaluated for every record and must return the SAME type (C, N or D) and, for C, the SAME length for every record — pad with PadR()/Str() when combining fields. Logical is not allowed.`,
+      },
+      index_for: {
+        command: "INDEX ON ... FOR <expression>",
+        type: "L",
+        goal: `Condition of a new index over ${arq}: only records where the expression is .T. enter the index. Must return a LOGICAL value.`,
+      },
+      replace: {
+        command: `REPLACE ${f.campo || "<field>"} WITH <expression>`,
+        type: f.tipo || ctx.expect || "any",
+        goal: `Compute the NEW VALUE of field ${tipoCampo} in ${arq}, for every record that matches the FOR/WHILE conditions. The expression must return type ${f.tipo || ctx.expect}${f.tamanho && f.tipo === "C" ? `, at most ${f.tamanho} characters` : ""}. It may read the current value of any field, including ${f.campo}.`,
+      },
+      mass_for: {
+        command: "REPLACE ... FOR <expression>",
+        type: "L",
+        goal: `Which records of ${arq} the mass operation touches. Evaluated for every record; must return a LOGICAL value.`,
+      },
+      mass_while: {
+        command: "REPLACE ... WHILE <expression>",
+        type: "L",
+        goal: `How far the mass operation goes in ${arq}: it stops at the first record where the expression is .F. Must return a LOGICAL value.`,
+      },
+    };
+    const t = POR_USO[ctx.uso] || { command: ctx.rotulo || "", type: ctx.expect || "any", goal: "" };
+    const alvo = { command: t.command, type: t.type, goal: t.goal, file: ctx.arquivo || "" };
+    if (f.campo) alvo.field = { name: f.campo, type: f.tipo, len: f.tamanho, dec: f.dec };
+    return alvo;
+  }
+
+  /**
+   * O prompt de sistema: o .md + os dados deste pedido em JSON.
+   * O JSON é GERADO — é a parte em que não pode haver mal-entendido, e não há.
+   */
+  async function montarSistema(ctx) {
+    const base = await carregarPrompt();
+    const cat = (window.CATALOGO && window.CATALOGO.funcoes) || {};
+    const functions = Object.values(cat).map((f) => ({
+      name: f.nome,
+      args: f.args.map((a) => (a.opc ? "[" + a.n + "]" : a.n)),
+      returns: f.ret,
+      does: f.one,
+    }));
+    const fields = (ctx.campos || []).map((c) => {
+      const o = { name: c.name, type: c.type };
+      if (c.len) o.len = c.len;
+      if (c.dec) o.dec = c.dec;
+      return o;
+    });
+    const dados = { target: alvoDe(ctx), fields, functions };
+    return base.trim() + "\n\n" + JSON.stringify(dados, null, 1);
+  }
+
+  // ------------------------------------------------------------- o aviso
+
+  /** Devolve true se a pessoa já leu (ou acabou de aceitar) o aviso. */
+  function garantirAviso() {
+    if (status && status.aviso_lido) return Promise.resolve(true);
+    return new Promise((resolver) => {
+      const dlg = $("dlg-ia-aviso");
+      const fim = (ok) => {
+        dlg.removeEventListener("close", aoFechar);
+        resolver(ok);
+      };
+      const aoFechar = () => fim(dlg.returnValue === "ok");
+      dlg.addEventListener("close", aoFechar);
+      dlg.returnValue = "";
+      $("ia-aviso-nao-mostrar").checked = false;
+      $("form-ia-aviso").onsubmit = (ev) => {
+        ev.preventDefault();
+        // Só "não mostrar mais" + confirmar grava o flag (no Rust, junto da
+        // config). Confirmar sem marcar: continua, e pergunta de novo da
+        // próxima vez -- a pessoa decide quando já leu o bastante.
+        if ($("ia-aviso-nao-mostrar").checked) {
+          window.QDBU.iaConfigurar(status.endpoint, status.modelo, "", true).then((s) => { status = s; }).catch(() => {});
+        }
+        dlg.close("ok");
+      };
+      $("ia-aviso-cancelar").onclick = () => dlg.close("");
+      dlg.showModal();
+    });
+  }
+
+  // ------------------------------------------------------------- pedir
+
+  function estado(texto, classe) {
+    const el = $("cx-ia-estado");
+    el.textContent = texto;
+    el.className = "cx-ia-estado " + (classe || "");
+  }
+
+  async function pedir() {
+    const pedido = $("cx-ia-pedido").value.trim();
+    if (!pedido) return;
+    const ctx = window.Construtor.contexto();
+    if (!ctx) return;
+
+    if (!(await garantirAviso())) return;
+
+    const btn = $("cx-ia-enviar");
+    btn.disabled = true;
+    estado(T("UI_IA_THINKING"), "");
+    try {
+      const sistema = await montarSistema(ctx);
+      const r = await window.QDBU.iaSugerir(sistema, pedido);
+      if (!r.expressao) {
+        // Pergunta vale mais que chute: fica na caixa, e a pessoa completa
+        // o pedido no mesmo campo.
+        if (r.pergunta) estado(T("UI_IA_QUESTION", { q: r.pergunta }), "pergunta");
+        else estado(r.motivo ? T("UI_IA_NO_RESULT_WHY", { why: r.motivo }) : T("UI_IA_NO_RESULT"), "erro");
+        $("cx-ia-pedido").focus();
+        return;
+      }
+      // UM passo de undo: Ctrl+Z volta ao que estava antes de pedir. E o
+      // texto entra pelo mesmo `inserir()` da paleta -- que já conferirá.
+      window.Construtor.substituir(r.expressao);
+      estado(T("UI_IA_DONE"), "ok");
+    } catch (e) {
+      estado(T("ERROR_IA_FAILED", { detail: String(e) }), "erro");
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function temChave() {
+    return !!(status && status.chave_ok);
+  }
+
+  function mostrarCaixa(sim) {
+    const caixa = $("cx-ia-caixa");
+    caixa.hidden = !sim;
+    if (!sim) {
+      $("cx-expr").focus();
+      return;
+    }
+    if (temChave()) {
+      estado("", "");
+      $("cx-ia-pedido").focus();
+    } else {
+      // Sem chave a caixa vira a orientação: o que falta e onde se põe.
+      estado(T("UI_IA_NO_KEY"), "");
+      $("cx-ia-config").focus();
+    }
+  }
+
+  // ------------------------------------------------------------- estado
+
+  async function atualizarBotao() {
+    try {
+      status = await window.QDBU.iaStatus();
+    } catch (e) {
+      status = null;
+    }
+    const tem = temChave();
+    $("cx-ia-pedido").hidden = !tem;
+    $("cx-ia-enviar").hidden = !tem;
+    $("cx-ia-config").hidden = tem;
+    // A chave acabou de entrar com a caixa aberta: destrava sem novo clique.
+    if (!$("cx-ia-caixa").hidden) mostrarCaixa(true);
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    if (!$("cx-ia")) return;
+    atualizarBotao();
+    window.addEventListener("ia-mudou", (ev) => {
+      status = ev.detail || status;
+      atualizarBotao();
+    });
+    // Ao abrir o construtor: caixa recolhida e vazia -- o diálogo é um só e é
+    // reaproveitado, e o pedido da abertura anterior pode ser de OUTRO alvo.
+    // E reconfere a chave, que pode ter entrado nesse meio tempo.
+    window.addEventListener("construtor-aberto", () => {
+      $("cx-ia-caixa").hidden = true;
+      $("cx-ia-pedido").value = "";
+      estado("", "");
+      atualizarBotao();
+    });
+
+    // Para quem edita o .md: `ConstrutorIa.montarSistema(Construtor.contexto())`
+    // no console mostra o prompt exatamente como vai. Nada mais sai daqui.
+    window.ConstrutorIa = { montarSistema };
+
+    $("cx-ia").addEventListener("click", () => mostrarCaixa($("cx-ia-caixa").hidden));
+    $("cx-ia-enviar").addEventListener("click", pedir);
+    // Preferências abre por cima do construtor (top layer empilha); ao gravar,
+    // `ia-mudou` chega aqui e a caixa destrava sozinha.
+    $("cx-ia-config").addEventListener("click", () => window.abrirConfig && window.abrirConfig());
+    $("cx-ia-pedido").addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") { ev.preventDefault(); ev.stopPropagation(); pedir(); }
+      if (ev.key === "Escape") { ev.preventDefault(); ev.stopPropagation(); mostrarCaixa(false); }
+    });
+  });
+})();

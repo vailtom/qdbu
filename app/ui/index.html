@@ -741,6 +741,25 @@
   Campos/Funcoes/Operadores chegam no passo seguinte -- este e o nucleo:
   editor, desfazer, status, Usar.
 -->
+<!-- O aviso de PRIMEIRA VEZ da IA. Diz as duas coisas que a pessoa tem o
+     direito de saber antes de o pedido sair da maquina: o que vai (nomes e
+     tipos dos campos, o pedido -- nenhum registro), e que este programa nao
+     guarda nada do que vai e volta. E que a expressao que voltar e sugestao:
+     nada roda sem o Usar dela -- e backup antes de gravar continua valendo. -->
+<dialog id="dlg-ia-aviso">
+  <form method="dialog" id="form-ia-aviso">
+    <h2 data-i18n="UI_IA_AVISO_TITLE"></h2>
+    <p data-i18n="UI_IA_AVISO_1"></p>
+    <p data-i18n="UI_IA_AVISO_2"></p>
+    <p data-i18n="UI_IA_AVISO_3"></p>
+    <div class="acoes">
+      <label class="ia-aviso-nao"><input type="checkbox" id="ia-aviso-nao-mostrar"> <span data-i18n="UI_IA_AVISO_NO_MORE"></span></label>
+      <button type="button" id="ia-aviso-cancelar" class="ghost" data-i18n="UI_CANCEL"></button>
+      <button type="submit" class="primario" data-i18n="UI_IA_AVISO_OK"></button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="dlg-construtor">
   <form method="dialog" id="form-construtor">
     <h2><span data-i18n="UI_CX_TITLE"></span> <span id="cx-contexto" class="cx-contexto"></span></h2>
@@ -749,6 +768,16 @@
       <button type="button" id="cx-desfazer" class="icone" data-i18n-title="UI_CX_UNDO"><svg class="ico" aria-hidden="true"><use href="#i-undo-2" /></svg></button>
       <button type="button" id="cx-refazer" class="icone" data-i18n-title="UI_CX_REDO"><svg class="ico" aria-hidden="true"><use href="#i-redo-2" /></svg></button>
       <button type="button" id="cx-restaurar" class="ghost" data-i18n="UI_CX_RESTORE"></button>
+      <!-- So existe com chave configurada: construtor-ia.js o mostra. -->
+      <button type="button" id="cx-ia" class="ghost cx-ia" data-i18n-title="UI_IA_ASK_TITLE">✦ <span data-i18n="UI_IA_ASK"></span></button>
+    </div>
+    <!-- A caixa do pedido em linguagem comum. Aparece entre a barra e o
+         editor quando se clica em ✦; Enter pede, Esc fecha. -->
+    <div id="cx-ia-caixa" class="cx-ia-caixa" hidden>
+      <input id="cx-ia-pedido" data-i18n-ph="UI_IA_PEDIDO_PH" autocomplete="off" spellcheck="false">
+      <button type="button" id="cx-ia-enviar" class="primario" data-i18n="UI_IA_SEND"></button>
+      <span id="cx-ia-estado" class="cx-ia-estado"></span>
+      <button type="button" id="cx-ia-config" class="ghost" hidden data-i18n="UI_IA_OPEN_PREFS"></button>
     </div>
 
     <div class="cx-editor">
@@ -1160,6 +1189,28 @@
     </label>
     <p class="explica" id="cfg-epoch"></p>
 
+    <!-- IA do construtor de expressao. Endpoint editavel porque o formato de
+         chat completions e o que praticamente todo servico aceita -- OpenAI,
+         Ollama local, um proxy da empresa. Chave em campo de senha, nunca
+         reexibida: vazio e "nao mexi", "-" apaga. Sem chave, o botao da IA
+         nao existe no construtor -- nao aparece desabilitado, nao promete. -->
+    <fieldset class="cfg-ia">
+      <legend data-i18n="UI_IA_SECTION"></legend>
+      <label>
+        <span data-i18n="UI_IA_ENDPOINT"></span>
+        <input id="cfg-ia-endpoint" spellcheck="false" autocomplete="off">
+      </label>
+      <label>
+        <span data-i18n="UI_IA_MODEL"></span>
+        <input id="cfg-ia-modelo" spellcheck="false" autocomplete="off">
+      </label>
+      <label>
+        <span data-i18n="UI_IA_KEY"></span> <span class="opcional" id="cfg-ia-chave-estado"></span>
+        <input id="cfg-ia-chave" type="password" autocomplete="off" data-i18n-ph="UI_IA_KEY_PH">
+      </label>
+      <p class="explica" data-i18n="UI_IA_EXPLAIN"></p>
+    </fieldset>
+
     <div class="acoes">
       <button type="button" id="cfg-cancelar" class="ghost" data-i18n="UI_CANCEL"></button>
       <button type="submit" class="primario" data-i18n="UI_SAVE"></button>
@@ -1271,6 +1322,7 @@
 <script src="js/construtor.js"></script>
 <script src="js/construtor-paleta.js"></script>
 <script src="js/construtor-cursor.js"></script>
+<script src="js/construtor-ia.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
