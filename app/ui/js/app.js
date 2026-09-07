@@ -1223,6 +1223,33 @@ async function repintarDoEstado() {
   garantirPagina(ativa);
   garantirForm(ativa);
   sincronizarPaineis();
+
+  /*
+   * A QUINTA GARANTIA: QUAIS ARQUIVOS ESTÃO ABERTOS TAMBÉM SE GRAVA.
+   *
+   * `agendarSalvar()` era chamado em onze lugares -- largura do painel, ordem
+   * das abas, aba ativa, colunas, filtro, tamanho de página, conexão expandida
+   * -- e em NENHUM deles ao abrir ou fechar um arquivo. Justamente o dado mais
+   * estruturante da sessão era o único que ninguém gravava.
+   *
+   * Isso não aparecia sempre, e é por isso que sobreviveu: qualquer clique
+   * seguinte numa aba ou numa coluna gravava a lista de tabela e o estado
+   * parecia certo. Só ficava evidente quando a abertura ou o fechamento eram a
+   * ÚLTIMA coisa feita antes de sair -- e aí:
+   *
+   *   - abrir por linha de comando e fechar o app perdia o arquivo
+   *   - fechar abas e sair trazia todas de volta na abertura seguinte
+   *
+   * O lugar é aqui pela mesma razão escrita acima para a estrutura e a página:
+   * todo caminho que muda a lista de abertos passa por este funil. Pôr a
+   * chamada em `abrirArquivo()` e em `fecharAba()` deixaria a armadilha montada
+   * para o quinto caminho que alguém criasse.
+   *
+   * `agendarSalvar()` não faz nada enquanto `restaurando` está ligado, então a
+   * própria restauração não regrava o que acabou de ler.
+   */
+  agendarSalvar();
+
   return st;
 }
 
@@ -4938,6 +4965,21 @@ function agendarSalvar() {
 }
 
 async function salvarSessao() {
+  /*
+   * O `restaurando` e conferido AQUI TAMBEM, e nao so em `agendarSalvar()`.
+   *
+   * A guarda de la impede AGENDAR durante a restauracao, mas nao cancela um
+   * agendamento que ja estava de pe -- e ha sempre um: o arranque chama
+   * `repintarDoEstado()` antes de `restaurarSessao()`, com a lista de abertos
+   * ainda vazia. Se a restauracao passar dos 400 ms do respiro, aquele
+   * `setTimeout` dispara NO MEIO dela e gravaria uma sessao pela metade por
+   * cima da que esta sendo lida -- apagando os arquivos que ainda nao voltaram.
+   *
+   * Guardar so na hora de agendar seria a mesma armadilha do `expect` fora do
+   * lock: entre decidir e fazer, o mundo muda.
+   */
+  if (restaurando) return;
+
   try {
     const ativa = abas.find((a) => a.h === abaAtiva);
     await QDBU.rpc("session.save", {
@@ -4989,6 +5031,10 @@ async function restaurarSessao() {
   }
 
   restaurando = true;
+  // E o agendamento que o `repintarDoEstado()` do arranque deixou de pe some
+  // junto: nao ha o que gravar antes de a restauracao terminar.
+  clearTimeout(salvarPendente);
+
   larguraPainel(est.panelWidth || PAINEL_PADRAO);
 
   // O <select> so aceita os valores que ele oferece; um pageSize gravado a mao
@@ -5482,6 +5528,7 @@ async function perguntarSaida() {
 }
 
 QDBU.aoEvento("pedido-de-saida", perguntarSaida);
+
 
 // ------------------------------------------------------- erro que nao some
 
