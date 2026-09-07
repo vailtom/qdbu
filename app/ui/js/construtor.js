@@ -52,6 +52,9 @@
     if (sel) el.setSelectionRange(sel[0], sel[1]);
     atualizarBotoes();
     agendarCheck(0);
+    // O cursor mudou sem tecla: quem vive junto dele (construtor-cursor.js)
+    // precisa saber. Evento, e não chamada, para os dois não se conhecerem.
+    window.dispatchEvent(new CustomEvent("construtor-mudou"));
   }
 
   // ---------------------------------------------------------------- undo

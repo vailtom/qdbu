@@ -753,6 +753,11 @@
 
     <div class="cx-editor">
       <textarea id="cx-expr" rows="3" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      <!-- O espelho invisivel de onde sai a coordenada do cursor, o dropdown
+           do IntelliSense e a dica flutuante: ver js/construtor-cursor.js. -->
+      <div id="cx-espelho" aria-hidden="true"></div>
+      <ul id="cx-sugestoes" role="listbox" hidden></ul>
+      <div id="cx-dica-flutuante" hidden></div>
     </div>
 
     <p id="cx-status" class="cx-status"></p>
@@ -1265,6 +1270,7 @@
 <script src="js/rpc.js"></script>
 <script src="js/construtor.js"></script>
 <script src="js/construtor-paleta.js"></script>
+<script src="js/construtor-cursor.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

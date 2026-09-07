@@ -205,7 +205,7 @@
         sub: f.nome + "()",
         ret: f.ret,
         termos: indiceDe(k, f),
-        inserir: () => window.Construtor.inserir(textoDeInsercao(f), { envolver: f.args.length > 0 }),
+        inserir: (o) => window.Construtor.inserir(textoDeInsercao(f), { envolver: f.args.length > 0 && !(o && o.semEnvolver) }),
         dica: () => [assinatura(f, true) + " → " + (f.ret === "any" ? T("UI_CX_ANY_TYPE") : tipo(f.ret)), desc === dk ? f.one : desc],
       });
     }
@@ -520,5 +520,24 @@
     window.addEventListener("idioma-mudou", () => { if (S) pintar(); });
   });
 
-  window.Paleta = { montar, historico, norm };
+  /**
+   * Candidatos para o IntelliSense: campos e funções cujo NOME começa com o
+   * prefixo digitado (case-insensitive), ranqueados pelo tipo esperado. Só o
+   * nome — quem digita `Up` quer `Upper`, não "Converter para maiúsculas".
+   */
+  function candidatos(prefixo) {
+    if (!S) return [];
+    const p = prefixo.toLowerCase();
+    const out = [];
+    for (const v of valoresDe("CAMPOS", "TODAS")) {
+      if (v.rotulo.toLowerCase().startsWith(p)) out.push({ ...v, pontos: 10 + (compativel(v.ret) ? 5 : 0), sub: v.rotulo, rotulo: v.sub });
+    }
+    for (const v of valoresDe("FUNCOES", "TODAS")) {
+      const nome = v.sub.replace(/\(\)$/, "");
+      if (nome.toLowerCase().startsWith(p)) out.push({ ...v, pontos: 5 + (compativel(v.ret) ? 5 : 0), sub: nome });
+    }
+    return out.sort((a, b) => b.pontos - a.pontos || a.sub.length - b.sub.length || a.sub.localeCompare(b.sub));
+  }
+
+  window.Paleta = { montar, historico, norm, candidatos };
 })();

@@ -1072,6 +1072,7 @@
   UI_CX_NOT_COMPILE: "✗ {detail}",
   UI_CX_WARNING: "⚠ Compila, pero no se pudo evaluar en el registro {n}: {detail}",
   UI_CX_SIMPLIFY: "la condición ya es Lógica — funciona sin el IIf.",
+  UI_CX_ARG_NOW: "argumento {n}: {name} ({type}). Ctrl+Espacio sugiere.",
   UI_CX_TRUE: "Sí",
   UI_CX_FALSE: "No",
   UI_CX_DISCARD_ASK: "Hay cambios que todavía no se usaron.",

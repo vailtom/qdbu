@@ -1076,6 +1076,7 @@
   UI_CX_NOT_COMPILE: "✗ {detail}",
   UI_CX_WARNING: "⚠ Compiles, but could not be evaluated on record {n}: {detail}",
   UI_CX_SIMPLIFY: "the condition is already Logical — it works without the IIf.",
+  UI_CX_ARG_NOW: "argument {n}: {name} ({type}). Ctrl+Space suggests.",
   UI_CX_TRUE: "Yes",
   UI_CX_FALSE: "No",
   UI_CX_DISCARD_ASK: "There are changes that were not used yet.",
