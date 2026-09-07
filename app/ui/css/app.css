@@ -2252,7 +2252,9 @@ dialog select:focus { outline: none; border-color: var(--amber); }
 .cx-colunas li.ativo { background: var(--bg4); color: var(--fg); box-shadow: inset 2px 0 0 var(--amber); }
 .cx-colunas li.vazio { color: var(--dim2); cursor: default; font-style: italic; }
 /* Compativel com o tipo esperado: a estrela e o "trazer para cima" visivel. */
-.cx-colunas li.compativel .cx-rot::before { content: "★ "; color: var(--amber); }
+/* A estrela vem DEPOIS do nome (pedido do autor): o olho alinha os nomes pela
+   esquerda, e uma estrela na frente quebrava a coluna. */
+.cx-colunas li.compativel .cx-rot::after { content: " ★"; color: var(--amber); }
 .cx-colunas .cx-sub { color: var(--dim2); font-family: var(--mono); font-size: 11.5px; }
 .cx-colunas .cx-por { flex-basis: 100%; color: var(--dim2); font-size: 11px; font-style: italic; }
 

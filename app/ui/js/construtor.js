@@ -318,21 +318,28 @@
         if (perto) msg += " " + T("UI_CX_SIMILAR", { name: perto });
         status(msg, "erro");
       } else {
-        status(T("UI_CX_NOT_COMPILE", { detail: r.error }), "erro");
+        status(T(r.error ? "UI_CX_NOT_COMPILE" : "UI_CX_NOT_COMPILE_PLAIN", { detail: r.error }), "erro");
       }
       return;
     }
     // M devolvido onde se espera C (e vice-versa) é compatível: texto é texto.
     const tipoOk = r.typeOk || (expect === "C" && r.type === "M");
     if (r.evaluated && !tipoOk) {
-      status(T("UI_CX_WRONG_TYPE", { expected: tipo(S.ctx.expect), got: tipo(r.type) }), "erro");
+      // "Lógico" é o nome do tipo; o que a pessoa precisa saber é que aqui
+      // vai uma CONDIÇÃO. Para os outros tipos, a palavra do tipo basta.
+      const esperado = S.ctx.expect === "L" ? T("UI_CX_NEED_L") : tipo(S.ctx.expect);
+      status(T("UI_CX_WRONG_TYPE", { expected: esperado, got: tipo(r.type) }), "erro");
       return;
     }
     if (!r.evaluated) {
       status(T("UI_CX_WARNING", { n: r.recno, detail: r.warning }), "aviso");
       return;
     }
-    status(T("UI_CX_OK_VALUE", { type: tipo(r.type), n: r.recno, value: valorNaTela(r) }), "ok");
+    // O tipo só aparece quando INFORMA: com destino "qualquer" (chave de
+    // índice) saber que devolve texto ou número importa; com destino fixo,
+    // dizer "lógico" é repetir o cabeçalho.
+    const chave = S.ctx.expect === "any" ? "UI_CX_OK_VALUE_TYPED" : "UI_CX_OK_VALUE";
+    status(T(chave, { type: tipo(r.type), n: r.recno, value: valorNaTela(r) }), "ok");
     if (simplificavel(expr)) {
       // Sugere, não impõe: um botão de texto ao lado do status. Aceitar é um
       // passo de undo como outro qualquer.

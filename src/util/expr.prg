@@ -80,7 +80,9 @@ FUNCTION ExprCompila( cH, cExpr, cErro )
    END SEQUENCE
 
    IF bBloco == NIL
-      cErro := "nao compila: erro de sintaxe"
+      /* Sem detalhe: o macro-compilador recusou sem dizer por que. A frase
+         ("expressao incompleta ou mal formada") e da UI, nao daqui. */
+      cErro := ""
       RETURN NIL
    ENDIF
 
