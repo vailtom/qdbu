@@ -64,15 +64,13 @@
     <span class="sub" data-i18n="UI_SUBTITLE"></span>
   </div>
   <div class="acoes-topo">
-    <!-- Da esquerda para a direita: Sobre, Tema, Preferencias -- ordem fixada
-         pelo autor em 07/09/2026. Sobre diz o que o programa E; Tema e a
-         preferencia mais mexida; Preferencias fecha a fila com o que muda
-         raramente. O tema e montado por js/tema.js.
+    <!-- Da esquerda para a direita: Tema, Sobre, Preferencias -- ordem fixada
+         pelo autor em 07/09/2026. O tema e montado por js/tema.js.
          O IDIOMA NAO MORA MAIS AQUI: e escolhido uma vez e nunca mais, entao
          foi para dentro de Preferencias. Um controle que se usa uma vez nao
          ganha lugar permanente no cabecalho. -->
-    <button type="button" id="btn-sobre" class="icone" data-i18n-title="UI_ABOUT"><svg class="ico" aria-hidden="true"><use href="#i-info" /></svg></button>
     <div class="tema" id="tema"></div>
+    <button type="button" id="btn-sobre" class="icone" data-i18n-title="UI_ABOUT"><svg class="ico" aria-hidden="true"><use href="#i-info" /></svg></button>
     <button type="button" id="btn-config" class="icone" data-i18n-title="UI_PREFERENCES">⚙</button>
   </div>
 </header>
@@ -1070,7 +1068,9 @@
          Cancelar deixa como estava. -->
     <label>
       <span data-i18n="UI_LANGUAGE"></span>
-      <select id="cfg-idioma"></select>
+      <!-- Widget proprio, nao <select>: um <select> nativo nao renderiza as
+           bandeiras SVG, e o autor as quer. Montado por js/idioma.js. -->
+      <div class="idioma" id="cfg-idioma"></div>
     </label>
     <label>
       <span data-i18n="UI_DEFAULT_CODEPAGE"></span>
@@ -1191,6 +1191,7 @@
 <script src="vendor/sweetalert2/sweetalert2.all.min.js"></script>
 <script src="js/i18n.js"></script>
 <script src="js/tema.js"></script>
+<script src="js/idioma.js"></script>
 <script src="js/rpc.js"></script>
 <script src="js/app.js"></script>
 </body>

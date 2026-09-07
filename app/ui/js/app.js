@@ -2929,10 +2929,9 @@ async function abrirConfig() {
     // procura a propria lingua reconhece a palavra dela mesmo sem entender a
     // tela em volta. E a lista de I.idiomas(), que so traz os dicionarios que
     // de fato carregaram.
-    const selIdioma = $("cfg-idioma");
-    selIdioma.textContent = "";
-    for (const i of window.I.idiomas()) selIdioma.appendChild(new Option(i.nome, i.cod));
-    selIdioma.value = window.I.idioma();
+    // Monta uma vez; nas seguintes so ressincroniza com o idioma vigente, para
+    // o Cancelar de uma abertura anterior nao deixar escolha pendurada.
+    window.Idioma.montar($("cfg-idioma"));
     $("dlg-config").showModal();
   } catch (e) {
     hint(msgErro(e));
@@ -2946,7 +2945,7 @@ async function gravarConfig() {
    * disco recusar a config, a escolha de idioma nao pode ir junto no
    * naufragio; sao decisoes independentes com destinos independentes.
    */
-  const idiomaNovo = $("cfg-idioma").value;
+  const idiomaNovo = window.Idioma.valor();
   if (idiomaNovo && idiomaNovo !== window.I.idioma()) window.I.mudarIdioma(idiomaNovo);
 
   try {

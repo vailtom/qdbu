@@ -192,6 +192,59 @@ header {
 .tema-item.ativo { color: var(--fg); box-shadow: inset 2px 0 0 var(--amber); }
 .tema-nome { flex: 1; }
 
+/* Seletor de idioma -- dentro de Preferencias. A lista e `position:absolute`
+   ancorada no `.idioma { position: relative }`; dentro do <dialog> ela cai
+   sobre o campo seguinte, que e o esperado de um menu. O <label> em bloco
+   poe o botao na linha de baixo do rotulo, como os outros campos.
+   O contentor segue em bloco (o botao fica ABAIXO do rotulo, como os
+   outros campos), mas a lista ancora pela ESQUERDA: como bloco ele ocupa a
+   largura toda do dialogo, e o `right: 0` do cabecalho a jogaria na borda
+   direita, longe do botao que a abriu. */
+dialog .idioma-lista { left: 0; right: auto; }
+/* `position: relative` aqui e o que ancora o menu: sem isso ele se posiciona
+   pelo <body> e cai no canto da janela em vez de sob o botao. */
+.idioma { position: relative; }
+
+.idioma-btn {
+  display: flex; align-items: center; gap: 7px;
+  background: transparent; color: var(--dim);
+  border: 1px solid var(--line); border-radius: 5px;
+  padding: 4px 9px; cursor: pointer; font-size: 12.5px;
+}
+.idioma-btn:hover { color: var(--fg); border-color: var(--dim2); }
+.idioma.aberto .idioma-btn { color: var(--fg); border-color: var(--amber); }
+
+/* A bandeira e um <svg> dentro de um <span>. O `display:block` no svg tira o
+   espaco de linha de base que faria a caixa 3px mais alta que a imagem. */
+.bandeira {
+  flex: none; width: 20px; height: 14px;
+  border-radius: 2px; overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.35);
+}
+.bandeira svg { display: block; width: 100%; height: 100%; }
+
+.idioma-seta { color: var(--dim2); font-size: 10px; }
+.idioma.aberto .idioma-seta { color: var(--amber); }
+
+.idioma-lista {
+  position: absolute; top: calc(100% + 5px); right: 0; z-index: 40;
+  margin: 0; padding: 4px; list-style: none;
+  min-width: 168px;
+  background: var(--bg3); border: 1px solid var(--line2); border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(0,0,0,.45);
+}
+.idioma-item {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 9px; border-radius: 4px; cursor: pointer;
+  color: var(--dim); font-size: 12.5px;
+}
+.idioma-item:hover { background: var(--bg4); color: var(--fg); }
+
+/* O idioma em vigor fica marcado com a barra ambar da esquerda, e nao so com a
+   cor do texto: numa lista de tres, "qual esta valendo" tem de ser visivel de
+   relance, sem comparar tons. */
+.idioma-item.ativo { color: var(--fg); box-shadow: inset 2px 0 0 var(--amber); }
+
 /* ------------------------------------------------------------------- corpo */
 
 .corpo { flex: 1; display: flex; min-height: 0; }
