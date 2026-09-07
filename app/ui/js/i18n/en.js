@@ -138,11 +138,11 @@
   UI_DEC: "Dec.",
 
   // The dBASE field types, spelled as a structure listing spells them.
-  UI_TYPE_C: "Character",
-  UI_TYPE_N: "Numeric",
+  UI_TYPE_C: "Text",
+  UI_TYPE_N: "Number",
   UI_TYPE_D: "Date",
   UI_TYPE_L: "Logical",
-  UI_TYPE_M: "Memo",
+  UI_TYPE_M: "Long text",
   UI_TYPE_A: "Array",
   UI_TYPE_B: "Code block",
   UI_TYPE_U: "NIL",

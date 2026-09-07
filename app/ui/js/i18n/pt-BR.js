@@ -140,11 +140,11 @@
 
   // As letras do dBASE viajam cruas da DLL; a palavra é escolhida aqui, com o
   // nome que a listagem de estrutura sempre usou — "caractere", não "texto".
-  UI_TYPE_C: "caractere",
-  UI_TYPE_N: "numérico",
+  UI_TYPE_C: "texto",
+  UI_TYPE_N: "número",
   UI_TYPE_D: "data",
   UI_TYPE_L: "lógico",
-  UI_TYPE_M: "memo",
+  UI_TYPE_M: "texto longo",
   UI_TYPE_A: "vetor",
   UI_TYPE_B: "code block",
   UI_TYPE_U: "NIL",
