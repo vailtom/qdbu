@@ -16,7 +16,7 @@ use std::time::Instant;
 
 use qdbudll::Harbour;
 use serde::Serialize;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 /// Porta do Chrome DevTools Protocol do WebView2.
 ///
@@ -27,6 +27,22 @@ use tauri::{Manager, State};
 /// 9333 e nao 9222 de proposito: a 9222 costuma estar ocupada pelo Chrome.
 /// Sobrescrevivel por QDBU_CDP_PORT; `QDBU_CDP_PORT=0` desliga.
 const CDP_PORT_PADRAO: &str = "9333";
+
+/// Versao de exibicao, `NN.NN`, e a data de linkedicao -- carimbadas pelo
+/// `build.rs` a partir de `[package] version`. Ver o comentario de la: o par e
+/// a data andam juntos porque nenhum dos dois identifica sozinho um binario.
+const VERSAO: &str = env!("QDBU_VERSAO");
+const COMPILADO: &str = env!("QDBU_COMPILADO");
+
+/// O nome do produto na tela. **`QDbu`, com esta grafia exata** -- nao `QDBU`,
+/// que e como o identificador do pacote e as variaveis de ambiente se escrevem.
+/// Ele existe como constante para nao haver uma segunda grafia em lugar nenhum.
+const PRODUTO: &str = "QDbu";
+
+/// O titulo da janela, no formato do DBU: nome, versao e o que o programa e.
+fn titulo_janela() -> String {
+    format!("{PRODUTO} v{VERSAO} - Database Utility")
+}
 
 static PROXIMO_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -139,6 +155,14 @@ struct Estado {
     /// nivel de baixo. Aqui o lock e pego, o Arc e clonado e o lock e solto na
     /// mesma linha; ninguem espera por ninguem.
     progresso: Mutex<Option<Arc<qdbudll::Progresso>>>,
+    /// O que veio na linha de comando. Lido uma vez no arranque e entregue a
+    /// UI pelo `status` -- quem abre arquivo continua sendo o frontend.
+    params: ParametrosLinha,
+    /// A pergunta de saida ja foi respondida com "sim"?
+    ///
+    /// `CloseRequested` dispara de novo quando a UI manda fechar de verdade, e
+    /// sem este trinco a pergunta se repetiria para sempre.
+    saida_confirmada: Mutex<bool>,
 }
 
 #[derive(Serialize)]
@@ -149,6 +173,13 @@ struct StatusDll {
     arch_app: &'static str,
     log: String,
     cdp: String,
+    /// Nome do produto na grafia oficial -- ver a constante PRODUTO.
+    produto: &'static str,
+    /// `NN.NN`, e a data de linkedicao que a acompanha.
+    versao: &'static str,
+    compilado: &'static str,
+    /// O que veio na linha de comando, ja interpretado.
+    params: ParametrosLinha,
 }
 
 #[derive(Serialize)]
@@ -264,6 +295,10 @@ fn status(estado: State<Estado>) -> StatusDll {
                     .map(|p| p.split_whitespace().next().unwrap_or(p).to_string())
             })
             .unwrap_or_else(|| "desligado".to_string()),
+        produto: PRODUTO,
+        versao: VERSAO,
+        compilado: COMPILADO,
+        params: estado.params.clone(),
     }
 }
 
@@ -421,6 +456,19 @@ fn abrir_pasta(caminho: String) -> Result<(), String> {
         .map_err(|e| format!("nao foi possivel abrir o Explorer: {e}"))
 }
 
+/// A resposta "Sim" da pergunta de saida.
+///
+/// Levanta o trinco e manda fechar de novo: o `CloseRequested` volta a
+/// disparar, agora passa direto pela pergunta, e o resto do fechamento
+/// (gravar a geometria, esperar a tarefa parar) acontece uma vez so, no lugar
+/// onde ja estava escrito. `destroy()` aqui pularia tudo isso.
+#[tauri::command]
+fn confirmar_saida(janela: tauri::Window, estado: State<Estado>) {
+    *estado.saida_confirmada.lock().unwrap() = true;
+    log("[qdbu] saida confirmada pelo usuario");
+    let _ = janela.close();
+}
+
 /*
  * NAO HA COMANDO PARA RECARREGAR A DLL, e a ausencia e deliberada.
  *
@@ -574,7 +622,7 @@ fn selftest() -> i32 {
     );
 
 
-    // --- renomeacao para QDBU: a config antiga tem de sobreviver ---
+    // --- renomeacao para QDbu: a config antiga tem de sobreviver ---
     //
     // O que esta em jogo nao e o nome da pasta: e o LOG DE ALTERACOES. Ele
     // responde "o que este programa fez com o meu arquivo?", e uma resposta que
@@ -1740,6 +1788,70 @@ fn selftest() -> i32 {
         saida("  --   TA: fixture TIPOS.DBF ausente, pulando (rode tests/fixtures/fixtures.bat)");
     }
 
+    /*
+     * ---- Linha de comando, versao e titulo -----------------------------
+     *
+     * Nao precisam da DLL: sao funcoes puras. Ficam no fim para nao empurrar
+     * as asercoes de dado para baixo, e entram aqui e nao num `#[test]` porque
+     * o projeto tem um trilho de regressao so, e ele e este.
+     */
+    saida("");
+    let arg = |v: &[&str]| parametros_de(&v.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+
+    t.ok(
+        "CLI: sem argumento nao pede nada",
+        arg(&[]) == ParametrosLinha::default(),
+        &format!("{:?}", arg(&[])),
+    );
+    t.ok(
+        "CLI: o nome solto e o arquivo a abrir",
+        arg(&["NETCLI.DBF"]).arquivo.as_deref() == Some("NETCLI.DBF"),
+        &format!("{:?}", arg(&["NETCLI.DBF"])),
+    );
+    t.ok(
+        "CLI: /E liga o uso exclusivo, em qualquer caixa e em qualquer ordem",
+        arg(&["/e", "X.DBF"]).exclusivo && arg(&["X.DBF", "/E"]).exclusivo,
+        &format!("{:?} / {:?}", arg(&["/e", "X.DBF"]), arg(&["X.DBF", "/E"])),
+    );
+    t.ok(
+        "CLI: /C e /M sao ACEITOS e ignorados -- atalho antigo continua abrindo",
+        arg(&["/C", "/M"]).ignorados.len() == 2 && arg(&["/C", "/M"]).desconhecidos.is_empty(),
+        &format!("{:?}", arg(&["/C", "/M"])),
+    );
+    t.ok(
+        "CLI: .VEW e reconhecido a parte -- nao vira 'arquivo nao encontrado'",
+        arg(&["A.VEW"]).vew.as_deref() == Some("A.VEW") && arg(&["A.VEW"]).arquivo.is_none(),
+        &format!("{:?}", arg(&["A.VEW"])),
+    );
+    t.ok(
+        "CLI: opcao desconhecida NAO e tratada como nome de arquivo",
+        arg(&["/Z"]).arquivo.is_none() && arg(&["/Z"]).desconhecidos == vec!["/Z".to_string()],
+        &format!("{:?}", arg(&["/Z"])),
+    );
+    t.ok(
+        "CLI: --selftest e afins nunca viram arquivo",
+        arg(&["--selftest", "--help"]) == ParametrosLinha::default(),
+        &format!("{:?}", arg(&["--selftest", "--help"])),
+    );
+
+    t.ok(
+        "VER: a versao de exibicao e NN.NN, carimbada pelo build.rs",
+        VERSAO.len() == 5
+            && VERSAO.as_bytes()[2] == b'.'
+            && VERSAO.chars().enumerate().all(|(i, c)| i == 2 || c.is_ascii_digit()),
+        &format!("VERSAO={VERSAO:?}"),
+    );
+    t.ok(
+        "VER: a data de linkedicao veio junto, no formato aaaa-mm-dd hh:mm",
+        COMPILADO.len() == 16 && COMPILADO.as_bytes()[10] == b' ',
+        &format!("COMPILADO={COMPILADO:?}"),
+    );
+    t.ok(
+        "VER: o titulo e 'QDbu vNN.NN - Database Utility' -- e QDbu, nao QDBU",
+        titulo_janela() == format!("QDbu v{VERSAO} - Database Utility"),
+        &titulo_janela(),
+    );
+
     t.resumo()
 }
 
@@ -2035,7 +2147,7 @@ fn dir_da_ui() -> Option<PathBuf> {
     }
 }
 
-/// Move `<raiz>/.dbu` para `<raiz>/.qdbu`, uma vez, na renomeacao para QDBU.
+/// Move `<raiz>/.dbu` para `<raiz>/.qdbu`, uma vez, na renomeacao para QDbu.
 ///
 /// A pasta guarda o que o usuario nao pode perder: o LOG DE ALTERACOES (a
 /// resposta para "o que este programa fez com o meu arquivo?"), as conexoes
@@ -2122,6 +2234,100 @@ fn migra_config_em(raiz: &Path) -> Migracao {
         }
     }
 }
+/*
+ * ====================================================================
+ *  Linha de comando -- a do DBU original, e so ela
+ * ====================================================================
+ *
+ * O DBU aceitava, em qualquer ordem (`ParseCommLine`, DBU.PRG:880):
+ *
+ *   <arquivo>   .VEW ou .DBF para abrir
+ *   /E          uso EXCLUSIVO dos arquivos
+ *   /C          usar cor mesmo em monitor monocromatico
+ *   /M          monocromatico
+ *
+ * Aqui vale o mesmo contrato, com duas diferencas honestas:
+ *
+ * - `/C` e `/M` sao ACEITOS E IGNORADOS, nao recusados. Nao ha monitor
+ *   monocromatico para atender, mas um atalho ou .bat antigo que os passe
+ *   tem de continuar abrindo o programa. Recusar um argumento que perdeu o
+ *   sentido e transformar compatibilidade em erro.
+ * - `.VEW` e RECONHECIDO e recusado com nome proprio. Ler o formato ainda
+ *   nao existe (ver docs/09-modelo-de-confianca.md); dizer "arquivo nao
+ *   encontrado" sobre um .VEW que esta ali seria a resposta errada.
+ *
+ * O que nao se reconhece vai para `desconhecidos` e a UI avisa -- em vez de
+ * ser tratado como nome de arquivo, que e o que o original fazia e produz
+ * "arquivo nao encontrado: /X".
+ */
+#[derive(Serialize, Clone, Default, PartialEq, Debug)]
+struct ParametrosLinha {
+    /// O arquivo a abrir, se veio um.
+    arquivo: Option<String>,
+    /// `/E`: abrir em uso exclusivo.
+    exclusivo: bool,
+    /// `.VEW` pedido na linha de comando -- reconhecido, ainda nao lido.
+    vew: Option<String>,
+    /// Aceitos por compatibilidade, sem efeito aqui (`/C`, `/M`).
+    ignorados: Vec<String>,
+    /// Nao reconhecidos.
+    desconhecidos: Vec<String>,
+}
+
+fn parametros_de(args: &[String]) -> ParametrosLinha {
+    let mut p = ParametrosLinha::default();
+
+    for a in args {
+        // Os proprios do app, ja tratados em main(), nunca sao arquivo.
+        if a.starts_with("--") {
+            continue;
+        }
+
+        match a.to_uppercase().as_str() {
+            "/E" => p.exclusivo = true,
+            "/C" | "/M" => p.ignorados.push(a.clone()),
+            _ => {
+                if a.starts_with('/') {
+                    p.desconhecidos.push(a.clone());
+                } else if a.to_uppercase().ends_with(".VEW") {
+                    p.vew = Some(a.clone());
+                } else if p.arquivo.is_none() {
+                    p.arquivo = Some(a.clone());
+                } else {
+                    // O DBU abria UM arquivo. O segundo nome nao e um erro de
+                    // digitacao a adivinhar -- e um pedido que o programa nao
+                    // sabe atender, e cala-lo esconderia isso.
+                    p.desconhecidos.push(a.clone());
+                }
+            }
+        }
+    }
+
+    p
+}
+
+/// O texto de `--help`. Sai pelo console anexado, como o `--selftest`.
+fn texto_de_ajuda() -> String {
+    format!(
+        "\
+{PRODUTO} v{VERSAO} - Database Utility
+Por Vailton Renato <vailtom@gmail.com>
+Compilado em {COMPILADO}
+
+  qdbu.exe [arquivo] [/E] [/C] [/M]
+
+  arquivo   .DBF para abrir ao subir
+  /E        uso exclusivo dos arquivos
+  /C /M     aceitos por compatibilidade com o DBU; sem efeito aqui
+
+  --selftest   roda a bateria de verificacao e sai
+  --help       este texto
+
+https://github.com/vailtom/qdbu
+"
+    )
+}
+
 fn main() {
     // O log acumula entre execucoes; marca onde cada sessao comeca.
     log(&format!(
@@ -2138,6 +2344,21 @@ fn main() {
         #[cfg(windows)]
         anexar_console_do_pai();
         std::process::exit(selftest());
+    }
+
+    if env::args().any(|a| a == "--help" || a == "-h" || a == "/?") {
+        #[cfg(windows)]
+        anexar_console_do_pai();
+        println!("{}", texto_de_ajuda());
+        std::process::exit(0);
+    }
+
+    // Parametros da linha de comando, no contrato do DBU. Lidos aqui e levados
+    // a UI pelo `status`: quem abre arquivo e o frontend, pelo mesmo caminho de
+    // sempre (`file.open`), e nao um segundo caminho so para a linha de comando.
+    let params = parametros_de(&env::args().skip(1).collect::<Vec<_>>());
+    if params != ParametrosLinha::default() {
+        log(&format!("[qdbu] linha de comando: {params:?}"));
     }
 
     // WebView2 guarda cache e cookies em %LOCALAPPDATA%\<identifier> por padrao.
@@ -2191,7 +2412,20 @@ fn main() {
                 hb: Mutex::new(hb),
                 erro_carga: Mutex::new(erro),
                 progresso: Mutex::new(leitor),
+                params: params.clone(),
+                saida_confirmada: Mutex::new(false),
             });
+
+            /*
+             * O titulo sai daqui, e nao do tauri.conf.json, porque carrega a
+             * VERSAO -- que o build.rs carimba no binario. Um titulo fixo no
+             * .json precisaria ser editado a cada release e, esquecido, mentiria
+             * sobre qual build esta aberto. O do .json fica como o que a janela
+             * mostra no instante entre criar e chegar aqui.
+             */
+            if let Some(w) = app.get_webview_window("main") {
+                let _ = w.set_title(&titulo_janela());
+            }
 
             // Volta como estava. Sem sessao anterior, abre maximizado -- que e
             // o padrao pedido para uma ferramenta de grade larga.
@@ -2266,6 +2500,42 @@ fn main() {
                 anotar_geometria(w);
             }
             tauri::WindowEvent::CloseRequested { api, .. } => {
+                /*
+                 * PERGUNTA ANTES, como o DBU fazia no DOS.
+                 *
+                 * O original perguntava "Sair para o DOS? (S/N)" ao ESC
+                 * (`rsvp(DBU_EXITTODOS)`, DBUVIEW.PRG:395) e so entao saia. Um
+                 * utilitario que escreve em arquivo de cliente nao deve fechar
+                 * por um clique perdido no X.
+                 *
+                 * A pergunta e feita PELA UI, e nao por um dialogo nativo: e
+                 * ela que tem os tres idiomas e o mesmo desenho de todas as
+                 * outras perguntas do app. O Rust so avisa que alguem pediu
+                 * para fechar; quem responde "sim" chama `confirmar_saida`,
+                 * que levanta o trinco e manda fechar de novo -- e ai este
+                 * mesmo tratador segue adiante.
+                 *
+                 * O trinco e o que impede o laco: sem ele o `close()` vindo da
+                 * confirmacao cairia aqui e perguntaria outra vez.
+                 */
+                {
+                    let estado = w.state::<Estado>();
+                    let mut confirmada = estado.saida_confirmada.lock().unwrap();
+                    if !*confirmada {
+                        api.prevent_close();
+                        if let Err(e) = w.emit("pedido-de-saida", ()) {
+                            // A UI nao respondeu ao evento -- prender a pessoa
+                            // numa janela que nao fecha e pior que fechar sem
+                            // perguntar. Solta o trinco e deixa fechar.
+                            log(&format!("[qdbu] nao deu para perguntar sobre a saida: {e}"));
+                            *confirmada = true;
+                            drop(confirmada);
+                            let _ = w.destroy();
+                        }
+                        return;
+                    }
+                }
+
                 gravar_janela(w);
 
                 /*
@@ -2329,7 +2599,7 @@ fn main() {
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
-            status, executar, rpc, andamento, cancelar, abrir_pasta
+            status, executar, rpc, andamento, cancelar, abrir_pasta, confirmar_saida
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o app Tauri");

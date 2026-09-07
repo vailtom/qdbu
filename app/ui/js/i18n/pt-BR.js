@@ -562,7 +562,7 @@
 
   UI_PREFLIGHT: "Conferências",
   UI_PREFLIGHT_EXPLAIN:
-    "Antes de alterar o arquivo, o QDBU confere o que pode dar errado e faz " +
+    "Antes de alterar o arquivo, o QDbu confere o que pode dar errado e faz " +
     "uma cópia. Nada é alterado até você confirmar.",
   UI_BACKUP_RUN: "Fazer o backup",
   UI_BACKUP_DONE: "Backup feito em {dir}",
@@ -648,7 +648,7 @@
 
   UI_ASK_BACKUP_TITLE: "Fazer uma cópia antes?",
   UI_ASK_BACKUP:
-    "A cópia fica na mesma pasta, com a hora no nome, e abre no QDBU como " +
+    "A cópia fica na mesma pasta, com a hora no nome, e abre no QDbu como " +
     "qualquer arquivo — dá para conferir antes de apagar a cópia.",
   UI_WITH_BACKUP: "Sim, copiar antes",
   UI_WITHOUT_BACKUP: "Não, seguir sem cópia",
@@ -1039,4 +1039,26 @@
   UI_RECALL_ANYWAY: "Recuperar mesmo assim",
   UI_STALE_DISCARD: "Descartar o meu",
   UI_STALE_OVERWRITE: "Gravar por cima",
+  // ---------------------------------------------------------------- sobre
+  // O texto e o mesmo do README, palavra por palavra: quem le a janela e quem
+  // le o repositorio tem de receber a mesma informacao.
+  UI_ABOUT: "Sobre",
+  UI_ABOUT_WHAT:
+    "Utilitário inspirado no DBU (o utilitário de manipulação de DBFs do Clipper), desenvolvido em Harbour, com interface em Tauri + Rust + HTML/JS.",
+  UI_NOTICE: "Aviso",
+  UI_ABOUT_WARRANTY:
+    "O QDbu nasceu como prova de conceito e exercício de estudo. É fornecido sem garantia de nenhuma espécie, expressa ou implícita, e o uso é por sua conta e risco.",
+  UI_ABOUT_COMPILED: "Compilado em {when}",
+  UI_ABOUT_SOURCES: "Para baixar os últimos fontes e releases visite:",
+
+  // ------------------------------------------------------------------ sair
+  UI_QUIT_TITLE: "Sair do QDbu?",
+  UI_QUIT_ASK: "O trabalho em andamento nas abas abertas não será retomado.",
+  UI_QUIT_YES: "Sair",
+  UI_QUIT_NO: "Ficar",
+
+  // --------------------------------------------------------- linha de comando
+  ERROR_CLI_VEW_UNSUPPORTED:
+    "'{file}' é um arquivo .VEW, e o QDbu ainda não lê esse formato.",
+  ERROR_CLI_UNKNOWN_OPTION: "Opção não reconhecida na linha de comando: {option}.",
 };

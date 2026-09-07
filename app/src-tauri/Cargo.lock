@@ -2383,6 +2383,7 @@ dependencies = [
 name = "qdbu"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "libloading 0.8.9",
  "serde",
  "serde_json",

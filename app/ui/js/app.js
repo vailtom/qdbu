@@ -1282,7 +1282,7 @@ async function garantirForm(aba) {
   carregarForm(aba.h, cursor);
 }
 
-async function abrirArquivo(caminho, conexao) {
+async function abrirArquivo(caminho, conexao, exclusivo) {
   // Windows mistura / e barra invertida no mesmo caminho; comparar cru erra.
   // fromCharCode(92) evita ter de escapar a barra invertida aqui.
   const SEP = String.fromCharCode(92);
@@ -1299,7 +1299,12 @@ async function abrirArquivo(caminho, conexao) {
   hint(T("UI_OPENING", { file: paraExibir(caminho) }));
 
   try {
-    const i = await QDBU.rpc("file.open", { path: caminho, connection: conexao });
+    // `exclusive` so viaja quando foi PEDIDO. Mandar `false` sempre nao muda
+    // o resultado, mas faria parecer que toda abertura decide sobre o modo --
+    // e quem decide, hoje, e so o /E da linha de comando.
+    const pedido = { path: caminho, connection: conexao };
+    if (exclusivo) pedido.exclusive = true;
+    const i = await QDBU.rpc("file.open", pedido);
     await repintarDoEstado();
 
     // file.open ja trouxe a estrutura; session.state nao a traz (seria pesado
@@ -5327,8 +5332,19 @@ $("form-conexao").addEventListener("submit", async (ev) => {
 
 // --------------------------------------------------------------------- boot
 
+/*
+ * Quem e este programa: nome, versao NN.NN e a data de linkedicao.
+ *
+ * Vem do `status`, carimbada no binario pelo build.rs. Guardada aqui porque a
+ * janela Sobre a repinta a cada troca de idioma e nao deve ir buscar de novo:
+ * ela nao muda enquanto o app esta aberto -- por definicao, e o binario que
+ * esta rodando.
+ */
+let identidade = null;
+
 (async () => {
   const s = await QDBU.status();
+  identidade = { produto: s.produto, versao: s.versao, compilado: s.compilado };
 
   const badge = $("badge");
   // Guardar a CHAVE no proprio elemento, e nao so o texto: o HTML nasce com
@@ -5370,7 +5386,102 @@ $("form-conexao").addEventListener("submit", async (ev) => {
   // Depois disso, restaura o que a sessao anterior tinha e ainda nao esta aberto.
   await repintarDoEstado();
   await restaurarSessao();
+
+  // A linha de comando por ultimo, e de proposito: o arquivo pedido nela tem de
+  // terminar como a aba ATIVA, e restaurarSessao() ativa a aba que estava aberta
+  // antes. Abrir antes dela deixaria a pessoa olhando outro arquivo.
+  await abrirDaLinhaDeComando(s.params);
 })();
+
+/*
+ * O que veio na linha de comando -- o contrato do DBU, decidido no Rust.
+ *
+ * O arquivo entra pelo MESMO `abrirArquivo()` de sempre. Um caminho proprio
+ * para a linha de comando seria um segundo jeito de abrir arquivo, e o segundo
+ * jeito e onde as garantias se perdem: o pre-voo, a aba, a sessao, o codepage
+ * em cascata. Aqui a linha de comando so escolhe QUAL, nunca COMO.
+ */
+async function abrirDaLinhaDeComando(p) {
+  if (!p) return;
+
+  // .VEW e reconhecido e recusado pelo nome. Dizer "arquivo nao encontrado"
+  // sobre um arquivo que esta ali seria a resposta errada para a pergunta certa.
+  if (p.vew) {
+    hint(T("ERROR_CLI_VEW_UNSUPPORTED", { file: paraExibir(p.vew) }));
+    return;
+  }
+
+  for (const o of p.desconhecidos || []) {
+    hint(T("ERROR_CLI_UNKNOWN_OPTION", { option: o }));
+  }
+
+  if (!p.arquivo) return;
+
+  await abrirArquivo(p.arquivo, null, p.exclusivo);
+}
+
+// ------------------------------------------------------------------- sobre
+
+/*
+ * A janela Sobre.
+ *
+ * Os tres pedacos que mudam -- titulo, data de linkedicao e o rotulo do link --
+ * sao pintados aqui e nao por `data-i18n`, porque carregam PARAMETRO. Por isso
+ * `pintarSobre()` e chamada tambem no ouvinte de `idioma-mudou`: sem ela a
+ * frase "Compilado em ..." ficaria no idioma anterior, que e exatamente o
+ * defeito que o combo de ordem ja teve.
+ */
+function pintarSobre() {
+  const id = identidade;
+  if (!id) return;
+  $("sb-titulo").textContent = id.produto + " v" + id.versao;
+  $("sb-compilado").textContent = T("UI_ABOUT_COMPILED", { when: id.compilado });
+}
+
+function abrirSobre() {
+  pintarSobre();
+  $("dlg-sobre").showModal();
+}
+
+$("btn-sobre").addEventListener("click", abrirSobre);
+
+// ------------------------------------------------------- sair, com pergunta
+
+/*
+ * "Sair para o DOS? (S/N)" -- a pergunta que o DBU fazia no ESC.
+ *
+ * Quem pergunta e a UI, e nao um dialogo nativo do sistema: e aqui que estao os
+ * tres idiomas e o mesmo desenho de todas as outras perguntas do app. O Rust
+ * so avisa que alguem pediu para fechar (o X, Alt+F4) e segura o fechamento;
+ * o "Sim" volta para ele por `confirmarSaida()`.
+ *
+ * `emSaida` existe porque o pedido pode chegar de novo enquanto a pergunta
+ * esta na tela -- clicar no X duas vezes -- e duas caixas empilhadas sobre a
+ * mesma decisao sao pior que nenhuma.
+ */
+let emSaida = false;
+
+async function perguntarSaida() {
+  if (emSaida) return;
+  emSaida = true;
+  try {
+    const r = await Swal.fire(
+      swalBase({
+        icon: "question",
+        title: T("UI_QUIT_TITLE"),
+        html: escapaHtml(T("UI_QUIT_ASK")),
+        showCancelButton: true,
+        confirmButtonText: T("UI_QUIT_YES"),
+        cancelButtonText: T("UI_QUIT_NO"),
+      })
+    );
+    if (r.isConfirmed) await QDBU.confirmarSaida();
+  } finally {
+    emSaida = false;
+  }
+}
+
+QDBU.aoEvento("pedido-de-saida", perguntarSaida);
 
 // ------------------------------------------------------- erro que nao some
 
@@ -5401,6 +5512,12 @@ window.addEventListener("unhandledrejection", (ev) => {
 // custaria uma volta inteira e poderia falhar por um motivo que nada tem a ver
 // com a troca.
 window.addEventListener("idioma-mudou", () => {
+  pintarSobre();
+  // O rotulo do botao de paginacao ("50 linhas") e desenhado pelo JS e carrega
+  // PARAMETRO, entao `data-i18n` nao o alcanca. Sem esta linha ele ficava no
+  // idioma anterior ao lado de "nesta pagina: 1-50" ja traduzido -- os dois no
+  // mesmo rodape, a um centimetro um do outro.
+  rotuloAjustes();
   pintar("arvore", desenhar);
   pintar("abas", desenharAbas);
   pintar("conteudo", desenharConteudo);

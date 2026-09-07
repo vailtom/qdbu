@@ -91,8 +91,33 @@ async function rpc(metodo, params) {
   return resp.result;
 }
 
+/**
+ * Escuta um evento emitido pelo Rust.
+ *
+ * O `event` so existe em `window.__TAURI__` -- ele NAO esta no
+ * `__TAURI_INTERNALS__`, que e a via de reserva do `invoke`. Como o unico
+ * evento hoje e a pergunta de saida, e o Rust ja trata o caso de ninguem
+ * responder (fecha em vez de prender a janela), a ausencia so precisa nao
+ * quebrar o resto do arranque.
+ */
+async function aoEvento(nome, fn) {
+  const ev = window.__TAURI__ && window.__TAURI__.event;
+  if (!ev || typeof ev.listen !== "function") return null;
+  return ev.listen(nome, fn);
+}
+
+/**
+ * Responde "sim" a pergunta de saida.
+ *
+ * O Rust levanta o trinco e manda fechar de novo; o resto do fechamento
+ * (gravar a geometria, esperar a tarefa parar) acontece la, uma vez so.
+ */
+async function confirmarSaida() {
+  return invoke("confirmar_saida");
+}
+
 /** Contador de revisao da ultima resposta. Ver session.prg. */
 let ultimaRev = 0;
 const rev = () => ultimaRev;
 
-window.QDBU = { status, chamar, rpc, rev, abrirPasta, ErroQDbu };
+window.QDBU = { status, chamar, rpc, rev, abrirPasta, aoEvento, confirmarSaida, ErroQDbu };

@@ -10,7 +10,7 @@
      por um navegador de verdade, para depurar. PNG de 32px, e nao o .ico de
      494 KB: os assets sao EMBUTIDOS no binario. -->
 <link rel="icon" type="image/png" href="favicon.png">
-<title>QDBU</title>
+<title>QDbu</title>
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -42,6 +42,7 @@
     <symbol id="i-funnel" viewBox="0 0 24 24"><path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z" /></symbol>
     <symbol id="i-file-output" viewBox="0 0 24 24"><path d="M4.226 20.925A2 2 0 0 0 6 22h12a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v3.127" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="m5 11-3 3" /> <path d="m5 17-3-3h10" /></symbol>
     <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /> <path d="m9 12 2 2 4-4" /></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /> <path d="M12 16v-4" /> <path d="M12 8h.01" /></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14" /> <path d="M12 5v14" /></symbol>
     <symbol id="i-circle-minus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /> <path d="M8 12h8" /></symbol>
     <symbol id="i-undo-2" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /> <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></symbol>
@@ -58,7 +59,7 @@
          de codificação. É o símbolo matemático de "porque" — o mesmo "porque"
          que este código persegue nos comentários: o que o programa faz se lê
          nas linhas, o motivo não. Fica sem espaço antes, colado ao nome. -->
-    <h1>QDBU∵</h1>
+    <h1>QDbu∵</h1>
     <span class="sub" data-i18n="UI_SUBTITLE"></span>
   </div>
   <div class="acoes-topo">
@@ -67,6 +68,9 @@
          no Windows os pares de indicador regional saem como as letras "BR". -->
     <!-- Tema antes do idioma: os dois sao preferencia de quem olha, e o de
          cores e o mais mexido dos dois. Montado por js/tema.js. -->
+    <!-- Sobre antes de Preferencias: um diz o que este programa E, o outro
+         como ele se comporta. Quem procura versao procura identidade. -->
+    <button type="button" id="btn-sobre" class="icone" data-i18n-title="UI_ABOUT"><svg class="ico" aria-hidden="true"><use href="#i-info" /></svg></button>
     <button type="button" id="btn-config" class="icone" data-i18n-title="UI_PREFERENCES">⚙</button>
     <div class="tema" id="tema"></div>
     <div class="idioma" id="idioma"></div>
@@ -799,7 +803,7 @@
      este diálogo mostra o que foi conferido, o resultado de cada item, e o que
      vai ser copiado. Quem confirma sabendo o que vai acontecer confia na
      ferramenta -- e é essa confiança que permite a ferramenta fazer PACK e ZAP,
-     que é a razão de o QDBU existir. -->
+     que é a razão de o QDbu existir. -->
 <dialog id="dlg-prevoo">
   <form method="dialog" id="form-prevoo">
     <h2 data-i18n="UI_PREFLIGHT"></h2>
@@ -952,6 +956,39 @@
     <div class="acoes">
       <button type="button" id="aj-cancelar" class="ghost" data-i18n="UI_CANCEL"></button>
       <button type="submit" class="primario" data-i18n="UI_APPLY"></button>
+    </div>
+  </form>
+</dialog>
+
+<!--
+  SOBRE -- quem e este programa, de quem, e de quando.
+
+  A versao e a data de linkedicao NAO sao decoracao: sao a unica forma de
+  alguem dizer "esta acontecendo comigo" sobre um binario especifico. Por isso
+  saem do `status`, carimbadas pelo build.rs, e nao de um literal aqui -- que
+  seria uma segunda verdade, e envelheceria calada.
+
+  O aviso de prova de conceito e o mesmo dos tres README, palavra por palavra:
+  quem le a janela e quem le o repositorio tem de receber a mesma informacao.
+-->
+<dialog id="dlg-sobre">
+  <form method="dialog" id="form-sobre">
+    <h2 id="sb-titulo"></h2>
+    <p class="sb-autor">Vailton Renato &lt;vailtom@gmail.com&gt;</p>
+
+    <p data-i18n="UI_ABOUT_WHAT"></p>
+
+    <h3 data-i18n="UI_NOTICE"></h3>
+    <p class="explica" data-i18n="UI_ABOUT_WARRANTY"></p>
+
+    <p class="explica" id="sb-compilado"></p>
+    <p class="explica">
+      <span data-i18n="UI_ABOUT_SOURCES"></span><br>
+      <a href="https://github.com/vailtom/qdbu" id="sb-link">https://github.com/vailtom/qdbu</a>
+    </p>
+
+    <div class="acoes">
+      <button type="submit" class="primario" data-i18n="UI_CLOSE"></button>
     </div>
   </form>
 </dialog>

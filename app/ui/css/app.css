@@ -94,6 +94,10 @@ header {
   color: var(--fg); font-size: 15px; line-height: 1;
 }
 .icone:hover { border-color: var(--amber); color: var(--amber); }
+/* O botao Sobre carrega um <svg>, e o ⚙ ao lado dele e um caractere de 15px.
+   Sem isto o icone sairia com os 14px da barra de acoes e os dois pareceriam
+   pesos diferentes na mesma linha. */
+.icone .ico { width: 16px; height: 16px; }
 
 /* Linha de checkbox nos dialogos: rotulo ao lado da caixa, sem esticar (a regra
    `dialog input { display:block; width:100% }` transformaria o checkbox num
@@ -103,6 +107,16 @@ header {
    Defeito que so o screenshot mostra -- no DOM esta tudo certo. */
 .linha-check { display: flex; flex-direction: row; align-items: center; gap: 8px; }
 .linha-check input { display: inline-block; width: auto; margin: 0; }
+
+/* Sobre: o autor cola no titulo, como assinatura, e nao como mais um paragrafo
+   do texto. O e-mail e selecionavel de proposito -- e por ele que alguem
+   escreve para relatar um defeito. */
+.sb-autor {
+  margin: -6px 0 14px; color: var(--fg2);
+  font-size: 12px; user-select: text;
+}
+#dlg-sobre h3 { margin: 16px 0 4px; font-size: 13px; }
+#dlg-sobre a { color: var(--amber); }
 
 .tema { position: relative; }
 

@@ -1,6 +1,6 @@
 **English** · [Português](README.pt-BR.md) · [Español](README.es.md)
 
-# QDBU
+# QDbu
 
 A utility inspired by **DBU** (Clipper's DBF handling tool), built in
 **Harbour**, with a **Tauri + Rust + HTML/JS** front end.
@@ -10,14 +10,14 @@ DBF, through the same RDD that has been holding production systems together for
 decades. The graphical layer exists to give that engine a window — not the other
 way around.
 
-What DBU did by keyboard on an 80-column terminal, QDBU does on a modern screen,
+What DBU did by keyboard on an 80-column terminal, QDbu does on a modern screen,
 without giving up anything a customer's file demands: per-record locking, a
 backup before every destructive operation, and a log of everything that changes
 bytes on disk.
 
 ## Notice
 
-QDBU was built as a **proof of concept and a study exercise**. It is provided
+QDbu was built as a **proof of concept and a study exercise**. It is provided
 **without warranty of any kind**, express or implied, and **you use it at your
 own risk**.
 
@@ -40,7 +40,7 @@ See [LICENSE](LICENSE).
 
 ## Beyond the original DBU
 
-DBU covered the essentials on an 80-column terminal. QDBU keeps what it did and
+DBU covered the essentials on an 80-column terminal. QDbu keeps what it did and
 deals with what was left out:
 
 **Several work areas at once**
@@ -63,7 +63,7 @@ deals with what was left out:
   bytes from `dbRecordInfo(DBRI_RAWRECORD)`, not on the value: in an `N(12,2)`,
   `FieldGet()` flattens "never filled" (the blanks from `APPEND BLANK`), `0.00`
   and "did not fit" (asterisks) into the same `0`. If the record changed since it
-  was read, QDBU shows both sides and leaves the decision to the person at the
+  was read, QDbu shows both sides and leaves the decision to the person at the
   keyboard.
 - **Automatic re-read while idle**, repainting only what changed and preserving
   the scroll position.
@@ -95,7 +95,7 @@ deals with what was left out:
   truncated in silence.
 - **`.ntx` matched by key expression, not by name.** In real databases the index
   for `NETCLI.DBF` is called `ID1CLI.ntx`, and every developer uses whatever
-  convention they like. QDBU reads the index header and checks that the fields it
+  convention they like. QDbu reads the index header and checks that the fields it
   names exist in the file.
 - **Index and filter expressions compile at runtime**, so the language functions
   are linked on purpose — without that, a `PADR()` in a key is rejected with

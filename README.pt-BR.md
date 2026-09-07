@@ -1,6 +1,6 @@
 [English](README.md) · **Português** · [Español](README.es.md)
 
-# QDBU
+# QDbu
 
 Utilitário inspirado no **DBU** (o utilitário de manipulação de DBFs do Clipper),
 desenvolvido em **Harbour**, com interface em **Tauri + Rust + HTML/JS**.
@@ -9,14 +9,14 @@ O Harbour é quem faz o trabalho: ele abre, lê, trava, indexa, filtra e grava o
 DBF, com o mesmo RDD que sustenta sistemas em produção há décadas. A camada
 gráfica existe para dar janela ao que ele já sabe fazer — e não o contrário.
 
-O que o DBU fazia por teclado num terminal de 80 colunas, o QDBU faz numa tela
+O que o DBU fazia por teclado num terminal de 80 colunas, o QDbu faz numa tela
 moderna, sem abrir mão de nada que um arquivo de cliente exige: trava por
 registro, backup antes de operação destrutiva, e log de tudo que muda bytes no
 disco.
 
 ## Aviso
 
-O QDBU nasceu como **prova de conceito e exercício de estudo**. É fornecido
+O QDbu nasceu como **prova de conceito e exercício de estudo**. É fornecido
 **sem garantia de nenhuma espécie**, expressa ou implícita, e **o uso é por sua
 conta e risco**.
 
@@ -38,7 +38,7 @@ Ver [LICENSE](LICENSE).
 
 ## Além do DBU original
 
-O DBU resolvia o essencial num terminal de 80 colunas. O QDBU mantém o que ele
+O DBU resolvia o essencial num terminal de 80 colunas. O QDbu mantém o que ele
 fazia e trata o que ficou de fora:
 
 **Várias work areas ao mesmo tempo**
@@ -62,7 +62,7 @@ fazia e trata o que ficou de fora:
   os bytes de `dbRecordInfo(DBRI_RAWRECORD)`, e não sobre o valor: num `N(12,2)`
   o `FieldGet()` achata "nunca preenchido" (brancos de `APPEND BLANK`), `0.00` e
   "não coube" (asteriscos) no mesmo `0`. Se o registro mudou desde a leitura, o
-  QDBU mostra os dois lados e deixa a decisão com quem está na frente.
+  QDbu mostra os dois lados e deixa a decisão com quem está na frente.
 - **Releitura automática em ociosidade**, repintando só o que mudou e
   preservando a rolagem.
 
@@ -92,7 +92,7 @@ fazia e trata o que ficou de fora:
   estava lá; um `C(40)` recebendo 60 caracteres seria truncado calado.
 - **`.ntx` casado pela expressão de chave, não pelo nome.** Nas bases reais o
   índice de `NETCLI.DBF` se chama `ID1CLI.ntx`, e cada dev usa a convenção que
-  quer. O QDBU lê o cabeçalho do índice e confere se os campos citados existem
+  quer. O QDbu lê o cabeçalho do índice e confere se os campos citados existem
   no arquivo.
 - **A expressão de índice e a de filtro compilam em runtime**, então as funções
   da linguagem estão linkadas de propósito — sem isso um `PADR()` numa chave

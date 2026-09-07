@@ -1,6 +1,6 @@
 @echo off
 rem =====================================================================
-rem  empacota.bat - monta o .zip do QDBU para o time de teste.
+rem  empacota.bat - monta o .zip do QDbu para o time de teste.
 rem
 rem  NAO E INSTALADOR. E um pacote portatil: descompactar e clicar. O
 rem  instalador vem depois; isto existe para pipeline de beta ser um
@@ -55,8 +55,13 @@ if not exist "%ORIGEM%" (
 )
 
 rem ---- Versao e carimbo, numa chamada so ------------------------------
+rem A versao sai do Cargo.toml e de nenhum outro lugar: e a mesma que o
+rem build.rs carimba no binario e que a janela Sobre mostra. O tauri.conf.json
+rem NAO declara `version` de proposito -- com dois lugares, bumpar um e
+rem esquecer o outro faz o titulo da janela e o nome do pacote discordarem, e
+rem ninguem repara nisso ate alguem relatar um defeito citando a versao errada.
 for /f "usebackq tokens=1,2" %%a in (`powershell -NoProfile -Command ^
-  "$c=Get-Content '%QDBU_HOME%\app\src-tauri\tauri.conf.json' -Raw | ConvertFrom-Json; '{0} {1}' -f $c.version,(Get-Date -Format yyyyMMdd)"`) do (
+  "$l=(Select-String -Path '%QDBU_HOME%\app\src-tauri\Cargo.toml' -Pattern '^version = ' | Select-Object -First 1).Line; $v=$l.Split([char]34)[1]; '{0} {1}' -f $v,(Get-Date -Format yyyyMMdd)"`) do (
   set "VER=%%a"
   set "HOJE=%%b"
 )
@@ -126,7 +131,7 @@ rem  onde o app grava. Um arquivo separado envelheceria em silencio na
 rem  primeira vez que este script mudasse de conteudo.
 rem =====================================================================
 :leiame
-> %1 echo QDBU %VER%  --  pacote de teste de %HOJE%
+> %1 echo QDbu %VER%  --  pacote de teste de %HOJE%
 >>%1 echo.
 >>%1 echo COMO RODAR
 >>%1 echo.

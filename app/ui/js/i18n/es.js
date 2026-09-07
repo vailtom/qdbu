@@ -535,7 +535,7 @@
 
   UI_PREFLIGHT: "Comprobaciones",
   UI_PREFLIGHT_EXPLAIN:
-    "Antes de alterar el archivo, QDBU comprueba lo que puede salir mal y hace " +
+    "Antes de alterar el archivo, QDbu comprueba lo que puede salir mal y hace " +
     "una copia. Nada se altera hasta que usted confirme.",
   UI_BACKUP_RUN: "Hacer la copia",
   UI_BACKUP_DONE: "Copia guardada en {dir}",
@@ -620,7 +620,7 @@
   UI_ASK_BACKUP_TITLE: "¿Hacer una copia antes?",
   UI_ASK_BACKUP:
     "La copia queda en la misma carpeta, con la hora en el nombre, y se abre " +
-    "en QDBU como cualquier archivo — puede revisarla antes de borrarla.",
+    "en QDbu como cualquier archivo — puede revisarla antes de borrarla.",
   UI_WITH_BACKUP: "Sí, copiar antes",
   UI_WITHOUT_BACKUP: "No, seguir sin copia",
   UI_GO_AHEAD: "Continuar",
@@ -1004,4 +1004,24 @@
   UI_RECALL_ANYWAY: "Recuperar de todos modos",
   UI_STALE_DISCARD: "Descartar lo mío",
   UI_STALE_OVERWRITE: "Sobrescribir",
+  // ------------------------------------------------------------ acerca de
+  UI_ABOUT: "Acerca de",
+  UI_ABOUT_WHAT:
+    "Utilidad inspirada en DBU (la herramienta de manipulación de DBF de Clipper), desarrollada en Harbour, con interfaz en Tauri + Rust + HTML/JS.",
+  UI_NOTICE: "Aviso",
+  UI_ABOUT_WARRANTY:
+    "QDbu nació como prueba de concepto y ejercicio de estudio. Se entrega sin garantía de ningún tipo, expresa o implícita, y su uso es por su cuenta y riesgo.",
+  UI_ABOUT_COMPILED: "Compilado el {when}",
+  UI_ABOUT_SOURCES: "Para descargar las últimas fuentes y versiones visite:",
+
+  // ------------------------------------------------------------------ salir
+  UI_QUIT_TITLE: "¿Salir de QDbu?",
+  UI_QUIT_ASK: "El trabajo en curso en las pestañas abiertas no se reanudará.",
+  UI_QUIT_YES: "Salir",
+  UI_QUIT_NO: "Quedarse",
+
+  // ------------------------------------------------------- línea de comandos
+  ERROR_CLI_VEW_UNSUPPORTED:
+    "'{file}' es un archivo .VEW, y QDbu todavía no lee ese formato.",
+  ERROR_CLI_UNKNOWN_OPTION: "Opción no reconocida en la línea de comandos: {option}.",
 };

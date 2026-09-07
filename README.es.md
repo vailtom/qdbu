@@ -1,6 +1,6 @@
 [English](README.md) · [Português](README.pt-BR.md) · **Español**
 
-# QDBU
+# QDbu
 
 Utilidad inspirada en **DBU** (la herramienta de manipulación de DBF de Clipper),
 desarrollada en **Harbour**, con interfaz en **Tauri + Rust + HTML/JS**.
@@ -10,14 +10,14 @@ DBF, con el mismo RDD que sostiene sistemas en producción desde hace décadas. 
 capa gráfica existe para darle una ventana a lo que él ya sabe hacer, y no al
 revés.
 
-Lo que DBU hacía por teclado en una terminal de 80 columnas, QDBU lo hace en una
+Lo que DBU hacía por teclado en una terminal de 80 columnas, QDbu lo hace en una
 pantalla moderna, sin renunciar a nada de lo que exige el archivo de un cliente:
 bloqueo por registro, copia de seguridad antes de toda operación destructiva, y
 registro de todo lo que cambia bytes en el disco.
 
 ## Aviso
 
-QDBU nació como **prueba de concepto y ejercicio de estudio**. Se entrega **sin
+QDbu nació como **prueba de concepto y ejercicio de estudio**. Se entrega **sin
 garantía de ningún tipo**, expresa o implícita, y **su uso es por su cuenta y
 riesgo**.
 
@@ -40,7 +40,7 @@ Ver [LICENSE](LICENSE).
 
 ## Más allá del DBU original
 
-DBU resolvía lo esencial en una terminal de 80 columnas. QDBU mantiene lo que
+DBU resolvía lo esencial en una terminal de 80 columnas. QDbu mantiene lo que
 hacía y se ocupa de lo que quedó fuera:
 
 **Varias áreas de trabajo a la vez**
@@ -65,7 +65,7 @@ hacía y se ocupa de lo que quedó fuera:
   es sobre los bytes de `dbRecordInfo(DBRI_RAWRECORD)`, no sobre el valor: en un
   `N(12,2)`, `FieldGet()` aplasta "nunca rellenado" (los blancos de
   `APPEND BLANK`), `0.00` y "no cupo" (asteriscos) en el mismo `0`. Si el
-  registro cambió desde la lectura, QDBU muestra los dos lados y deja la decisión
+  registro cambió desde la lectura, QDbu muestra los dos lados y deja la decisión
   a quien está delante.
 - **Relectura automática en reposo**, repintando solo lo que cambió y
   conservando el desplazamiento.
@@ -98,7 +98,7 @@ hacía y se ocupa de lo que quedó fuera:
   silencio.
 - **`.ntx` emparejado por la expresión de clave, no por el nombre.** En las bases
   reales el índice de `NETCLI.DBF` se llama `ID1CLI.ntx`, y cada desarrollador
-  usa la convención que quiere. QDBU lee la cabecera del índice y comprueba que
+  usa la convención que quiere. QDbu lee la cabecera del índice y comprueba que
   los campos que menciona existan en el archivo.
 - **Las expresiones de índice y de filtro compilan en tiempo de ejecución**, así
   que las funciones del lenguaje están enlazadas a propósito: sin eso, un

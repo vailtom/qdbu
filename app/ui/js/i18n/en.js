@@ -539,7 +539,7 @@
 
   UI_PREFLIGHT: "Pre-flight checks",
   UI_PREFLIGHT_EXPLAIN:
-    "Before altering the file, QDBU checks what could go wrong and makes a " +
+    "Before altering the file, QDbu checks what could go wrong and makes a " +
     "copy. Nothing is altered until you confirm.",
   UI_BACKUP_RUN: "Run the backup",
   UI_BACKUP_DONE: "Backup written to {dir}",
@@ -624,7 +624,7 @@
   UI_ASK_BACKUP_TITLE: "Make a copy first?",
   UI_ASK_BACKUP:
     "The copy stays in the same folder, with the time in its name, and opens " +
-    "in QDBU like any file — you can check it before deleting the copy.",
+    "in QDbu like any file — you can check it before deleting the copy.",
   UI_WITH_BACKUP: "Yes, copy first",
   UI_WITHOUT_BACKUP: "No, go without a copy",
   UI_GO_AHEAD: "Continue",
@@ -1008,4 +1008,24 @@
   UI_RECALL_ANYWAY: "Recall anyway",
   UI_STALE_DISCARD: "Discard mine",
   UI_STALE_OVERWRITE: "Overwrite",
+  // ---------------------------------------------------------------- about
+  UI_ABOUT: "About",
+  UI_ABOUT_WHAT:
+    "A utility inspired by DBU (Clipper's DBF handling tool), built in Harbour, with a Tauri + Rust + HTML/JS front end.",
+  UI_NOTICE: "Notice",
+  UI_ABOUT_WARRANTY:
+    "QDbu was built as a proof of concept and a study exercise. It is provided without warranty of any kind, express or implied, and you use it at your own risk.",
+  UI_ABOUT_COMPILED: "Built on {when}",
+  UI_ABOUT_SOURCES: "For the latest sources and releases visit:",
+
+  // ------------------------------------------------------------------ quit
+  UI_QUIT_TITLE: "Quit QDbu?",
+  UI_QUIT_ASK: "Work in progress in the open tabs will not be resumed.",
+  UI_QUIT_YES: "Quit",
+  UI_QUIT_NO: "Stay",
+
+  // ---------------------------------------------------------- command line
+  ERROR_CLI_VEW_UNSUPPORTED:
+    "'{file}' is a .VEW file, and QDbu does not read that format yet.",
+  ERROR_CLI_UNKNOWN_OPTION: "Unrecognised command-line option: {option}.",
 };

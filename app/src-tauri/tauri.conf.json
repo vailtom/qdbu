@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "QDBU",
-  "version": "0.1.0",
+  "productName": "QDbu",
   "identifier": "br.projetos.qdbu",
   "build": {
     "frontendDist": "../ui"
@@ -9,7 +8,7 @@
   "app": {
     "windows": [
       {
-        "title": "QDBU - Database Utility",
+        "title": "QDbu - Database Utility",
         "width": 1280,
         "height": 800,
         "minWidth": 720,

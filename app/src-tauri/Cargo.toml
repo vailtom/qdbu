@@ -6,6 +6,10 @@ rust-version = "1.77"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+# So para o carimbo de linkedicao do build.rs. E dependencia de BUILD: nao entra
+# no binario, e nao custa download -- o chrono ja estava na arvore do tauri.
+# `default-features = false` com `clock` pega a hora local sem arrastar o resto.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
