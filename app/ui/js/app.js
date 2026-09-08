@@ -1694,11 +1694,29 @@ async function insistirEmUso(tentar, opcoes) {
       await new Promise((f) => setTimeout(f, EM_USO_PULSO_MS));
     }
 
+    /*
+     * A RECUSA TAMBEM RELIGOU, e pode ter voltado sem tudo.
+     *
+     * Quando o modo pedido nao sai, a DLL volta ao modo anterior e religa --
+     * e o que nao conseguiu repor vem em `params.rebindErrors`. E a hora
+     * exata de dizer: quem decide entre tentar de novo e desistir precisa
+     * saber que o arquivo ja voltou sem o filtro, senao desiste e opera sobre
+     * uma grade que deixou de descrever o que mostra.
+     */
+    const perdas = ((ultimo.erro && ultimo.erro.params) || {}).rebindErrors || [];
     const resp = await Swal.fire(
       swalBase({
         icon: "warning",
         title: T("UI_FILE_IN_USE_TITLE"),
-        html: escapaHtml(msgErro(ultimo.erro)),
+        html:
+          escapaHtml(msgErro(ultimo.erro)) +
+          (perdas.length
+            ? '<ul class="sw-lista sw-pend"><li>' +
+              perdas
+                .map((p) => escapaHtml(msgErro({ codigo: p.code, params: p.params || {} })))
+                .join("</li><li>") +
+              "</li></ul>"
+            : ""),
         showCancelButton: true,
         confirmButtonText: T("UI_RETRY"),
         cancelButtonText: T("UI_CANCEL"),
@@ -1708,6 +1726,44 @@ async function insistirEmUso(tentar, opcoes) {
     // como falha -- por isso `desistiu`, e por isso a mensagem e WARN_.
     if (!resp.isConfirmed) return { ok: false, erro: ultimo.erro, desistiu: true };
   }
+}
+
+/*
+ * O QUE O RELIGAR NAO CONSEGUIU REPOR TEM DE APARECER.
+ *
+ * Toda operacao que fecha e reabre a area -- PACK, ZAP, alterar estrutura,
+ * trocar o modo, a sonda do `file.trylock` -- devolve `rebindErrors`: a lista
+ * do que o `Religar()` da DLL nao conseguiu por de volta. Um indice que nao
+ * reanexou, uma ordem que se perdeu, um filtro que deixou de compilar.
+ *
+ * A lista existia na DLL e nao era lida por ninguem aqui, o que e a pior
+ * combinacao possivel: NENHUMA dessas perdas produz erro. A operacao responde
+ * "ok", a tela repinta, e a grade passa a mostrar o arquivo inteiro com o
+ * filtro ainda escrito no painel, ou na ordem fisica com o nome do indice
+ * ainda aceso. Quem olha nao tem como saber -- e quem apaga registro olhando
+ * uma grade filtrada que deixou de filtrar apaga o que nao queria.
+ *
+ * Cada entrada ja vem com `code` e `params` no molde de qualquer recusa, entao
+ * a frase sai do dicionario pelo mesmo caminho de sempre.
+ *
+ * O PAINEL DO FILTRO E CORRIGIDO JUNTO, e nao so a barra. Sem isso ele seguia
+ * dizendo "Filtro aplicado: TXT == 'x'." sobre uma area que ja nao tem filtro
+ * nenhum -- a mesma divergencia entre painel e arquivo que o comentario de
+ * `ativarAba()` descreve, e a pior possivel aqui: a frase do painel afirma
+ * exatamente o contrario do que a barra acabou de avisar.
+ */
+function avisarPerdasDoReligar(res) {
+  const lista = (res && res.rebindErrors) || [];
+  if (!lista.length) return false;
+  const frases = lista.map((f) => msgErro({ codigo: f.code, params: f.params || {} }));
+  hint(frases.join(" "));
+
+  const doFiltro = lista.findIndex((f) => f.item === "filter");
+  if (doFiltro >= 0) {
+    msgFiltro(frases[doFiltro], "aviso");
+    marcarFiltroAtivo("", null);
+  }
+  return true;
 }
 
 async function abrirArquivo(caminho, conexao, exclusivo, somenteLeitura) {
@@ -7960,6 +8016,11 @@ $("es-editar").addEventListener("click", async () => {
     return;
   }
 
+  /* A SONDA TAMBEM RELIGA, e o que ela nao repos importa AQUI mais que em
+     qualquer outro lugar: a pessoa esta prestes a montar uma estrutura
+     olhando uma grade que pode ter perdido o filtro sem dizer nada. */
+  if (avisarPerdasDoReligar(r.valor)) sincronizarPaineis();
+
   esEntrarNoModo(true);
   } finally {
     emOperacaoExclusiva = false;
@@ -8293,6 +8354,9 @@ async function esAplicar() {
         showCancelButton: false,
       })
     );
+    /* DEPOIS do dialogo: `repintarDoEstado` escreve na barra, e o aviso tem de
+       ser a ultima coisa que sobra nela. */
+    avisarPerdasDoReligar(r);
   } catch (e) {
     await repintarDoEstado(); // o handle pode ter virado `detached` (R6)
     restoreDraft();
@@ -9096,6 +9160,9 @@ async function destrutiva(acao) {
         showCancelButton: false,
       })
     );
+    /* Ver a nota no struct.modify: o aviso vem depois do dialogo, senao o
+       repintar o apaga da barra antes de alguem ler. */
+    avisarPerdasDoReligar(r);
   } catch (e) {
     await repintarDoEstado(); // o handle pode ter virado `detached` (R6)
     await Swal.fire(

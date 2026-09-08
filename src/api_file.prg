@@ -500,41 +500,67 @@ STATIC FUNCTION AliasLivre( cArq )
 FUNCTION Api_File_Trylock( hP )
 
    LOCAL cH := ParStr( hP, "h" )
-   LOCAL xErro, hInfo, xIda, xVolta, aFalhas := {}
+   LOCAL xErro, hInfo, hEstado, cArq, cAlias, lModoOrig, nWa, aFalhas := {}
 
    IF ( xErro := SessSelect( cH ) ) != NIL
       RETURN xErro
    ENDIF
 
-   hInfo := SessHandle( cH )
+   hInfo     := SessHandle( cH )
+   lModoOrig := hInfo[ "exclusive" ]
 
    /* Ja exclusivo: ninguem mais tem o arquivo. Fechar e reabrir so para
       confirmar seria arriscar o que ja esta garantido. */
-   IF hInfo[ "exclusive" ]
+   IF lModoOrig
       RETURN Ok( { "canLock" => .T., "rebindErrors" => {} } )
    ENDIF
 
-   /* IDA. A recusa dele ja vem com o codigo certo e com a area de volta no
-      modo anterior -- nao ha o que traduzir nem o que desfazer aqui. */
-   xIda := Api_File_Reopen( { "h" => cH, "exclusive" => .T. } )
-   IF ! xIda[ "ok" ]
-      RETURN xIda
-   ENDIF
-   AEval( hb_HGetDef( xIda[ "result" ], "rebindErrors", {} ), {| x | AAdd( aFalhas, x ) } )
+   cArq    := hInfo[ "path" ]
+   cAlias  := hInfo[ "alias" ]
+   hEstado := EstadoAntes( cH )
 
-   /* VOLTA. Devolve o exclusivo na hora -- ver a divergencia acima. */
-   xVolta := Api_File_Reopen( { "h" => cH, "exclusive" => .F. } )
-   IF ! xVolta[ "ok" ]
-      RETURN xVolta
+   dbCloseArea()
+
+   /* `SoLeitura` tambem aqui: sem ela a sonda reabriria a area GRAVAVEL, e um
+      handle somente-leitura perderia a trava do RDD so por alguem ter clicado
+      em "Editar estrutura". */
+   nWa := AbreNaArea( cArq, cAlias, .T., SoLeitura( hInfo ) )
+
+   IF nWa == 0
+      /* Nao conseguiu: volta ao modo original e devolve a recusa. O `aFalhas`
+         viaja tambem AQUI -- e no caminho de recusa que o religar acontece, e
+         era exatamente onde a versao anterior perdia o relato. */
+      xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, ;
+                           Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "another program is using it", ;
+                                "h", { "file" => hb_FNameNameExt( cArq ), ;
+                                       "rebindErrors" => aFalhas } ), .F., @aFalhas )
+      RETURN xErro
    ENDIF
-   AEval( hb_HGetDef( xVolta[ "result" ], "rebindErrors", {} ), {| x | AAdd( aFalhas, x ) } )
+
+   SessReattach( cH, nWa, .T. )
 
    /*
-    * As falhas de religar VIAJAM. O `file.reopen` ja as reportava e esta sonda
-    * as jogava fora: um indice que nao reabre ou um filtro que nao recompila
-    * some sem uma palavra, e a tela continua mostrando o que o filtro antigo
-    * dizia. Quem pergunta "posso?" tem de saber o que a pergunta custou.
+    * DEVOLVE O EXCLUSIVO NA HORA, pelo `ReabreArea` e nao por um segundo
+    * `file.reopen`.
+    *
+    * Com dois `reopen` havia um buraco: se a volta ao compartilhado falhasse,
+    * o fallback dele reabria no "modo anterior" -- que a essa altura JA ERA o
+    * exclusivo --, devolvia recusa e deixava o arquivo do cliente TRAVADO pela
+    * vida da aba. E a recusa entrava na lista de "em uso", entao o "tentar
+    * novamente" caia no atalho de handle-ja-exclusivo e abria o editor
+    * dizendo que estava tudo bem.
+    *
+    * O `ReabreArea` FECHA a area quando nao consegue reabrir (`SessDetach`):
+    * perder o handle e ruim, mas soltar a trava e obrigatorio -- nao se
+    * sequestra o arquivo de outro programa por causa de uma pergunta.
+    *
+    * De quebra, o religar acontece UMA vez por sondagem, e nao duas.
     */
+   xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .F., @aFalhas )
+   IF xErro != NIL
+      RETURN xErro
+   ENDIF
+
    RETURN Ok( { "canLock" => .T., "rebindErrors" => aFalhas } )
 
 /*
@@ -773,8 +799,44 @@ FUNCTION FileState( cH, lWithFields )
 /*
  * file.reopen {"h":"h7","exclusive":true} -- troca o modo de abertura.
  *
- * A SEQUENCIA E A R6 de as regras de integridade, e cada falha tem tratamento
- * proprio porque elas nao sao equivalentes.
+ * A sequencia e a R6, e mora no `TrocaModo` logo abaixo, junto do codigo que a
+ * executa. Aqui fica so o que e proprio desta porta: o modo pedido por omissao
+ * e o compartilhado, e pedir o modo que ja se tem nao mexe em nada.
+ */
+FUNCTION Api_File_Reopen( hP )
+
+   LOCAL cH    := ParStr( hP, "h" )
+   LOCAL lExcl := ParLog( hP, "exclusive", .F. )
+   LOCAL xErro
+
+   IF ( xErro := SessSelect( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   /* Ja esta no modo pedido: nao mexe. Fechar e reabrir a toa seria abrir a
+      janela por nada. */
+   IF SessHandle( cH )[ "exclusive" ] == lExcl
+      RETURN Ok( FileState( cH, .F. ) )
+   ENDIF
+
+   RETURN TrocaModo( cH, lExcl, 0 )
+
+
+/*
+ * A SEQUENCIA DA R6, ESCRITA UMA VEZ SO.
+ *
+ * `file.reopen` e `file.reopenslow` sao a MESMA corrida; a segunda so alarga a
+ * janela do meio para caber uma mao humana. Eram duas copias, e a segunda ja
+ * tinha ficado para tras: a correcao que fez a recusa carregar `rebindErrors`
+ * entrou so aqui, e o `reopenslow` -- que existe justamente para ser conduzido
+ * enquanto alguem toma o arquivo, o cenario mais provavel de perder estado --
+ * seguiu descartando a lista. Duas copias de um passo perigoso divergem
+ * caladas; uma so nao tem como.
+ *
+ * `nEspera`, em segundos, e a unica diferenca de comportamento. Zero e o
+ * `file.reopen`.
+ *
+ * Cada falha tem tratamento proprio, porque elas nao sao equivalentes:
  *
  *   1. fotografa o ambiente (rebind.prg)
  *   2. dbCloseArea()
@@ -790,29 +852,19 @@ FUNCTION FileState( cH, lWithFields )
  * o pior caso e "nao consegui trocar o modo", nunca "perdi o arquivo do
  * usuario sem avisar".
  */
-FUNCTION Api_File_Reopen( hP )
+STATIC FUNCTION TrocaModo( cH, lExcl, nEspera )
 
-   LOCAL cH    := ParStr( hP, "h" )
-   LOCAL lExcl := ParLog( hP, "exclusive", .F. )
-   LOCAL xErro, hInfo, hEstado, cArq, cAlias, nWa
-
-   IF ( xErro := SessSelect( cH ) ) != NIL
-      RETURN xErro
-   ENDIF
-
-   hInfo  := SessHandle( cH )
-   cArq   := hInfo[ "path" ]
-   cAlias := hInfo[ "alias" ]
-
-   /* Ja esta no modo pedido: nao mexe. Fechar e reabrir a toa seria abrir a
-      janela por nada. */
-   IF hInfo[ "exclusive" ] == lExcl
-      RETURN Ok( FileState( cH, .F. ) )
-   ENDIF
-
-   hEstado := EstadoAntes( cH )
+   LOCAL hInfo   := SessHandle( cH )
+   LOCAL cArq    := hInfo[ "path" ]
+   LOCAL cAlias  := hInfo[ "alias" ]
+   LOCAL hEstado := EstadoAntes( cH )
+   LOCAL nWa, aFalhas
 
    dbCloseArea()
+
+   IF nEspera > 0
+      hb_idleSleep( nEspera )      /* ---- a janela, aberta de par em par ---- */
+   ENDIF
 
    nWa := AbreNaArea( cArq, cAlias, lExcl, SoLeitura( hInfo ) )
 
@@ -829,20 +881,39 @@ FUNCTION Api_File_Reopen( hP )
                        "why"    => "ERROR_REOPEN_FAILED" } )
       ENDIF
 
-      /* Voltou ao estado anterior: religa e recusa. Nada foi perdido. */
+      /*
+       * Voltou ao estado anterior: religa e recusa.
+       *
+       * "Nada foi perdido" era uma afirmacao, nao um fato: o que o religar NAO
+       * conseguiu repor era descartado justamente aqui -- no caminho de
+       * RECUSA, que e o mais provavel de todos, porque e o que acontece quando
+       * outro programa esta com o arquivo. A lista viaja com a recusa.
+       */
       SessReattach( cH, nWa, hInfo[ "exclusive" ] )
-      Religar( hEstado )
+      aFalhas := Religar( hEstado )
 
       RETURN Err( iif( lExcl, "ERROR_CANNOT_LOCK_EXCLUSIVE", "ERROR_CANNOT_OPEN_SHARED" ), ;
                   "mode change refused", "h", ;
-                  { "file" => hb_FNameNameExt( cArq ) } )
+                  { "file" => hb_FNameNameExt( cArq ), ;
+                    "rebindErrors" => aFalhas } )
    ENDIF
 
    SessReattach( cH, nWa, lExcl )
 
+   /*
+    * O RELIGAR VEM PRIMEIRO, e a foto depois.
+    *
+    * Escrito dentro do hash literal, o Harbour avaliava da esquerda para a
+    * direita: o `FileState` corria ANTES do `Religar` e fotografava a area
+    * recem-aberta -- filtro vazio, cursor no registro 1, sem ordem ativa.
+    * Quem repintasse a tela com esse `state` apagaria da interface o filtro e
+    * a posicao que o religar tinha acabado de repor, sem erro nenhum.
+    */
+   aFalhas := Religar( hEstado )
+
    RETURN Ok( { ;
       "state"        => FileState( cH, .F. ), ;
-      "rebindErrors" => Religar( hEstado ) } )
+      "rebindErrors" => aFalhas } )
 
 
 /*
@@ -945,48 +1016,16 @@ FUNCTION Api_File_Reconnect( hP )
  */
 FUNCTION Api_File_Reopenslow( hP )
 
-   LOCAL cH     := ParStr( hP, "h" )
-   LOCAL lExcl  := ParLog( hP, "exclusive", .T. )
+   LOCAL cH      := ParStr( hP, "h" )
+   LOCAL lExcl   := ParLog( hP, "exclusive", .T. )
    LOCAL nEspera := ParNum( hP, "hold", 10 )
-   LOCAL xErro, hInfo, hEstado, cArq, cAlias, nWa
+   LOCAL xErro
 
    IF ( xErro := SessSelect( cH ) ) != NIL
       RETURN xErro
    ENDIF
 
-   nEspera := Max( 1, Min( nEspera, 60 ) )
-
-   hInfo   := SessHandle( cH )
-   cArq    := hInfo[ "path" ]
-   cAlias  := hInfo[ "alias" ]
-   hEstado := EstadoAntes( cH )
-
-   dbCloseArea()
-
-   /* ---- A JANELA, aberta de par em par ---- */
-   hb_idleSleep( nEspera )
-
-   nWa := AbreNaArea( cArq, cAlias, lExcl, SoLeitura( hInfo ) )
-
-   IF nWa == 0
-      nWa := AbreNaArea( cArq, cAlias, hInfo[ "exclusive" ], SoLeitura( hInfo ) )
-
-      IF nWa == 0
-         SessDetach( cH, "ERROR_REOPEN_FAILED" )
-         RETURN Err( "ERROR_HANDLE_DETACHED", "could not reopen in either mode", "h", ;
-                     { "handle" => cH, ;
-                       "file"   => hb_FNameNameExt( cArq ), ;
-                       "why"    => "ERROR_REOPEN_FAILED" } )
-      ENDIF
-
-      SessReattach( cH, nWa, hInfo[ "exclusive" ] )
-      Religar( hEstado )
-
-      RETURN Err( iif( lExcl, "ERROR_CANNOT_LOCK_EXCLUSIVE", "ERROR_CANNOT_OPEN_SHARED" ), ;
-                  "mode change refused", "h", { "file" => hb_FNameNameExt( cArq ) } )
-   ENDIF
-
-   SessReattach( cH, nWa, lExcl )
-
-   RETURN Ok( { "state" => FileState( cH, .F. ), ;
-                "rebindErrors" => Religar( hEstado ) } )
+   /* Sem o atalho do `file.reopen`: pedir o modo que ja se tem tem de fechar e
+      reabrir do mesmo jeito, senao o gancho de diagnostico nao abriria janela
+      nenhuma -- que e a unica coisa que ele existe para fazer. */
+   RETURN TrocaModo( cH, lExcl, Max( 1, Min( nEspera, 60 ) ) )

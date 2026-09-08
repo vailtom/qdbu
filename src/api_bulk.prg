@@ -272,14 +272,18 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
 
    nDepois := LastRec()
 
-   xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL )
+   /* O QUE O RELIGAR NAO CONSEGUIU REPOR VIAJA COM O SUCESSO.
+      Um PACK que deu certo e um indice que nao voltou nao produzem erro
+      nenhum: a grade so passa a mostrar o arquivo sem a ordem que estava
+      escrita nela. `aFalhas` era declarado aqui e jogado fora num
+      HB_SYMBOL_UNUSED -- a intencao existia e o dado nao chegava. */
+   xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .F., @aFalhas )
    IF xErro != NIL
       RETURN xErro
    ENDIF
 
-   HB_SYMBOL_UNUSED( aFalhas )
-
    RETURN Ok( { "action"   => cAcao, ;
+                "rebindErrors" => aFalhas, ;
                 "strategy" => iif( lBackup, "copy", "direct" ), ;
                 "file"     => hb_FNameNameExt( cArq ), ;
                 "backup"   => iif( lBackup .AND. cAcao == "pack", ;

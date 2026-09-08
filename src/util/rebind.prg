@@ -176,7 +176,7 @@ FUNCTION ReanexaIndices( hEstado )
 FUNCTION Religar( hEstado, lSemIndices )
 
    LOCAL aFalhas := {}
-   LOCAL nOrdem := 0, i, oErr
+   LOCAL nOrdem := 0, i, oErr, bFiltro
 
    /*
     * `lSemIndices` e o caminho da ALTERACAO DE ESTRUTURA.
@@ -230,11 +230,33 @@ FUNCTION Religar( hEstado, lSemIndices )
       ENDIF
    ENDIF
 
-   /* 3. Filtro. */
+   /*
+    * 3. Filtro -- COMPILAR NAO E CONSEGUIR.
+    *
+    * `hb_macroBlock()` monta o bloco sem olhar o arquivo: `TXT == 'x'` compila
+    * perfeitamente depois de a coluna TXT ter sido removida pela alteracao de
+    * estrutura. O `dbSetFilter` aceita, o religamento se declara completo, e a
+    * bomba fica armada -- ela estoura na PRIMEIRA leitura de pagina, longe da
+    * causa, como `falha no Harbour (data.page): Variable does not exist [TXT]`.
+    * Ou seja, um "ERR:", que neste projeto significa bug a corrigir, para uma
+    * coisa que a pessoa escolheu fazer.
+    *
+    * Medido por CDP em 08/09/2026: filtro sobre TXT, campo removido pelo
+    * editor de estrutura, e a grade ficou inutilizavel ate fechar a aba.
+    *
+    * Por isso o bloco e AVALIADO uma vez antes de valer. Se estourar, o filtro
+    * nao entra e a perda vai para a lista -- que e o desfecho honesto: o
+    * arquivo e outro, e o filtro era sobre o de antes.
+    */
    IF ! Empty( hEstado[ "filter" ] )
       BEGIN SEQUENCE WITH {| e | Break( e ) }
-         dbSetFilter( hb_macroBlock( hEstado[ "filter" ] ), hEstado[ "filter" ] )
+         bFiltro := hb_macroBlock( hEstado[ "filter" ] )
+         Eval( bFiltro )              /* <- a prova; o dbSetFilter nao a faz */
+         dbSetFilter( bFiltro, hEstado[ "filter" ] )
       RECOVER USING oErr
+         /* O `dbSetFilter` pode ter valido antes do erro em outra volta; sem
+            limpar, a area ficaria com um filtro que ninguem consegue avaliar. */
+         dbClearFilter()
          AAdd( aFalhas, { ;
             "item"   => "filter", ;
             "code"   => "ERROR_REBIND_FILTER_FAILED", ;
@@ -460,7 +482,19 @@ STATIC FUNCTION CaminhoDoBagReg( cBag, aReg )
  * Se nem o modo anterior voltar, o handle vira `detached` (R6): a aba fica na
  * tela, marcada, com o motivo, e a grade e descartada.
  */
-FUNCTION ReabreArea( cH, cArq, cAlias, lModo, hEstado, xErroOriginal, lSemIndices )
+/*
+ * `aFalhas` (por referencia) leva o que o `Religar` NAO conseguiu repor.
+ *
+ * Ele sempre devolveu essa lista e todos os chamadores daqui a jogavam fora:
+ * PACK, ZAP e alterar estrutura terminavam "com sucesso" tendo perdido um
+ * indice que nao reabriu ou um filtro que nao recompilou, sem uma palavra.
+ * E a falha mais traicoeira que este projeto conhece -- a grade segue pintando
+ * linhas que o filtro escrito nela ja nao deixa passar, e nao ha erro nenhum.
+ *
+ * Opcional de proposito: quem nao passa continua compilando, e quem passa
+ * ganha o dado sem uma segunda versao desta funcao.
+ */
+FUNCTION ReabreArea( cH, cArq, cAlias, lModo, hEstado, xErroOriginal, lSemIndices, aFalhas )
 
    LOCAL nWa
 
@@ -495,6 +529,9 @@ FUNCTION ReabreArea( cH, cArq, cAlias, lModo, hEstado, xErroOriginal, lSemIndice
    ENDIF
 
    SessReattach( cH, nWa, lModo )
-   Religar( hEstado, lSemIndices )
+
+   /* Atribuir a um parametro que ninguem passou e inofensivo -- ele e um
+      local. Quem passou por referencia recebe; os demais seguem como antes. */
+   aFalhas := Religar( hEstado, lSemIndices )
 
    RETURN xErroOriginal

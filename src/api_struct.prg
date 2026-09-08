@@ -365,7 +365,7 @@ FUNCTION Api_Struct_Modify( hP )
    LOCAL xErro, hInfo, hEstado, aEstru, aDe
    LOCAL cArq, cAlias, cTmp, cBackup, cSelo, cExtMemo
    LOCAL nWa, nAntes, nDepois, nFalhas := 0
-   LOCAL aIndices, lModoOrig
+   LOCAL aIndices, lModoOrig, aFalhas := {}
 
    IF ( xErro := SessSelect( cH ) ) != NIL
       RETURN xErro
@@ -477,7 +477,9 @@ FUNCTION Api_Struct_Modify( hP )
       a tela mostra uma lista de indices abertos que nao existe mais. */
    hInfo[ "indexes" ] := {}
 
-   xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .T. )
+   /* Ver a nota no `Api_Bulk_Run`: o que o religar nao repos viaja com o
+      sucesso, senao a tela fica descrevendo um filtro que ja nao esta ligado. */
+   xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .T., @aFalhas )
    IF xErro != NIL
       RETURN xErro
    ENDIF
@@ -485,6 +487,7 @@ FUNCTION Api_Struct_Modify( hP )
    nDepois := LastRec()
 
    RETURN Ok( { "file"       => hb_FNameNameExt( cArq ), ;
+                "rebindErrors" => aFalhas, ;
                 "backup"     => iif( lBackup, hb_FNameNameExt( cBackup ), "" ), ;
                 "before"     => nAntes, ;
                 "after"      => nDepois, ;

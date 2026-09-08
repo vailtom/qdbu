@@ -2264,21 +2264,26 @@ fn selftest() -> i32 {
                     let outro = std::fs::OpenOptions::new()
                         .read(true).write(true).share_mode(3).open(&alvo);
                     let travou = outro.is_ok();
-                    /* Um FILTRO ligado, para haver estado a perder: sem ele
-                       a assercao mediria uma area sem nada dentro. */
+                    /* ESTADO A PERDER: um filtro ligado E o cursor FORA do
+                       registro 1. Sem mover o cursor, a comparacao do recno
+                       compara 1 com 1 e passaria mesmo se a sonda o jogasse
+                       para o topo -- a mesma armadilha do filtro vazio, na
+                       outra metade da mesma assercao. */
                     let _ = rpc_bruto(&hb, "filter.set",
                         &format!(r#"{{"h":"{hs}","expr":"!Deleted()"}}"#));
-                    let info_ant = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{hs}"}}"#))
-                        .ok()
-                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
-                    let ga = |k: &str| -> String {
-                        info_ant.as_ref()
+                    let _ = rpc_bruto(&hb, "data.goto", &format!(r#"{{"h":"{hs}","recno":4}}"#));
+
+                    let campo = |v: &Option<serde_json::Value>, k: &str| -> String {
+                        v.as_ref()
                             .and_then(|x| x.pointer(&format!("/result/{k}")))
                             .map(|x| x.to_string())
                             .unwrap_or_default()
                     };
-                    let filtro_antes = ga("filter");
-                    let recno_antes = ga("recno");
+                    let before = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{hs}"}}"#))
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                    let filter_before = campo(&before, "filter");
+                    let recno_before = campo(&before, "recno");
 
                     let com_outro = rpc_bruto(&hb, "file.trylock",
                         &format!(r#"{{"h":"{hs}"}}"#)).unwrap_or_default();
@@ -2298,18 +2303,12 @@ fn selftest() -> i32 {
                      * nenhum: a grade so passa a mostrar registros que nao
                      * satisfazem o que esta escrito nela.
                      */
-                    let info_dep = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{hs}"}}"#))
+                    let after = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{hs}"}}"#))
                         .ok()
                         .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
-                    let g = |v: &Option<serde_json::Value>, k: &str| -> String {
-                        v.as_ref()
-                            .and_then(|x| x.pointer(&format!("/result/{k}")))
-                            .map(|x| x.to_string())
-                            .unwrap_or_default()
-                    };
-                    let filtro_dep = g(&info_dep, "filter");
-                    let recno_dep = g(&info_dep, "recno");
-                    let modo = info_dep.as_ref()
+                    let filter_after = campo(&after, "filter");
+                    let recno_after = campo(&after, "recno");
+                    let modo = after.as_ref()
                         .and_then(|v| v.pointer("/result/exclusive").and_then(|b| b.as_bool()))
                         .unwrap_or(true);
                     // A sonda reporta o que Religar nao conseguiu repor. Vazio
@@ -2322,20 +2321,26 @@ fn selftest() -> i32 {
                     t.ok(
                         "TRYLOCK: recusa com o arquivo tomado, libera sem ele, e devolve a area COM filtro, cursor e modo",
                         travou
-                            // A FIXTURE TAMBEM E AFIRMADA: com o filtro vazio
-                            // os dois lados desta comparacao seriam "" e ela
-                            // passaria sem ter medido nada.
-                            && filtro_antes.contains("Deleted")
+                            /* A FIXTURE TAMBEM E AFIRMADA. Com o filtro vazio
+                               os dois lados da comparacao seriam "" e ela
+                               passaria sem ter medido nada; com o cursor no
+                               registro 1, o recno compararia 1 com 1. */
+                            && filter_before.contains("Deleted")
+                            && recno_before == "4"
                             && com_outro.contains("ERROR_CANNOT_LOCK_EXCLUSIVE")
+                            /* `canLock` so existe no Ok; a recusa nao o carrega.
+                               Um `!contains("ERROR")` ao lado disto nao media
+                               nada de novo -- e `sem_perdas` ja cobre a lista de
+                               falhas do religamento, o unico outro lugar onde a
+                               palavra poderia aparecer numa resposta de sucesso. */
                             && sozinho.contains("canLock")
-                            && !sozinho.contains("ERROR")
                             && sem_perdas
                             && ainda_le.contains("rows")
-                            && filtro_dep == filtro_antes
-                            && recno_dep == recno_antes
+                            && filter_after == filter_before
+                            && recno_after == recno_before
                             && !modo,
                         &format!(
-                            "travou {travou} / recusou {} / liberou {} / sem perdas {sem_perdas} /                              filtro {filtro_antes}->{filtro_dep} / recno {recno_antes}->{recno_dep} / exclusivo {modo}",
+                            "travou {travou} / recusou {} / liberou {} / sem perdas {sem_perdas}                              / filtro {filter_before}->{filter_after}                              / recno {recno_before}->{recno_after} / exclusivo {modo}",
                             com_outro.contains("ERROR_CANNOT_LOCK_EXCLUSIVE"),
                             sozinho.contains("canLock")),
                     );
@@ -2380,6 +2385,143 @@ fn selftest() -> i32 {
                     );
                     let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h2}"}}"#));
 
+                    /*
+                     * `file.reopen` -- A R6 INTEIRA, e nao so a sonda.
+                     *
+                     * Nao havia assercao nenhuma para ele, e ele e quem troca o
+                     * modo de um arquivo com filtro, ordem e cursor por cima.
+                     * As tres saidas sao medidas aqui, e a do meio e a que mais
+                     * importa: a RECUSA e o desfecho mais provavel na maquina do
+                     * cliente, porque e o que acontece quando o ERP esta com o
+                     * arquivo -- e era justamente ali que o resultado do
+                     * `Religar()` era descartado, deixando "nada foi perdido"
+                     * como afirmacao em vez de fato.
+                     */
+                    let h3s = hde(&abre(&format!(r#"{{"path":"{alvo_s}"}}"#)));
+                    let _ = rpc_bruto(&hb, "filter.set",
+                        &format!(r#"{{"h":"{h3s}","expr":"!Deleted()"}}"#));
+                    let _ = rpc_bruto(&hb, "data.goto", &format!(r#"{{"h":"{h3s}","recno":3}}"#));
+                    let inf3 = |k: &str| -> String {
+                        rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h3s}"}}"#))
+                            .ok()
+                            .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                            .and_then(|v| v.pointer(&format!("/result/{k}")).map(|x| x.to_string()))
+                            .unwrap_or_default()
+                    };
+                    let f0 = inf3("filter");
+                    let r0 = inf3("recno");
+
+                    // 1. RECUSA: outro programa com o arquivo aberto.
+                    let terceiro = std::fs::OpenOptions::new()
+                        .read(true).write(true).share_mode(3).open(&alvo);
+                    let tomou = terceiro.is_ok();
+                    let neg = rpc_bruto(&hb, "file.reopen",
+                        &format!(r#"{{"h":"{h3s}","exclusive":true}}"#)).unwrap_or_default();
+                    let apos_neg = (inf3("filter"), inf3("recno"), inf3("exclusive"));
+                    drop(terceiro);
+
+                    // 2. TROCA de verdade, com o arquivo livre.
+                    let sim = rpc_bruto(&hb, "file.reopen",
+                        &format!(r#"{{"h":"{h3s}","exclusive":true}}"#)).unwrap_or_default();
+                    let apos_sim = (inf3("filter"), inf3("recno"), inf3("exclusive"));
+
+                    // 3. ATALHO: pedir o modo que ja se tem nao fecha a area.
+                    let mesmo = rpc_bruto(&hb, "file.reopen",
+                        &format!(r#"{{"h":"{h3s}","exclusive":true}}"#)).unwrap_or_default();
+
+                    t.ok(
+                        "REOPEN: recusa devolve a area intacta COM a lista do religar, troca preserva estado, e o modo que ja se tem nao mexe",
+                        tomou
+                            // A fixture tambem e afirmada: sem filtro e com o
+                            // cursor no 1, as comparacoes abaixo seriam "" == ""
+                            // e 1 == 1, e passariam sem medir nada.
+                            && f0.contains("Deleted") && r0 == "3"
+                            && neg.contains("ERROR_CANNOT_LOCK_EXCLUSIVE")
+                            && neg.contains(r#""rebindErrors":[]"#)
+                            && apos_neg == (f0.clone(), r0.clone(), "false".into())
+                            && sim.contains(r#""rebindErrors":[]"#)
+                            && apos_sim == (f0.clone(), r0.clone(), "true".into())
+                            && mesmo.contains("\"exclusive\":true") && !mesmo.contains("ERROR"),
+                        &format!(
+                            "tomou {tomou} / recusa {} / apos recusa {apos_neg:?}                              / troca {} / apos troca {apos_sim:?} / atalho {}",
+                            neg.contains("ERROR_CANNOT_LOCK_EXCLUSIVE"),
+                            sim.contains("rebindErrors"),
+                            !mesmo.contains("ERROR")),
+                    );
+                    let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h3s}"}}"#));
+
+                    let _ = std::fs::remove_file(&alvo);
+                    let _ = std::fs::remove_file(&alvo_dbt);
+                }
+
+                /*
+                 * COMPILAR NAO E CONSEGUIR -- o filtro sobre um campo removido.
+                 *
+                 * `hb_macroBlock()` monta o bloco sem olhar o arquivo, entao
+                 * `TXT == 'x'` continua compilando depois de a coluna TXT ter
+                 * sido removida pela alteracao de estrutura. O `Religar()`
+                 * aceitava, se declarava completo, e a bomba estourava na
+                 * PRIMEIRA leitura de pagina -- longe da causa e como "ERR:",
+                 * que neste projeto significa bug a corrigir.
+                 *
+                 * Medido por CDP em 08/09/2026, na tela: a grade ficava
+                 * inutilizavel ate fechar a aba, dizendo "falha no Harbour
+                 * (data.page): Variable does not exist [TXT]".
+                 *
+                 * As DUAS pontas sao afirmadas: a perda tem de ser RELATADA
+                 * (`rebindErrors`) e a area tem de continuar LEGIVEL. Uma so
+                 * nao basta -- relatar e deixar a area quebrada seria trocar um
+                 * defeito silencioso por um defeito documentado.
+                 */
+                {
+                    let alvo = dir_run().join("filtro_orfao.dbf");
+                    let alvo_dbt = dir_run().join("filtro_orfao.dbt");
+                    let _ = std::fs::copy(&ed2, &alvo);
+                    let _ = std::fs::copy(ed2.with_extension("dbt"), &alvo_dbt);
+                    let alvo_s = alvo.to_string_lossy().replace('\\', "/");
+
+                    let hf = hde(&abre(&format!(r#"{{"path":"{alvo_s}"}}"#)));
+                    let posto = rpc_bruto(&hb, "filter.set",
+                        &format!(r#"{{"h":"{hf}","expr":"TXT == 'x'"}}"#)).unwrap_or_default();
+
+                    /* A estrutura NOVA e a de antes menos o TXT -- o campo que
+                       o filtro cita. `struct.modify` fecha e reabre a area, e e
+                       no religamento que o filtro orfao tenta voltar. */
+                    let novos = rpc_bruto(&hb, "file.info",
+                        &format!(r#"{{"h":"{hf}","fields":true}}"#))
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                        .and_then(|v| v.pointer("/result/fields").and_then(|a| a.as_array()).cloned())
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter(|c| c.pointer("/name").and_then(|n| n.as_str()) != Some("TXT"))
+                        .collect::<Vec<_>>();
+                    let mudou = rpc_bruto(&hb, "struct.modify",
+                        &format!(r#"{{"h":"{hf}","fields":{},"backup":false}}"#,
+                                 serde_json::Value::Array(novos.clone())))
+                        .unwrap_or_default();
+                    let pagina = rpc_bruto(&hb, "data.page",
+                        &format!(r#"{{"h":"{hf}","anchor":"top","count":1}}"#))
+                        .unwrap_or_default();
+                    let filtro_agora = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{hf}"}}"#))
+                        .unwrap_or_default();
+
+                    t.ok(
+                        "REBIND: filtro sobre campo removido NAO volta -- e relatado como perda, e a grade continua legivel",
+                        // A fixture: sem o filtro posto e sem o TXT na lista de
+                        // antes, nao haveria orfao nenhum a medir.
+                        posto.contains("\"ok\":true") && !novos.is_empty()
+                            && mudou.contains("ERROR_REBIND_FILTER_FAILED")
+                            && pagina.contains("rows") && !pagina.starts_with("ERR:")
+                            && filtro_agora.contains(r#""filter":"""#),
+                        &format!("posto {} / modify {} / pagina {} / info {}",
+                                 posto.contains("\"ok\":true"),
+                                 &mudou[..mudou.len().min(120)],
+                                 &pagina[..pagina.len().min(60)],
+                                 filtro_agora.contains(r#""filter":"""#)),
+                    );
+
+                    let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{hf}"}}"#));
                     let _ = std::fs::remove_file(&alvo);
                     let _ = std::fs::remove_file(&alvo_dbt);
                 }
