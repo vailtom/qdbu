@@ -251,6 +251,7 @@
   ERROR_HANDLE_CLOSED: "Este arquivo foi fechado em {closedIn}.",
 
   ERROR_CONNECTION_EXISTS: "Já existe uma conexão chamada '{name}'.",
+  ERROR_CONNECTION_EXISTS_SUGGEST: "Já existe uma conexão chamada '{name}'. Sugeri '{suggestion}' — confira e clique em Adicionar.",
   ERROR_CONNECTION_NOT_FOUND: "Não há conexão chamada '{name}'.",
   ERROR_DIR_NOT_FOUND: "A pasta '{dir}' não existe.",
 

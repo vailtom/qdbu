@@ -5576,6 +5576,41 @@ function abrirDialogoAbrir() {
   $("ab-path").focus();
 }
 
+/* O ULTIMO PEDACO do caminho -- o nome da pasta, que e o nome que a pessoa
+   daria a conexao.
+
+   NORMALIZA A BARRA ANTES DE CORTAR: o Windows mistura `\` e `/` no mesmo
+   caminho, entao trocar tudo por `/` e so depois cortar e a unica forma que
+   nao depende de qual separador veio. `String.fromCharCode(92)` e a barra
+   invertida -- escreve-la literalmente aqui ja se perdeu uma vez numa edicao,
+   e a expressao regular resultante (`[\/]`) casava so a barra normal: o
+   caminho inteiro virava o nome da conexao. */
+function nomeDaPasta(caminho) {
+  const SEP = String.fromCharCode(92);
+  const partes = String(caminho || "").split(SEP).join("/").split("/").filter(Boolean);
+  return partes.length ? partes[partes.length - 1] : "";
+}
+
+/* Um nome de conexao que ainda nao existe: "lucrimax", "lucrimax (2)"...
+
+   A MESMA PASTA EM UNIDADES DIFERENTES e o caso comum -- `J:\bases\lucrimax` e
+   `D:\backup\lucrimax` sao duas conexoes legitimas cujo nome derivado colide.
+   Sem isto a segunda so descobria o problema ao clicar em Adicionar, e a
+   pessoa tinha de inventar um nome do nada. */
+function nomeLivreConexao(base, ignorar) {
+  const arruma = (t) => String(t || "").trim().toLowerCase();
+  const meu = arruma(ignorar);
+  const usados = new Set(
+    (conexoes || []).map((c) => arruma(c.name)).filter((n) => n && n !== meu)
+  );
+  if (!usados.has(arruma(base))) return base;
+  for (let i = 2; i < 1000; i++) {
+    const tentativa = base + " (" + i + ")";
+    if (!usados.has(arruma(tentativa))) return tentativa;
+  }
+  return base;
+}
+
 /* Escolher a pasta da conexao pelo dialogo do sistema.
    `directory: true` e a unica diferenca para o `#ab-procurar`, que escolhe
    ARQUIVO. Mesma via (tauri-plugin-dialog) porque o frontend e HTML/JS
@@ -5596,12 +5631,13 @@ $("con-procurar").addEventListener("click", async () => {
     if (!escolhido) return;
     $("con-dir").value = Array.isArray(escolhido) ? escolhido[0] : escolhido;
     $("con-erro").hidden = true;
-    // O nome herda o da pasta enquanto a pessoa nao escreveu um -- e o que ela
-    // ia digitar de qualquer jeito.
+    // O nome herda o da pasta enquanto a pessoa nao escreveu um -- e ja nasce
+    // LIVRE: duas unidades com a mesma pasta ("lucrimax") sao duas conexoes
+    // legitimas, e a segunda vira "lucrimax (2)" sem ninguem ter de inventar.
     const nome = $("con-nome");
     if (!nome.value.trim()) {
-      const partes = $("con-dir").value.split(/[\/]/).filter(Boolean);
-      if (partes.length) nome.value = partes[partes.length - 1];
+      const base = nomeDaPasta($("con-dir").value);
+      if (base) nome.value = nomeLivreConexao(base);
     }
   } catch (e) {
     $("con-erro").textContent = msgErro(e);
@@ -5728,6 +5764,29 @@ $("form-conexao").addEventListener("submit", async (ev) => {
       conEditando = null;
       return;
     }
+    /*
+     * NOME REPETIDO E BARRADO AQUI, com a sugestao ja no campo.
+     *
+     * A DLL tambem recusa (ERROR_CONNECTION_EXISTS), mas ali a pessoa recebe
+     * "ja existe" e o campo do jeito que estava -- e tem de inventar um nome.
+     * Barrando antes da para devolver o trabalho pronto: o nome livre entra no
+     * campo, selecionado, e um segundo clique em Adicionar resolve.
+     *
+     * Nome vazio deriva da pasta primeiro, que e o que a DLL faria: sem isso a
+     * conferencia nao teria o que conferir.
+     */
+    const querido = $("con-nome").value.trim() || nomeDaPasta($("con-dir").value.trim());
+    const livre = nomeLivreConexao(querido);
+    if (querido && livre !== querido) {
+      $("con-nome").value = livre;
+      $("con-nome").classList.add("culpado");
+      erro.textContent = T("ERROR_CONNECTION_EXISTS_SUGGEST", { name: querido, suggestion: livre });
+      erro.hidden = false;
+      $("con-nome").focus();
+      $("con-nome").select();
+      return;
+    }
+
     const r = await QDBU.rpc("workspace.add", {
       dir: $("con-dir").value.trim(),
       // `name`, e nao `nome`: e a chave que a DLL le (Api_Workspace_Add). Com

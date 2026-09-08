@@ -242,6 +242,7 @@
   ERROR_HANDLE_CLOSED: "This file was closed in {closedIn}.",
 
   ERROR_CONNECTION_EXISTS: "A connection named '{name}' already exists.",
+  ERROR_CONNECTION_EXISTS_SUGGEST: "A connection named '{name}' already exists. Suggested '{suggestion}' — check it and click Add.",
   ERROR_CONNECTION_NOT_FOUND: "No connection named '{name}'.",
   ERROR_DIR_NOT_FOUND: "Folder '{dir}' does not exist.",
 
