@@ -31,7 +31,7 @@ rem ---------------------------------------------------------------- 1
 rem CHAVE DE API. O autor pediu, com todas as letras, que o processo
 rem abortasse se a chave dele fosse subir. Ela mora em .qdbu\ia.json, que
 rem e ignorado -- mas "e ignorado" e uma linha num arquivo que muda.
-echo [1/8] Chave de API em arquivo rastreado...
+echo [1/9] Chave de API em arquivo rastreado...
 git grep -I -l -E "sk-[A-Za-z0-9_-]{20,}" -- . >nul 2>&1
 if not errorlevel 1 (
   echo       FALHOU: ha algo com cara de chave de API em arquivo rastreado:
@@ -45,7 +45,7 @@ rem ---------------------------------------------------------------- 2
 rem ARQUIVOS PROIBIDOS, no HISTORICO e nao so no topo. Num repositorio
 rem publico, arquivo que ficou num commit antigo esta publicado do mesmo
 rem jeito.
-echo [2/8] Arquivos proibidos em qualquer commit...
+echo [2/9] Arquivos proibidos em qualquer commit...
 git log --all --pretty=format: --name-only --diff-filter=A 2>nul | sort /unique > "%TEMP%\qdbu_hist.txt"
 findstr /i /r "^docs/ GUIA-DO-PROJETO arjota\.bat backup_sources\.py ^\.qdbu/ \.dbf$ \.dbt$ \.ntx$ \.vew$" "%TEMP%\qdbu_hist.txt" >nul 2>&1
 if not errorlevel 1 (
@@ -59,7 +59,7 @@ if not errorlevel 1 (
 rem ---------------------------------------------------------------- 3
 rem REGRA 5: nenhuma mencao a ferramenta de IA no que e publicado --
 rem conteudo, nome de arquivo ou mensagem de commit.
-echo [3/8] Regra 5 nas mensagens de commit...
+echo [3/9] Regra 5 nas mensagens de commit...
 git log --all --format="%%s %%b" 2>nul | findstr /i "claude anthropic copilot chatgpt co-authored-by" >nul 2>&1
 if not errorlevel 1 (
   echo       FALHOU: mensagem de commit cita a ferramenta:
@@ -71,7 +71,7 @@ if not errorlevel 1 (
 
 rem ---------------------------------------------------------------- 4
 rem A VERSAO PUBLICADA. O erro que fez este arquivo nascer.
-echo [4/8] Os tres README dizem a versao do binario...
+echo [4/9] Os tres README dizem a versao do binario...
 where node >nul 2>&1
 if errorlevel 1 (
   echo       FALHOU: node nao esta no PATH.
@@ -89,7 +89,7 @@ if errorlevel 1 (
 )
 
 rem ---------------------------------------------------------------- 5
-echo [5/8] i18n: orfa, idioma atrasado, literal solto...
+echo [5/9] i18n: orfa, idioma atrasado, literal solto...
 node "%QDBU_HOME%\app\devtools\i18n.mjs" >nul 2>&1
 if errorlevel 1 (
   echo       FALHOU:
@@ -100,7 +100,7 @@ if errorlevel 1 (
 )
 
 rem ---------------------------------------------------------------- 6
-echo [6/8] Catalogo de funcoes em sincronia com o REQUEST...
+echo [6/9] Catalogo de funcoes em sincronia com o REQUEST...
 node "%QDBU_HOME%\app\devtools\catalogo.mjs" >nul 2>&1
 if errorlevel 1 (
   echo       FALHOU:
@@ -112,7 +112,7 @@ if errorlevel 1 (
 
 rem ---------------------------------------------------------------- 7
 rem TRILHO C: o contrato da DLL. Precisa do app fechado, como o build.
-echo [7/8] Trilho C: contrato da DLL...
+echo [7/9] Trilho C: contrato da DLL...
 tasklist /fi "imagename eq qdbu.exe" 2>nul | find /i "qdbu.exe" >nul
 if not errorlevel 1 (
   echo       PULADO: o app esta aberto e segura a DLL. Feche-o e repita.
@@ -128,9 +128,24 @@ if not errorlevel 1 (
 )
 
 rem ---------------------------------------------------------------- 8
+rem MENSAGEM DE COMMIT EM INGLES -- regra absoluta do autor, 08/09/2026.
+rem O historico de um repositorio publico e lido por quem chega de fora, e
+rem e onde esta escrito POR QUE cada coisa e como e. Regra sem trilho e
+rem regra que morre no primeiro dia corrido.
+echo [8/9] Mensagens de commit em ingles...
+node "%QDBU_HOME%\app\devtools\commits.mjs" >nul 2>&1
+if errorlevel 1 (
+  echo       FALHOU:
+  node "%QDBU_HOME%\app\devtools\commits.mjs"
+  set /a FALHAS+=1
+) else (
+  echo       ok
+)
+
+rem ---------------------------------------------------------------- 9
 rem ARVORE LIMPA. Publicar com mudanca nao commitada produz um pacote que
 rem nao corresponde a nenhum commit -- e ninguem consegue reproduzi-lo.
-echo [8/8] Arvore de trabalho limpa...
+echo [9/9] Arvore de trabalho limpa...
 git diff --quiet 2>nul
 if errorlevel 1 (
   echo       FALHOU: ha mudanca nao commitada:
@@ -155,7 +170,7 @@ if not "%FALHAS%"=="0" (
   exit /b 1
 )
 
-echo  Os 8 automaticos passaram.
+echo  Os 9 automaticos passaram.
 echo ===========================================================
 echo.
 rem AS TRES QUE PRECISAM DE OLHO NAO VIRAM "ok" AUTOMATICO. Marcar como
