@@ -2264,34 +2264,80 @@ fn selftest() -> i32 {
                     let outro = std::fs::OpenOptions::new()
                         .read(true).write(true).share_mode(3).open(&alvo);
                     let travou = outro.is_ok();
+                    /* Um FILTRO ligado, para haver estado a perder: sem ele
+                       a assercao mediria uma area sem nada dentro. */
+                    let _ = rpc_bruto(&hb, "filter.set",
+                        &format!(r#"{{"h":"{hs}","expr":"!Deleted()"}}"#));
+                    let info_ant = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{hs}"}}"#))
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                    let ga = |k: &str| -> String {
+                        info_ant.as_ref()
+                            .and_then(|x| x.pointer(&format!("/result/{k}")))
+                            .map(|x| x.to_string())
+                            .unwrap_or_default()
+                    };
+                    let filtro_antes = ga("filter");
+                    let recno_antes = ga("recno");
+
                     let com_outro = rpc_bruto(&hb, "file.trylock",
                         &format!(r#"{{"h":"{hs}"}}"#)).unwrap_or_default();
                     drop(outro);
                     let sozinho = rpc_bruto(&hb, "file.trylock",
                         &format!(r#"{{"h":"{hs}"}}"#)).unwrap_or_default();
 
-                    // A sonda devolveu o arquivo? Le uma pagina para provar.
+                    /*
+                     * "DEVOLVE A AREA COMO ESTAVA" tem de ser MEDIDO, e ler
+                     * uma pagina nao mede.
+                     *
+                     * A sonda fecha e reabre; `Religar()` e quem repoe indice,
+                     * ordem ativa, filtro e cursor, e ele registra o que NAO
+                     * conseguiu numa lista que antes era descartada aqui. Uma
+                     * assercao que so confere que ha linhas passaria com o
+                     * filtro perdido -- e um filtro perdido nao da erro
+                     * nenhum: a grade so passa a mostrar registros que nao
+                     * satisfazem o que esta escrito nela.
+                     */
+                    let info_dep = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{hs}"}}"#))
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                    let g = |v: &Option<serde_json::Value>, k: &str| -> String {
+                        v.as_ref()
+                            .and_then(|x| x.pointer(&format!("/result/{k}")))
+                            .map(|x| x.to_string())
+                            .unwrap_or_default()
+                    };
+                    let filtro_dep = g(&info_dep, "filter");
+                    let recno_dep = g(&info_dep, "recno");
+                    let modo = info_dep.as_ref()
+                        .and_then(|v| v.pointer("/result/exclusive").and_then(|b| b.as_bool()))
+                        .unwrap_or(true);
+                    // A sonda reporta o que Religar nao conseguiu repor. Vazio
+                    // e a unica resposta aceitavel para uma pergunta.
+                    let sem_perdas = sozinho.contains(r#""rebindErrors":[]"#);
                     let ainda_le = rpc_bruto(&hb, "data.page",
                         &format!(r#"{{"h":"{hs}","anchor":"top","count":1}}"#))
                         .unwrap_or_default();
-                    let modo = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{hs}"}}"#))
-                        .ok()
-                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
-                        .and_then(|v| v.pointer("/result/exclusive").and_then(|b| b.as_bool()))
-                        .unwrap_or(true);
 
                     t.ok(
-                        "TRYLOCK: recusa com outro programa no arquivo, libera sem ele, e DEVOLVE a area como estava",
+                        "TRYLOCK: recusa com o arquivo tomado, libera sem ele, e devolve a area COM filtro, cursor e modo",
                         travou
+                            // A FIXTURE TAMBEM E AFIRMADA: com o filtro vazio
+                            // os dois lados desta comparacao seriam "" e ela
+                            // passaria sem ter medido nada.
+                            && filtro_antes.contains("Deleted")
                             && com_outro.contains("ERROR_CANNOT_LOCK_EXCLUSIVE")
                             && sozinho.contains("canLock")
                             && !sozinho.contains("ERROR")
+                            && sem_perdas
                             && ainda_le.contains("rows")
+                            && filtro_dep == filtro_antes
+                            && recno_dep == recno_antes
                             && !modo,
-                        &format!("fixture travou {travou} / com outro {} / sozinho {} / le {} / exclusivo {modo}",
-                                 com_outro.contains("ERROR_CANNOT_LOCK_EXCLUSIVE"),
-                                 sozinho.contains("canLock"),
-                                 ainda_le.contains("rows")),
+                        &format!(
+                            "travou {travou} / recusou {} / liberou {} / sem perdas {sem_perdas} /                              filtro {filtro_antes}->{filtro_dep} / recno {recno_antes}->{recno_dep} / exclusivo {modo}",
+                            com_outro.contains("ERROR_CANNOT_LOCK_EXCLUSIVE"),
+                            sozinho.contains("canLock")),
                     );
 
                     let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{hs}"}}"#));

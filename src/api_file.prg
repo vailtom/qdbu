@@ -472,74 +472,70 @@ STATIC FUNCTION AliasLivre( cArq )
 /* ------------------------------------------------------------ auxiliares */
 
 /*
- * file.trylock {"h":"..."} -> { "canLock": .T. }  |  ERROR_CANNOT_LOCK_EXCLUSIVE
+ * file.trylock {"h":"..."} -> { "canLock":.T., "rebindErrors":[...] }
  *
  * A PERGUNTA DO DBU, FEITA ANTES DE A PESSOA DIGITAR.
  *
- * `DBUSTRU.PRG:92` toma o exclusivo ANTES de abrir o editor de estrutura, e se
- * nao consegue mostra DBU_STRUMSG2 e nem entra. Ninguem monta uma estrutura de
+ * `DBUSTRU.PRG:92` toma o exclusivo ANTES de abrir o editor de estrutura e, se
+ * nao consegue, mostra DBU_STRUMSG2 e nem entra. Ninguem monta uma estrutura de
  * quarenta campos para descobrir no fim que ela nao pode ser gravada.
  *
  * A DIVERGENCIA DELIBERADA: o DBU SEGURA o exclusivo durante toda a edicao;
- * aqui ele e devolvido na hora. O DBU era DOS monousuario, e podia. Segurar o
- * arquivo enquanto alguem digita uma estrutura por dez minutos travaria o ERP
- * do cliente por tempo indeterminado, e isso e pior que o problema que resolve.
+ * aqui ele e devolvido na hora. O DBU era DOS monousuario e podia. Segurar o
+ * arquivo enquanto alguem digita por dez minutos travaria o ERP do cliente por
+ * tempo indeterminado, e isso e pior que o problema que resolve. Entao isto e
+ * AVISO, nao reserva -- e por isso o rascunho preservado e o "tentar
+ * novamente" continuam necessarios.
  *
- * A garantia fica em tres partes, e as tres precisam existir:
- *   1. este aviso na ENTRADA, para nao investir trabalho a toa;
- *   2. o rascunho preservado quando o `struct.apply` recusa (app.js);
- *   3. o "tentar novamente" na hora de aplicar.
+ * E DUAS CHAMADAS AO `file.reopen`, e nao uma sequencia propria.
  *
- * O ciclo fecha e reabre a area, entao usa a MESMA maquina do struct.apply --
- * `EstadoAntes` / `AbreNaArea` / `ReabreArea`. Uma segunda implementacao seria
- * um segundo conjunto de garantias a manter em dia (R5).
+ * A primeira versao repetia a mao o fechar-e-reabrir e perdeu duas garantias
+ * que o `Api_File_Reopen` ja tinha: repassar o somente-leitura (a area voltava
+ * GRAVAVEL sob um handle que anunciava a trava) e devolver os `rebindErrors`
+ * (um filtro que nao recompila seria descartado em silencio, e a grade seguiria
+ * pintando linhas que ja nao passam por ele). Era a quarta copia da mesma
+ * sequencia; escrita assim, ela herda tambem o estagio que tenta VOLTAR ao modo
+ * anterior antes de desistir -- o que o `ReabreArea` nao faz.
  */
 FUNCTION Api_File_Trylock( hP )
 
    LOCAL cH := ParStr( hP, "h" )
-   LOCAL xErro, hInfo, hEstado, cArq, cAlias, lModoOrig, nWa
+   LOCAL xErro, hInfo, xIda, xVolta, aFalhas := {}
 
    IF ( xErro := SessSelect( cH ) ) != NIL
       RETURN xErro
    ENDIF
 
-   hInfo     := SessHandle( cH )
-   lModoOrig := hInfo[ "exclusive" ]
+   hInfo := SessHandle( cH )
 
    /* Ja exclusivo: ninguem mais tem o arquivo. Fechar e reabrir so para
       confirmar seria arriscar o que ja esta garantido. */
-   IF lModoOrig
-      RETURN Ok( { "canLock" => .T. } )
+   IF hInfo[ "exclusive" ]
+      RETURN Ok( { "canLock" => .T., "rebindErrors" => {} } )
    ENDIF
 
-   cArq    := hInfo[ "path" ]
-   cAlias  := hInfo[ "alias" ]
-   hEstado := EstadoAntes( cH )
-
-   dbCloseArea()
-
-   /* `SoLeitura` tambem aqui: sem ela a sonda reabria a area GRAVAVEL, e um
-      handle somente-leitura perdia a trava do RDD so por alguem ter clicado
-      em "Editar estrutura". Todos os outros pontos que reatam um handle de
-      usuario ja passavam isto. */
-   nWa := AbreNaArea( cArq, cAlias, .T., SoLeitura( hInfo ) )
-
-   IF nWa == 0
-      /* Nao conseguiu: volta ao modo original e devolve a recusa. E o mesmo
-         codigo que o struct.apply usa, para a UI ter UM caso a tratar. */
-      RETURN ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, ;
-                         Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "another program is using it", ;
-                              "h", { "file" => hb_FNameNameExt( cArq ) } ), .F. )
+   /* IDA. A recusa dele ja vem com o codigo certo e com a area de volta no
+      modo anterior -- nao ha o que traduzir nem o que desfazer aqui. */
+   xIda := Api_File_Reopen( { "h" => cH, "exclusive" => .T. } )
+   IF ! xIda[ "ok" ]
+      RETURN xIda
    ENDIF
+   AEval( hb_HGetDef( xIda[ "result" ], "rebindErrors", {} ), {| x | AAdd( aFalhas, x ) } )
 
-   SessReattach( cH, nWa, .T. )
-
-   /* Devolve o exclusivo NA HORA -- ver a divergencia explicada acima. */
-   IF ( xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .F. ) ) != NIL
-      RETURN xErro
+   /* VOLTA. Devolve o exclusivo na hora -- ver a divergencia acima. */
+   xVolta := Api_File_Reopen( { "h" => cH, "exclusive" => .F. } )
+   IF ! xVolta[ "ok" ]
+      RETURN xVolta
    ENDIF
+   AEval( hb_HGetDef( xVolta[ "result" ], "rebindErrors", {} ), {| x | AAdd( aFalhas, x ) } )
 
-   RETURN Ok( { "canLock" => .T. } )
+   /*
+    * As falhas de religar VIAJAM. O `file.reopen` ja as reportava e esta sonda
+    * as jogava fora: um indice que nao reabre ou um filtro que nao recompila
+    * some sem uma palavra, e a tela continua mostrando o que o filtro antigo
+    * dizia. Quem pergunta "posso?" tem de saber o que a pergunta custou.
+    */
+   RETURN Ok( { "canLock" => .T., "rebindErrors" => aFalhas } )
 
 /*
  * `lSemAcesso` (por referencia) diz que NAO DEU PARA OLHAR.
