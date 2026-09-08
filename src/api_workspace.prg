@@ -194,8 +194,10 @@ FUNCTION Api_Workspace_Update( hP )
 
    LOCAL cName := Par( hP, "name" )
    LOCAL cCdp  := Par( hP, "codepage" )
+   LOCAL cNovo := Par( hP, "newName" )
+   LOCAL cDir  := Par( hP, "dir" )
    LOCAL aCon := Connections()
-   LOCAL n, cChave
+   LOCAL n, m, cChave, cAntigo, nSoltos
 
    IF Empty( cName )
       RETURN Err( "ERROR_PARAM_REQUIRED", "connection name is required", "name", ;
@@ -211,6 +213,37 @@ FUNCTION Api_Workspace_Update( hP )
    IF n == 0
       RETURN Err( "ERROR_CONNECTION_NOT_FOUND", "connection not found", "name", ;
                   { "name" => cName } )
+   ENDIF
+
+   /*
+    * RENOMEAR: o nome e a CHAVE da conexao, entao trocar um exige as mesmas
+    * conferencias do cadastro -- nao pode ser vazio nem colidir com outra.
+    * Comparar consigo mesma de fora do AScan seria errado: mudar so a caixa
+    * ("Fixtures" -> "FIXTURES") acusaria colisao com a propria conexao.
+    */
+   IF hb_HHasKey( hP, "newName" )
+      IF Empty( cNovo )
+         RETURN Err( "ERROR_PARAM_REQUIRED", "connection name cannot be empty", "newName", ;
+                     { "param" => "newName" } )
+      ENDIF
+      m := AScan( aCon, {| h, i | i != n .AND. Upper( h[ "name" ] ) == Upper( cNovo ) } )
+      IF m > 0
+         RETURN Err( "ERROR_CONNECTION_EXISTS", "a connection with this name exists", "newName", ;
+                     { "name" => cNovo } )
+      ENDIF
+   ENDIF
+
+   /* MOVER: mesma conferencia do cadastro. Apontar para uma pasta que nao
+      existe deixaria a conexao inutil sem dizer por que. */
+   IF hb_HHasKey( hP, "dir" )
+      IF Empty( cDir )
+         RETURN Err( "ERROR_PARAM_REQUIRED", "connection folder is required", "dir", ;
+                     { "param" => "dir" } )
+      ENDIF
+      cDir := hb_DirSepDel( CaminhoOS( cDir ) )
+      IF ! hb_DirExists( cDir )
+         RETURN Err( "ERROR_DIR_NOT_FOUND", "folder not found", "dir", { "dir" => cDir } )
+      ENDIF
    ENDIF
 
    IF Empty( cCdp )
@@ -242,9 +275,71 @@ FUNCTION Api_Workspace_Update( hP )
       ENDIF
    NEXT
 
+   /*
+    * AS DUAS MUDANCAS ESTRUTURAIS VEM POR ULTIMO, depois de tudo validado:
+    * a partir daqui nao ha mais recusa possivel, entao nao ha estado meio
+    * trocado a desfazer.
+    */
+   cAntigo := aCon[ n ][ "name" ]
+   nSoltos := 0
+
+   IF hb_HHasKey( hP, "dir" )
+      /*
+       * MUDAR A PASTA SOLTA OS ARQUIVOS QUE FICARAM PARA TRAS.
+       *
+       * Um arquivo aberto guarda o NOME da conexao de onde veio. Se a conexao
+       * passa a apontar para outra pasta, aquele arquivo deixa de pertencer a
+       * ela -- continua aberto, pelo caminho absoluto, mas dizer que ele e
+       * "@Cliente A" seria falso, e a aba mostra esse rotulo.
+       *
+       * Solta em vez de fechar: o arquivo esta aberto e ninguem pediu para
+       * fecha-lo. Solta em vez de mentir: o vinculo e que acabou.
+       */
+      IF ! ( Upper( aCon[ n ][ "dir" ] ) == Upper( cDir ) )
+         nSoltos := SoltaForaDaPasta( cAntigo, cDir )
+      ENDIF
+      aCon[ n ][ "dir" ] := cDir
+   ENDIF
+
+   IF hb_HHasKey( hP, "newName" )
+      aCon[ n ][ "name" ] := cNovo
+      /* O handle guarda o nome de quando abriu. Sem isto a aba continuaria
+         escrita "@nomeantigo" e, pior, a sessao restauraria o arquivo com uma
+         conexao que nao existe mais -- perdendo o codepage dela em silencio. */
+      RenomeiaNosHandles( cAntigo, cNovo )
+   ENDIF
+
    SaveConnections( aCon )
 
-   RETURN Ok( { "connection" => aCon[ n ] } )
+   RETURN Ok( { "connection" => aCon[ n ], "detached" => nSoltos } )
+
+/* Troca o nome da conexao em todo arquivo ABERTO que veio dela. */
+STATIC FUNCTION RenomeiaNosHandles( cVelho, cNovo )
+
+   LOCAL hInfo
+
+   FOR EACH hInfo IN SessOpenFiles()
+      IF Upper( hInfo[ "connection" ] ) == Upper( cVelho )
+         hInfo[ "connection" ] := cNovo
+      ENDIF
+   NEXT
+
+   RETURN NIL
+
+/* Tira o vinculo dos abertos que nao estao na pasta nova. Devolve quantos. */
+STATIC FUNCTION SoltaForaDaPasta( cConn, cDirNovo )
+
+   LOCAL hInfo, n := 0
+
+   FOR EACH hInfo IN SessOpenFiles()
+      IF Upper( hInfo[ "connection" ] ) == Upper( cConn ) .AND. ;
+         ! Upper( hb_DirSepDel( hb_FNameDir( hInfo[ "path" ] ) ) ) == Upper( cDirNovo )
+         hInfo[ "connection" ] := ""
+         n++
+      ENDIF
+   NEXT
+
+   RETURN n
 
 /* workspace.remove {"name":"Cliente A"} */
 FUNCTION Api_Workspace_Remove( hP )

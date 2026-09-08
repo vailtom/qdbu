@@ -2089,6 +2089,62 @@ fn selftest() -> i32 {
                 );
                 let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&hav)));
 
+                /*
+                 * RENOMEAR E MOVER uma conexao. O que precisa ser afirmado nao
+                 * e o rename em si -- e o que ele faz com os ARQUIVOS ABERTOS.
+                 *
+                 * O handle guarda o NOME de quando abriu. Sem reconciliar, a
+                 * aba continuaria escrita "@nomeantigo" e, pior, a sessao
+                 * restauraria o arquivo com uma conexao que nao existe mais,
+                 * perdendo o codepage dela em silencio.
+                 *
+                 * E mudar a PASTA solta quem ficou para tras: o arquivo segue
+                 * aberto pelo caminho absoluto, mas dizer que ele pertence a
+                 * uma conexao que aponta para outro lugar seria falso.
+                 */
+                let hren = abre(&format!(r#"{{"path":"{ed2_s}","connection":"cfgconn"}}"#));
+                let conn_de = |v: &Option<serde_json::Value>| -> String {
+                    v.as_ref()
+                        .and_then(|x| x.pointer("/result/connection").and_then(|c| c.as_str()))
+                        .unwrap_or("").to_string()
+                };
+                let info = |h: &str| -> Option<serde_json::Value> {
+                    rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h}"}}"#))
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                };
+                let antes_ren = conn_de(&info(&hde(&hren)));
+                let _ = rpc_bruto(&hb, "workspace.update",
+                    r#"{"name":"cfgconn","newName":"cfgconn2"}"#);
+                let depois_ren = conn_de(&info(&hde(&hren)));
+
+                // Nome repetido continua recusado -- e a mesma regra do cadastro.
+                let colide = rpc_bruto(&hb, "workspace.update",
+                    r#"{"name":"cfgconn2","newName":"Fixtures"}"#).unwrap_or_default();
+
+                // Mover para outra pasta solta o arquivo, que ficou na antiga.
+                let outra = dir_run().parent().map(|p| p.to_path_buf()).unwrap_or_else(dir_run);
+                let outra_s = outra.to_string_lossy().replace('\\', "/");
+                let mov = rpc_bruto(&hb, "workspace.update",
+                    &format!(r#"{{"name":"cfgconn2","dir":"{outra_s}"}}"#))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let soltos = mov.as_ref()
+                    .and_then(|v| v.pointer("/result/detached").and_then(|d| d.as_i64()))
+                    .unwrap_or(-1);
+                let depois_mov = conn_de(&info(&hde(&hren)));
+
+                t.ok(
+                    "CONN: renomear leva o nome aos arquivos ABERTOS, nome repetido recusa, e mover SOLTA quem ficou para tras",
+                    antes_ren == "cfgconn" && depois_ren == "cfgconn2"
+                        && colide.contains("ERROR_CONNECTION_EXISTS")
+                        && soltos == 1 && depois_mov.is_empty(),
+                    &format!("antes {antes_ren:?} / apos rename {depois_ren:?} / colisao {} / soltos {soltos} / apos mover {depois_mov:?}",
+                             colide.contains("ERROR_CONNECTION_EXISTS")),
+                );
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&hren)));
+                let _ = rpc_bruto(&hb, "workspace.remove", r#"{"name":"cfgconn2"}"#);
+
                 let _ = rpc_bruto(&hb, "workspace.remove", r#"{"name":"cfgconn"}"#);
 
                 // Sem cadastro nenhum apontando para ela, a pasta continua

@@ -1010,6 +1010,11 @@
   INFO_CODEPAGE_UNPINNED: "File codepage unpinned; the connection or global one applies again.",
   INFO_CONFIG_SAVED: "Preferences saved.",
   INFO_CONNECTION_UPDATED: "Connection '{name}' updated.",
+  ERROR_CONNECTION_NAME_EMPTY: "The connection needs a name.",
+  INFO_CONNECTION_DETACHED_TABS: {
+    one: "One tab no longer belongs to it.",
+    other: "{n} tabs no longer belong to it.",
+  },
   WARN_CODEPAGE_NOT_PINNED: "Could not write to the folder; codepage {cp} applies to this session only.",
   WARN_CODEPAGE_NOT_UNPINNED: "Could not write to the folder; the codepage is still pinned to the file.",
   WARN_CONFIG_NOT_SAVED: "Could not save to disk; preferences apply to this session only.",

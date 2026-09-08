@@ -6084,20 +6084,23 @@ function cadastrarAvulsa() {
   $("con-nome").select();
 }
 
-/* Editar as propriedades de uma conexao existente -- codepage e modo de
-   abertura. Reusa o diálogo, com pasta e nome travados: o que muda depois é o
-   que a conexao DECIDE, não onde ela aponta (workspace.update). */
+/* Editar as propriedades de uma conexao existente.
+
+   NOME E PASTA DEIXARAM DE SER TRAVADOS (pedido do autor, 08/09/2026). Eles
+   eram travados porque `workspace.update` nao sabia mexer neles -- a tela
+   estava dizendo a verdade sobre o que o backend fazia. Agora ele sabe, e as
+   duas coisas que mais mudam na vida real de uma conexao -- o cliente que
+   trocou de servidor, o nome que ficou ruim -- deixam de exigir remover e
+   cadastrar de novo, que era o contorno e perdia codepage e modo junto. */
 let conEditando = null;
 function editarConexao(nome) {
   const con = (conexoes || []).find((c) => c.name === nome);
   conEditando = nome;
-  $("con-dir").value = con ? con.dir : "";
+  $("con-dir").value = con ? paraExibir(con.dir) : "";
   $("con-nome").value = nome;
-  $("con-dir").disabled = true;
-  $("con-nome").disabled = true;
-  // Travar so o campo deixava o Procurar escrever nele -- e a pasta escolhida
-  // sumia sem aviso, porque `workspace.update` nao a envia.
-  $("con-procurar").disabled = true;
+  $("con-dir").disabled = false;
+  $("con-nome").disabled = false;
+  $("con-procurar").disabled = false;
   preencherSelectCodepage($("con-codepage"), true);
   $("con-codepage").value = (con && con.codepage) || "";
   $("con-somente-leitura").checked = !!(con && con.readOnly);
@@ -6125,15 +6128,79 @@ $("form-conexao").addEventListener("submit", async (ev) => {
 
   try {
     if (conEditando) {
-      await QDBU.rpc("workspace.update", {
+      const antes = (conexoes || []).find((c) => c.name === conEditando) || {};
+      const nomeNovo = $("con-nome").value.trim();
+      const dirNovo = $("con-dir").value.trim();
+
+      if (!nomeNovo) {
+        $("con-nome").classList.add("culpado");
+        erro.textContent = T("ERROR_CONNECTION_NAME_EMPTY");
+        erro.hidden = false;
+        $("con-nome").focus();
+        return;
+      }
+
+      /* NOME REPETIDO BARRADO AQUI, com a sugestao ja no campo -- o mesmo
+         tratamento do cadastro. A DLL tambem recusa, mas ali a pessoa recebe
+         "ja existe" e o campo do jeito que estava. `nomeLivreConexao` ignora a
+         propria conexao, senao trocar so a caixa acusaria colisao consigo. */
+      const arruma = (t) => String(t || "").trim().toLowerCase();
+      const outros = (conexoes || []).filter((c) => c.name !== conEditando);
+      if (outros.some((c) => arruma(c.name) === arruma(nomeNovo))) {
+        $("con-nome").classList.add("culpado");
+        erro.textContent = T("ERROR_CONNECTION_EXISTS", { name: nomeNovo });
+        erro.hidden = false;
+        $("con-nome").focus();
+        $("con-nome").select();
+        return;
+      }
+
+      const r = await QDBU.rpc("workspace.update", {
         name: conEditando,
+        newName: nomeNovo,
+        dir: dirNovo,
         codepage: $("con-codepage").value,
         readOnly: $("con-somente-leitura").checked,
         exclusive: $("con-exclusivo").checked,
       });
       dlg.close();
+
+      /*
+       * O CACHE E A EXPANSAO SAO CHAVEADOS PELO NOME, entao um rename os
+       * deixaria orfaos: a arvore pediria a pasta de novo e a conexao nasceria
+       * fechada, como se nunca tivesse sido aberta.
+       */
+      const nomeFinal = (r.connection && r.connection.name) || nomeNovo;
+      if (nomeFinal !== conEditando) {
+        if (arquivosDe.has(conEditando)) {
+          arquivosDe.set(nomeFinal, arquivosDe.get(conEditando));
+          arquivosDe.delete(conEditando);
+        }
+        if (expandidas.has(conEditando)) {
+          expandidas.delete(conEditando);
+          expandidas.add(nomeFinal);
+        }
+      }
+      /* A PASTA MUDOU: o que estava em cache e da pasta ANTIGA. Deixar ali
+         faria a busca continuar achando arquivos que esta conexao ja nao tem
+         -- e um duplo clique abriria pelo caminho antigo. */
+      if (r.connection && !mesmaPasta(antes.dir, r.connection.dir)) {
+        arquivosDe.delete(nomeFinal);
+        if (selecaoArvore) selecaoArvore = null;
+      }
+
+      // `repintarDoEstado` traz os handles com o `connection` ja reconciliado
+      // pela DLL -- e por isso as abas acertam o rotulo sozinhas.
+      await repintarDoEstado();
       await carregarConexoes();
-      hint(T("INFO_CONNECTION_UPDATED", { name: conEditando }));
+      if (expandidas.has(nomeFinal)) await abrirConexao(nomeFinal);
+
+      hint(
+        r.detached
+          ? T("INFO_CONNECTION_UPDATED", { name: nomeFinal }) + " " +
+            T("INFO_CONNECTION_DETACHED_TABS", { n: r.detached })
+          : T("INFO_CONNECTION_UPDATED", { name: nomeFinal })
+      );
       conEditando = null;
       return;
     }

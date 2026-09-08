@@ -1041,6 +1041,11 @@
   INFO_CODEPAGE_UNPINNED: "Codepage do arquivo desfixado; volta a valer o da conexão ou o global.",
   INFO_CONFIG_SAVED: "Preferências salvas.",
   INFO_CONNECTION_UPDATED: "Conexão '{name}' atualizada.",
+  ERROR_CONNECTION_NAME_EMPTY: "A conexão precisa de um nome.",
+  INFO_CONNECTION_DETACHED_TABS: {
+    one: "Uma aba deixou de pertencer a ela.",
+    other: "{n} abas deixaram de pertencer a ela.",
+  },
   WARN_CODEPAGE_NOT_PINNED: "Não foi possível gravar na pasta; o codepage {cp} vale só nesta sessão.",
   WARN_CODEPAGE_NOT_UNPINNED: "Não foi possível gravar na pasta; o codepage continua fixado no arquivo.",
   WARN_CONFIG_NOT_SAVED: "Não foi possível salvar no disco; as preferências valem só nesta sessão.",
