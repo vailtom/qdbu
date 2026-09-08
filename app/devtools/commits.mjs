@@ -50,13 +50,21 @@ const PALAVRAS = [
   "tem", "faz", "sendo", "havia", "fica", "ficou", "vira", "virou",
 ];
 
-/* Trecho entre crases e nome de arquivo sao CODIGO, nao prosa: um commit em
-   ingles cita `ModoDaPasta`, `api_workspace.prg` e `pasta avulsa` como nome
-   do recurso. Medir a lingua ali produziria acusacao onde nao ha erro. */
+/* CODIGO NAO E PROSA, e este projeto tem os identificadores em portugues.
+   Um commit em ingles legitimamente cita `ModoDaPasta`, `QDBU_VERSAO`,
+   `api_workspace.prg` e `identidade.versao` -- medir a lingua ali produz
+   acusacao onde nao ha erro. Foi o que aconteceu na primeira versao: ela
+   reprovou um commit em ingles por causa do `QDBU_VERSAO` no corpo. */
 function prosa(texto) {
   return String(texto)
     .replace(/`[^`]*`/g, " ")
     .replace(/\b[\w-]+\.(prg|mjs|js|rs|c|h|bat|md|json|toml|css|html)\b/gi, " ")
+    // identificador pontuado ou sublinhado: QDBU_VERSAO, identidade.versao
+    .replace(/\b[A-Za-z_][A-Za-z0-9_]*[._][A-Za-z0-9_.]+\b/g, " ")
+    // CAIXA ALTA inteira: QDBU_VERSAO solto, DBF, NTX, REPLACE
+    .replace(/\b[A-Z][A-Z0-9_]{2,}\b/g, " ")
+    // caixa mista: ModoDaPasta, abrirAvulsa, larguraPainel
+    .replace(/\b(?=[A-Za-z]*[a-z])(?=[A-Za-z]*[A-Z])[A-Za-z]{3,}\b/g, " ")
     .replace(/\bCo-Authored-By:.*/gi, " ");
 }
 
