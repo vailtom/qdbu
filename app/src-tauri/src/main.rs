@@ -2225,6 +2225,74 @@ fn selftest() -> i32 {
                     let _ = std::fs::remove_file(&travado);
                 }
 
+                /*
+                 * O AVISO ANTES DE DIGITAR -- `file.trylock`.
+                 *
+                 * `DBUSTRU.PRG:92` toma o exclusivo ANTES de abrir o editor de
+                 * estrutura e, se nao consegue, nem entra. Ninguem monta uma
+                 * estrutura de quarenta campos para descobrir no fim que ela
+                 * nao pode ser gravada.
+                 *
+                 * O que precisa ser afirmado sao as DUAS pontas: que a sonda
+                 * RECUSA com o arquivo tomado, e -- mais importante -- que ela
+                 * DEVOLVE o arquivo do jeito que estava. Ela fecha e reabre a
+                 * area; uma sonda que estraga o que veio medir seria pior que
+                 * nao ter sonda.
+                 *
+                 * `share_mode(3)` e FILE_SHARE_READ|WRITE: e como um programa
+                 * Clipper abre um DBF compartilhado, que e o caso do cliente
+                 * com o ERP aberto.
+                 */
+                {
+                    use std::os::windows::fs::OpenOptionsExt;
+                    let alvo = dir_run().join("trylock.dbf");
+                    // O CONJUNTO, e nao so o .dbf: a flag de memo esta ligada
+                    // no cabecalho, e sem o .dbt ao lado o open recusa antes de
+                    // chegar ao que esta sendo medido aqui.
+                    let alvo_dbt = dir_run().join("trylock.dbt");
+                    let _ = std::fs::copy(&ed2, &alvo);
+                    let _ = std::fs::copy(ed2.with_extension("dbt"), &alvo_dbt);
+                    let alvo_s = alvo.to_string_lossy().replace('\\', "/");
+
+                    let h = abre(&format!(r#"{{"path":"{alvo_s}"}}"#));
+                    let hs = hde(&h);
+
+                    let outro = std::fs::OpenOptions::new()
+                        .read(true).write(true).share_mode(3).open(&alvo);
+                    let com_outro = rpc_bruto(&hb, "file.trylock",
+                        &format!(r#"{{"h":"{hs}"}}"#)).unwrap_or_default();
+                    drop(outro);
+                    let sozinho = rpc_bruto(&hb, "file.trylock",
+                        &format!(r#"{{"h":"{hs}"}}"#)).unwrap_or_default();
+
+                    // A sonda devolveu o arquivo? Le uma pagina para provar.
+                    let ainda_le = rpc_bruto(&hb, "data.page",
+                        &format!(r#"{{"h":"{hs}","anchor":"top","count":1}}"#))
+                        .unwrap_or_default();
+                    let modo = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{hs}"}}"#))
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                        .and_then(|v| v.pointer("/result/exclusive").and_then(|b| b.as_bool()))
+                        .unwrap_or(true);
+
+                    t.ok(
+                        "TRYLOCK: recusa com outro programa no arquivo, libera sem ele, e DEVOLVE a area como estava",
+                        com_outro.contains("ERROR_CANNOT_LOCK_EXCLUSIVE")
+                            && sozinho.contains("canLock")
+                            && !sozinho.contains("ERROR")
+                            && ainda_le.contains("rows")
+                            && !modo,
+                        &format!("com outro {} / sozinho {} / le {} / exclusivo {modo}",
+                                 com_outro.contains("ERROR_CANNOT_LOCK_EXCLUSIVE"),
+                                 sozinho.contains("canLock"),
+                                 ainda_le.contains("rows")),
+                    );
+
+                    let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{hs}"}}"#));
+                    let _ = std::fs::remove_file(&alvo);
+                    let _ = std::fs::remove_file(&alvo_dbt);
+                }
+
                 let nao_ha = rpc_bruto(&hb, "workspace.files", r#"{"dir":"Z:/nao/existe"}"#).unwrap_or_default();
                 t.ok(
                     "LOOSE: `dir` inexistente devolve ERROR_DIR_NOT_FOUND, e nao ERR:",

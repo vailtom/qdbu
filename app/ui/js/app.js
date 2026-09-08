@@ -1621,6 +1621,13 @@ async function garantirForm(aba) {
 const EM_USO_ESPERA_MS = 2000;
 const EM_USO_PULSO_MS = 400;
 
+/* As DUAS recusas que significam "outro programa esta com o arquivo": a de
+   abrir (`file.open`) e a de tomar o exclusivo para uma operacao que o exige
+   -- alterar estrutura, PACK, ZAP. Sao codigos diferentes porque as situacoes
+   sao diferentes, mas para quem opera a resposta e a mesma: esperar e tentar
+   de novo, ou desistir. */
+const CODIGOS_EM_USO = ["ERROR_FILE_IN_USE", "ERROR_CANNOT_LOCK_EXCLUSIVE"];
+
 async function insistirEmUso(tentar) {
   for (;;) {
     const ate = Date.now() + EM_USO_ESPERA_MS;
@@ -1628,7 +1635,7 @@ async function insistirEmUso(tentar) {
     for (;;) {
       ultimo = await tentar();
       // Sucesso, ou uma recusa que nao e "em uso": nao ha o que insistir.
-      if (ultimo.ok || ultimo.erro.codigo !== "ERROR_FILE_IN_USE") return ultimo;
+      if (ultimo.ok || CODIGOS_EM_USO.indexOf(ultimo.erro.codigo) < 0) return ultimo;
       if (Date.now() >= ate) break;
       await new Promise((f) => setTimeout(f, EM_USO_PULSO_MS));
     }
@@ -7825,6 +7832,34 @@ function esImpacto() {
 $("es-editar").addEventListener("click", async () => {
   const aba = abas.find((a) => a.h === abaAtiva);
   await garantirEstrutura(aba);
+
+  /*
+   * NAO SE ENTRA NUM EDITOR CUJO APLICAR JA SE SABE QUE VAI RECUSAR.
+   *
+   * E o que o DBU faz (`DBUSTRU.PRG:92`): toma o exclusivo ANTES de abrir o
+   * editor e, se nao consegue, mostra a mensagem e nem entra. Ninguem monta
+   * uma estrutura de quarenta campos para descobrir no fim que ela nao pode
+   * ser gravada.
+   *
+   * Aqui o exclusivo e devolvido na hora (ver `file.trylock` na DLL), entao
+   * isto e um AVISO e nao uma reserva: entre este instante e o Aplicar o
+   * arquivo pode ser tomado por outro programa. Por isso as outras duas
+   * garantias continuam necessarias -- o rascunho preservado e o tentar
+   * novamente. Esta evita o trabalho jogado fora; aquelas evitam a perda.
+   */
+  const r = await insistirEmUso(async () => {
+    try {
+      return { ok: true, valor: await QDBU.rpc("file.trylock", { h: abaAtiva }) };
+    } catch (err) {
+      return { ok: false, erro: err };
+    }
+  });
+  if (!r.ok) {
+    // Desistir aqui e nao abrir o editor: nada foi digitado, nada se perde.
+    if (!r.desistiu) hint(msgErro(r.erro));
+    return;
+  }
+
   esEntrarNoModo(true);
 });
 
@@ -8062,12 +8097,67 @@ async function esAplicar() {
    */
   const guarda = { rascunho: esRascunho, original: esOriginal,
                    alvo: esAlvo, novo: esNovo, sel: esSel };
+
+  /* Devolve o rascunho e reabre -- mas so se o arquivo ainda esta la. Num
+     handle perdido (R6) nao ha sobre o que editar, e a modal reaberta
+     prometeria um Aplicar que vai recusar.
+
+     Virou funcao porque agora ha DOIS caminhos que precisam dela: a recusa
+     (catch) e a desistencia no "tentar novamente". Repetir o trio na mao e
+     como se esquece um dos lugares. */
+  const devolverRascunho = () => {
+    const aindaVale = abas.some((a) => a.h === guarda.alvo && !a.detached);
+    if (guarda.alvo !== null && !aindaVale) return false;
+    esAlvo = guarda.alvo; esOriginal = guarda.original;
+    esRascunho = guarda.rascunho; esNovo = guarda.novo; esSel = guarda.sel;
+    esEditando = true;
+    desenharEditor();
+    if (!$("dlg-estrutura").open) $("dlg-estrutura").showModal();
+    return true;
+  };
+
   esFechar();
 
   try {
-    const r = await comProgresso(
-      QDBU.rpc("struct.modify", { h: alvo, fields: campos, backup: comBackup })
-    );
+    /*
+     * TENTAR DE NOVO TAMBEM AQUI, e nao so ao abrir.
+     *
+     * O aviso na entrada do editor diz que o arquivo estava livre naquele
+     * instante -- nao o reserva. Entre digitar e aplicar, o ERP do cliente
+     * pode ter aberto o arquivo, e e justamente aqui que o trabalho ja foi
+     * feito. Recusar de uma vez seria mandar a pessoa refazer tudo por causa
+     * de dois segundos de espera.
+     *
+     * `struct.modify` so toca o original no passo 7: falhar ao tomar o
+     * exclusivo deixa o arquivo exatamente como estava, entao repetir e
+     * seguro -- a recusa vem antes de qualquer escrita, e a propria mensagem
+     * termina em "Nada foi alterado".
+     */
+    const tentativa = await insistirEmUso(async () => {
+      try {
+        return {
+          ok: true,
+          valor: await comProgresso(
+            QDBU.rpc("struct.modify", { h: alvo, fields: campos, backup: comBackup })
+          ),
+        };
+      } catch (err) {
+        return { ok: false, erro: err };
+      }
+    });
+    if (!tentativa.ok) {
+      /* Desistir e ESCOLHA, nao falha: o trabalho volta para a tela e a barra
+         avisa. Um dialogo de erro sobre uma decisao da pessoa e o app
+         discutindo com ela. */
+      if (tentativa.desistiu) {
+        await repintarDoEstado();
+        devolverRascunho();
+        hint(T("WARN_STRUCTURE_CANCELLED"));
+        return;
+      }
+      throw tentativa.erro;
+    }
+    const r = tentativa.valor;
 
     // A grade em cache é da estrutura velha -- as colunas mudaram de nome.
     gradeDe.delete(alvo);
@@ -8099,18 +8189,7 @@ async function esAplicar() {
     );
   } catch (e) {
     await repintarDoEstado(); // o handle pode ter virado `detached` (R6)
-
-    /* Devolve o rascunho e reabre -- mas só se o arquivo ainda está lá. Num
-       handle perdido (R6) não há sobre o que editar, e a modal reaberta
-       prometeria um Aplicar que vai recusar. */
-    const aindaVale = abas.some((a) => a.h === guarda.alvo && !a.detached);
-    if (guarda.alvo === null || aindaVale) {
-      esAlvo = guarda.alvo; esOriginal = guarda.original;
-      esRascunho = guarda.rascunho; esNovo = guarda.novo; esSel = guarda.sel;
-      esEditando = true;
-      desenharEditor();
-      if (!$("dlg-estrutura").open) $("dlg-estrutura").showModal();
-    }
+    devolverRascunho();
 
     await Swal.fire(
       swalBase({

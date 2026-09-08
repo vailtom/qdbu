@@ -117,6 +117,7 @@
   ERROR_FILE_IN_USE:
     "Could not open '{file}' in {mode} mode: another program is using the file.",
   WARN_OPEN_CANCELLED: "Opening '{file}' was cancelled.",
+  WARN_STRUCTURE_CANCELLED: "Structure change cancelled. Nothing was changed, and what you built is still here.",
   UI_IN_USE_SHORT: "In use by another program.",
   UI_IN_FOLDER: "In the folder",
   UI_FILTER_INDEX: "Filter index…",

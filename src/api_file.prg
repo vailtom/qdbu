@@ -481,6 +481,72 @@ STATIC FUNCTION AliasLivre( cArq )
  * foi conferida por quem chama, entao chegar aqui e o `hb_vfOpen` falhar
  * significa acesso negado -- quase sempre alguem usando o arquivo.
  */
+/*
+ * file.trylock {"h":"..."} -> { "canLock": .T. }  |  ERROR_CANNOT_LOCK_EXCLUSIVE
+ *
+ * A PERGUNTA DO DBU, FEITA ANTES DE A PESSOA DIGITAR.
+ *
+ * `DBUSTRU.PRG:92` toma o exclusivo ANTES de abrir o editor de estrutura, e se
+ * nao consegue mostra DBU_STRUMSG2 e nem entra. Ninguem monta uma estrutura de
+ * quarenta campos para descobrir no fim que ela nao pode ser gravada.
+ *
+ * A DIVERGENCIA DELIBERADA: o DBU SEGURA o exclusivo durante toda a edicao;
+ * aqui ele e devolvido na hora. O DBU era DOS monousuario, e podia. Segurar o
+ * arquivo enquanto alguem digita uma estrutura por dez minutos travaria o ERP
+ * do cliente por tempo indeterminado, e isso e pior que o problema que resolve.
+ *
+ * A garantia fica em tres partes, e as tres precisam existir:
+ *   1. este aviso na ENTRADA, para nao investir trabalho a toa;
+ *   2. o rascunho preservado quando o `struct.apply` recusa (app.js);
+ *   3. o "tentar novamente" na hora de aplicar.
+ *
+ * O ciclo fecha e reabre a area, entao usa a MESMA maquina do struct.apply --
+ * `EstadoAntes` / `AbreNaArea` / `ReabreArea`. Uma segunda implementacao seria
+ * um segundo conjunto de garantias a manter em dia (R5).
+ */
+FUNCTION Api_File_Trylock( hP )
+
+   LOCAL cH := ParStr( hP, "h" )
+   LOCAL xErro, hInfo, hEstado, cArq, cAlias, lModoOrig, nWa
+
+   IF ( xErro := SessSelect( cH ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   hInfo     := SessHandle( cH )
+   lModoOrig := hInfo[ "exclusive" ]
+
+   /* Ja exclusivo: ninguem mais tem o arquivo. Fechar e reabrir so para
+      confirmar seria arriscar o que ja esta garantido. */
+   IF lModoOrig
+      RETURN Ok( { "canLock" => .T. } )
+   ENDIF
+
+   cArq    := hInfo[ "path" ]
+   cAlias  := hInfo[ "alias" ]
+   hEstado := EstadoAntes( cH )
+
+   dbCloseArea()
+
+   nWa := AbreNaArea( cArq, cAlias, .T. )
+
+   IF nWa == 0
+      /* Nao conseguiu: volta ao modo original e devolve a recusa. E o mesmo
+         codigo que o struct.apply usa, para a UI ter UM caso a tratar. */
+      RETURN ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, ;
+                         Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "another program is using it", ;
+                              "h", { "file" => hb_FNameNameExt( cArq ) } ), .F. )
+   ENDIF
+
+   SessReattach( cH, nWa, .T. )
+
+   /* Devolve o exclusivo NA HORA -- ver a divergencia explicada acima. */
+   IF ( xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .F. ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   RETURN Ok( { "canLock" => .T. } )
+
 STATIC FUNCTION EhDbfValido( cArq, cMotivo, lSemAcesso )
 
    LOCAL hFile, cBuf
