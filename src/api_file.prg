@@ -527,14 +527,32 @@ FUNCTION Api_File_Trylock( hP )
    nWa := AbreNaArea( cArq, cAlias, .T., SoLeitura( hInfo ) )
 
    IF nWa == 0
-      /* Nao conseguiu: volta ao modo original e devolve a recusa. O `aFalhas`
-         viaja tambem AQUI -- e no caminho de recusa que o religar acontece, e
-         era exatamente onde a versao anterior perdia o relato. */
-      xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, ;
-                           Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "another program is using it", ;
-                                "h", { "file" => hb_FNameNameExt( cArq ), ;
-                                       "rebindErrors" => aFalhas } ), .F., @aFalhas )
-      RETURN xErro
+      /*
+       * Nao conseguiu: volta ao modo original e devolve a recusa.
+       *
+       * A RECUSA E MONTADA DEPOIS DO `ReabreArea`, e nao como argumento dele.
+       * Escrita inline, ela era avaliada ANTES da chamada -- o Harbour resolve
+       * os argumentos primeiro --, entao `rebindErrors` viajava com a lista
+       * VAZIA que existia naquele instante, e nunca com o que o religar de
+       * fato nao conseguiu repor. Mesma armadilha do `FileState` dentro do
+       * hash literal, na outra ponta.
+       *
+       * Medido por CDP em 08/09/2026: com o `.ntx` apagado de proposito e o
+       * arquivo tomado por outro programa, o religar produziu duas perdas
+       * (indice e ordem) e o dialogo de "tentar novamente" nao listou nenhuma.
+       *
+       * O caminho de RECUSA e o mais provavel de todos -- e o que acontece
+       * quando o ERP do cliente esta com o arquivo --, entao e justamente aqui
+       * que perder o relato custa mais.
+       */
+      xErro := ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, NIL, .F., @aFalhas )
+      IF xErro != NIL
+         RETURN xErro       /* nem o modo original voltou: o handle virou detached */
+      ENDIF
+
+      RETURN Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "another program is using it", "h", ;
+                  { "file"         => hb_FNameNameExt( cArq ), ;
+                    "rebindErrors" => aFalhas } )
    ENDIF
 
    SessReattach( cH, nWa, .T. )

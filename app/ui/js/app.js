@@ -8004,6 +8004,20 @@ $("es-editar").addEventListener("click", async () => {
     // A sonda pode ter PERDIDO o arquivo na janela da R6: sem repintar, a aba
     // continuaria com cara de viva sobre um handle que ja nao existe.
     await repintarDoEstado();
+    /*
+     * A RECUSA TAMBEM RELIGA, e o que ela nao repos fica valendo.
+     *
+     * O editor nao abriu, mas o arquivo foi fechado e reaberto no caminho, e
+     * pode ter voltado sem o filtro. Sem isto o painel seguia com a marca
+     * "filtrado" acesa sobre uma area sem filtro nenhum -- medido na tela em
+     * 08/09/2026, com o alias do filtro fechado de proposito. A perda ganha a
+     * barra do erro "em uso": aquele a pessoa acabou de ler no dialogo, e
+     * este e o que continua verdadeiro depois que ele fecha.
+     */
+    if (avisarPerdasDoReligar((r.erro && r.erro.params) || {})) {
+      sincronizarPaineis();
+      return;
+    }
     // Desistir aqui e nao abrir o editor: nada foi digitado, nada se perde.
     if (!r.desistiu) hint(msgErro(r.erro));
     return;

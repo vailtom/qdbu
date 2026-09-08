@@ -2526,6 +2526,120 @@ fn selftest() -> i32 {
                     let _ = std::fs::remove_file(&alvo_dbt);
                 }
 
+                /*
+                 * A RECUSA CARREGA AS PERDAS -- e a ordem de avaliacao do
+                 * Harbour ja fez ela nao carregar.
+                 *
+                 * O `Err(...)` do `file.trylock` estava escrito como ARGUMENTO
+                 * do `ReabreArea`, e o Harbour resolve os argumentos antes da
+                 * chamada: `rebindErrors` viajava com a lista vazia que existia
+                 * naquele instante, nunca com o que o religar deixou de repor.
+                 * A assercao anterior nao pegava porque media um cenario SEM
+                 * perda nenhuma -- os dois lados eram `[]` e ela passava.
+                 *
+                 * Achado clicando, em 08/09/2026: com o `.ntx` apagado e o
+                 * arquivo tomado, o religar produziu duas perdas e o dialogo de
+                 * "tentar novamente" nao listou nenhuma.
+                 *
+                 * A PERDA E ENCENADA DE VERDADE, e nao injetada: uma thread a
+                 * parte apaga o `.ntx` dentro da janela alargada do
+                 * `file.reopenslow` -- a mesma corrida do R6, em camera lenta,
+                 * que e para isso que aquele gancho existe. Depois disso o
+                 * handle segue listando um indice que nao existe mais, e toda
+                 * religacao falha de forma reproduzivel.
+                 */
+                {
+                    use std::os::windows::fs::OpenOptionsExt;
+                    let alvo = dir_run().join("perdas.dbf");
+                    let alvo_dbt = dir_run().join("perdas.dbt");
+                    let alvo_ntx = dir_run().join("perdas.ntx");
+                    let _ = std::fs::copy(&ed2, &alvo);
+                    let _ = std::fs::copy(ed2.with_extension("dbt"), &alvo_dbt);
+                    let alvo_s = alvo.to_string_lossy().replace('\\', "/");
+                    let ntx_s = alvo_ntx.to_string_lossy().replace('\\', "/");
+
+                    let hp = hde(&abre(&format!(r#"{{"path":"{alvo_s}"}}"#)));
+                    let criou = rpc_bruto(&hb, "index.create",
+                        &format!(r#"{{"h":"{hp}","key":"TXT","path":"{ntx_s}"}}"#))
+                        .unwrap_or_default();
+
+                    /* A thread apaga o .ntx enquanto a VM dorme com a area
+                       FECHADA -- antes disso o RDD o mantem travado. */
+                    let caminho = alvo_ntx.clone();
+                    let carrasco = std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(1500));
+                        let ok = std::fs::remove_file(&caminho).is_ok();
+                        ok && !caminho.exists()
+                    });
+                    let lento = rpc_bruto(&hb, "file.reopenslow",
+                        &format!(r#"{{"h":"{hp}","exclusive":false,"hold":3}}"#))
+                        .unwrap_or_default();
+                    let apagou = carrasco.join().unwrap_or(false);
+
+                    t.ok(
+                        "REBIND: o SUCESSO do TrocaModo relata o indice que sumiu na janela da R6",
+                        // A fixture inteira e afirmada: sem indice criado ou
+                        // sem .ntx apagado nao ha perda nenhuma a relatar, e a
+                        // assercao passaria medindo o nada.
+                        criou.contains("\"ok\":true") && apagou
+                            && lento.contains("ERROR_REBIND_INDEX_FAILED")
+                            && lento.contains("ERROR_REBIND_ORDER_LOST"),
+                        &format!("criou {} / apagou {apagou} / lento {}",
+                                 criou.contains("\"ok\":true"),
+                                 &lento[..lento.len().min(200)]),
+                    );
+
+                    /*
+                     * E AGORA A RECUSA, com uma perda encenada de outro jeito.
+                     *
+                     * O indice nao serve para esta metade: `EstadoAntes()`
+                     * fotografa o RDD, e nao a sessao. Depois que a religacao
+                     * acima falhou, o indice ja nao esta aberto -- nao ha mais
+                     * o que perder, e a assercao mediria uma lista vazia contra
+                     * outra lista vazia. Foi o que aconteceu na primeira versao
+                     * deste teste, e ela reprovou codigo ja corrigido.
+                     *
+                     * O FILTRO serve, e de forma determinista: um filtro que
+                     * cita OUTRO ALIAS compila e avalia enquanto aquela area
+                     * existe, e deixa de avaliar assim que ela fecha. E o caso
+                     * real de quem tem dois arquivos abertos e fecha um.
+                     */
+                    let vizinho = dir_run().join("vizinho.dbf");
+                    let vizinho_dbt = dir_run().join("vizinho.dbt");
+                    let _ = std::fs::copy(&ed2, &vizinho);
+                    let _ = std::fs::copy(ed2.with_extension("dbt"), &vizinho_dbt);
+                    let hv = hde(&abre(&format!(r#"{{"path":"{}"}}"#,
+                                                vizinho.to_string_lossy().replace('\\', "/"))));
+                    let posto = rpc_bruto(&hb, "filter.set",
+                        &format!(r#"{{"h":"{hp}","expr":"VIZINHO->INT > -1"}}"#))
+                        .unwrap_or_default();
+                    let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{hv}"}}"#));
+
+                    let outro = std::fs::OpenOptions::new()
+                        .read(true).write(true).share_mode(3).open(&alvo);
+                    let tomou = outro.is_ok();
+                    let negou = rpc_bruto(&hb, "file.trylock",
+                        &format!(r#"{{"h":"{hp}"}}"#)).unwrap_or_default();
+                    drop(outro);
+
+                    t.ok(
+                        "TRYLOCK: a RECUSA carrega as perdas do religar, e nao a lista vazia de antes da chamada",
+                        posto.contains("\"ok\":true") && tomou
+                            && negou.contains("ERROR_CANNOT_LOCK_EXCLUSIVE")
+                            && negou.contains("ERROR_REBIND_FILTER_FAILED"),
+                        &format!("posto {} / tomou {tomou} / recusa {}",
+                                 posto.contains("\"ok\":true"),
+                                 &negou[..negou.len().min(240)]),
+                    );
+
+                    let _ = std::fs::remove_file(&vizinho);
+                    let _ = std::fs::remove_file(&vizinho_dbt);
+                    let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{hp}"}}"#));
+                    let _ = std::fs::remove_file(&alvo);
+                    let _ = std::fs::remove_file(&alvo_dbt);
+                    let _ = std::fs::remove_file(&alvo_ntx);
+                }
+
                 let nao_ha = rpc_bruto(&hb, "workspace.files", r#"{"dir":"Z:/nao/existe"}"#).unwrap_or_default();
                 t.ok(
                     "LOOSE: `dir` inexistente devolve ERROR_DIR_NOT_FOUND, e nao ERR:",
