@@ -302,6 +302,11 @@
     // e não no dicionário, porque interpolação não aninha tradução.
     const p = Object.assign({}, e.params || {});
     if (p.type) p.type = tipo(p.type);
+    // `mode` chega como "exclusive"/"shared" -- o vocabulário do RDD, não o de
+    // quem lê. Mesma razão do `type` acima: interpolação não aninha tradução.
+    // O DBU original faz exatamente isto, com UMA frase e o modo trocado
+    // dentro: "...em modo " + IIF( lOpenMode, "exclusivo", "compartilhado" ).
+    if (p.mode) p.mode = t("UI_MODE_" + String(p.mode).toUpperCase());
 
     if (bruto(chave, p) === undefined && bruto(chave + "_" + p.param, p) === undefined) {
       // Código sem tradução: a frase em inglês que o Harbour montou é melhor que

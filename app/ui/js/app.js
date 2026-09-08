@@ -372,7 +372,19 @@ function listaArquivos(con) {
     if (arq.fields) det.push(T("UI_FIELDS_COUNT", { n: arq.fields }));
     if (arq.memo) det.push(T("UI_MEMO"));
     if (arq.indexes.length) det.push(arq.indexes.join(", "));
-    if (!arq.valid) {
+    /*
+     * EM USO NAO E INVALIDO, e a arvore precisa mostrar a diferenca.
+     *
+     * O arquivo que o ERP do cliente esta usando vinha marcado como invalido
+     * e RISCADO, dizendo "nao e um DBF" sobre um DBF perfeito -- uma pasta
+     * inteira aparecia condenada enquanto o sistema do cliente estava aberto.
+     * Riscado significa "este arquivo nao serve"; em uso e um estado de
+     * agora, que passa quando o outro programa fechar.
+     */
+    if (arq.inUse) {
+      li.classList.add("em-uso");
+      det.unshift(T("UI_IN_USE_SHORT"));
+    } else if (!arq.valid) {
       li.classList.add("invalido");
       det.unshift(T("UI_NOT_A_DBF_SHORT", { reason: arq.reason }));
     }
@@ -1591,6 +1603,52 @@ async function garantirForm(aba) {
   carregarForm(aba.h, cursor);
 }
 
+/*
+ * EM USO POR OUTRO PROGRAMA: TENTAR DE NOVO OU DESISTIR.
+ *
+ * E o comportamento do DBU original, e a especificacao esta no `NetUse` do
+ * DBUNET.PRG: ele repete em SILENCIO por dois segundos e, so entao, pergunta
+ * com dois botoes -- "Tentar Novamente" e "Cancelar". Quem responde tentar
+ * ganha outros dois segundos.
+ *
+ * A repeticao silenciosa e o detalhe que importa: na esmagadora maioria das
+ * vezes o outro programa esta soltando o arquivo naquele instante, e uma
+ * pergunta que aparece e some sozinha ensina a pessoa a ignora-la. O laco
+ * vive AQUI e nao na DLL porque a VM e uma thread so -- dormir dois segundos
+ * la dentro congelaria o app inteiro, e a pergunta mora onde moram os tres
+ * idiomas.
+ */
+const EM_USO_ESPERA_MS = 2000;
+const EM_USO_PULSO_MS = 400;
+
+async function insistirEmUso(tentar) {
+  for (;;) {
+    const ate = Date.now() + EM_USO_ESPERA_MS;
+    let ultimo;
+    for (;;) {
+      ultimo = await tentar();
+      // Sucesso, ou uma recusa que nao e "em uso": nao ha o que insistir.
+      if (ultimo.ok || ultimo.erro.codigo !== "ERROR_FILE_IN_USE") return ultimo;
+      if (Date.now() >= ate) break;
+      await new Promise((f) => setTimeout(f, EM_USO_PULSO_MS));
+    }
+
+    const resp = await Swal.fire(
+      swalBase({
+        icon: "warning",
+        title: T("UI_FILE_IN_USE_TITLE"),
+        html: escapaHtml(msgErro(ultimo.erro)),
+        showCancelButton: true,
+        confirmButtonText: T("UI_RETRY"),
+        cancelButtonText: T("UI_CANCEL"),
+      })
+    );
+    // Cancelar e ESCOLHA, nao erro: quem chama trata como desistencia e nao
+    // como falha -- por isso `desistiu`, e por isso a mensagem e WARN_.
+    if (!resp.isConfirmed) return { ok: false, erro: ultimo.erro, desistiu: true };
+  }
+}
+
 async function abrirArquivo(caminho, conexao, exclusivo, somenteLeitura) {
   // Windows mistura / e barra invertida no mesmo caminho; comparar cru erra.
   // fromCharCode(92) evita ter de escapar a barra invertida aqui.
@@ -1621,7 +1679,25 @@ async function abrirArquivo(caminho, conexao, exclusivo, somenteLeitura) {
     const pedido = { path: caminho, connection: conexao };
     if (exclusivo) pedido.exclusive = true;
     if (somenteLeitura) pedido.readOnly = true;
-    const i = await QDBU.rpc("file.open", pedido);
+
+    /* Em uso por outro programa nao e o fim da tentativa -- e o comportamento
+       do DBU original: repete em silencio e depois pergunta. Ver
+       `insistirEmUso`. */
+    const r = await insistirEmUso(async () => {
+      try {
+        return { ok: true, valor: await QDBU.rpc("file.open", pedido) };
+      } catch (err) {
+        return { ok: false, erro: err };
+      }
+    });
+    if (!r.ok) {
+      if (r.desistiu) {
+        hint(T("WARN_OPEN_CANCELLED", { file: paraExibir(caminho) }));
+        return;
+      }
+      throw r.erro;
+    }
+    const i = r.valor;
     await repintarDoEstado();
 
     // file.open ja trouxe a estrutura; session.state nao a traz (seria pesado

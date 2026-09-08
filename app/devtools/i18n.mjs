@@ -59,6 +59,9 @@ const IMPLICITAS = [
   /^UI_CDP_[A-Z0-9]+$/, //         "UI_CDP_" + codepage.id (rotuloCodepage, app.js)
   /^UI_THEME_[A-Z]+$/, //          "UI_THEME_" + tema.id (js/tema.js)
   /^ERROR_PARAM_REQUIRED_/, //     especializacao por params.param (i18n.js)
+  // `UI_MODE_<MODO>` e montada em doErro(): o `mode` chega como
+  // "exclusive"/"shared" e vira palavra antes de entrar na frase.
+  /^UI_MODE_[A-Z]+$/,
   /^ERROR_PARAM_OUT_OF_RANGE_/,
   /^ERROR_PARAM_TOO_(SMALL|BIG)_/,
   /^ERROR_UNSPECIFIED$/, //        default do proprio motor

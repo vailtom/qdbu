@@ -25,7 +25,7 @@ FUNCTION Api_File_Open( hP )
    LOCAL cConn := ParStr( hP, "connection" )
    LOCAL cCdp  := ParStr( hP, "codepage" )
    LOCAL lExcl, lLer, hCon
-   LOCAL cAlias, cH, hJa, nArea, cMotivo, oErr, cOrigem
+   LOCAL cAlias, cH, hJa, nArea, cMotivo, oErr, cOrigem, lSemAcesso
 
    IF Empty( cArq )
       RETURN Err( "ERROR_PARAM_REQUIRED", "file path is required", "path", ;
@@ -86,7 +86,15 @@ FUNCTION Api_File_Open( hP )
 
    /* Valida ANTES de mandar o Harbour abrir: um .DBF que e arquivo texto faria
       o USE estourar erro de runtime, e erro previsivel tem de ser recusa. */
-   IF ! EhDbfValido( cArq, @cMotivo )
+   IF ! EhDbfValido( cArq, @cMotivo, @lSemAcesso )
+      /* EM USO nao e "invalido". O modo pedido vai junto porque e o que a
+         frase diz -- e a mesma distincao do DBU original, cuja mensagem e
+         "...em modo " + IIF( lOpenMode, "exclusivo", "compartilhado" ). */
+      IF lSemAcesso
+         RETURN Err( "ERROR_FILE_IN_USE", "another program is using the file", "path", ;
+                     { "file" => hb_FNameNameExt( cArq ), ;
+                       "mode" => iif( lExcl, "exclusive", "shared" ) } )
+      ENDIF
       RETURN Err( "ERROR_NOT_A_DBF", "not a valid DBF", "path", ;
                   { "file" => hb_FNameNameExt( cArq ), "reason" => cMotivo } )
    ENDIF
@@ -112,11 +120,28 @@ FUNCTION Api_File_Open( hP )
          seria uma promessa que o primeiro caminho novo quebraria em silencio. */
       dbUseArea( .T.,, cArq, cAlias, ! lExcl, lLer )
    RECOVER USING oErr
+      /*
+       * A SEGUNDA PORTA DA MESMA RECUSA.
+       *
+       * O `EhDbfValido` acima pega o caso em que nem o cabecalho se le. Mas
+       * ha o outro: o arquivo permite LEITURA e nega o modo pedido -- e o que
+       * acontece quando outro programa o tem aberto compartilhado e aqui se
+       * pede exclusivo. Ai quem recusa e o `dbUseArea`.
+       *
+       * 32 e 33 sao ERROR_SHARING_VIOLATION e ERROR_LOCK_VIOLATION do
+       * Windows. `NetErr()` cobre o caso em que o RDD marca sem estourar --
+       * e o que o `NetUse` do DBU original consulta.
+       */
+      IF NetErr() .OR. ( HB_ISOBJECT( oErr ) .AND. ;
+                         HB_ISNUMERIC( oErr:osCode ) .AND. ;
+                         ( oErr:osCode == 32 .OR. oErr:osCode == 33 ) )
+         RETURN Err( "ERROR_FILE_IN_USE", "another program is using the file", "path", ;
+                     { "file" => hb_FNameNameExt( cArq ), ;
+                       "mode" => iif( lExcl, "exclusive", "shared" ) } )
+      ENDIF
       RETURN Err( "ERROR_OPEN_FAILED", "could not open the file", "path", ;
                   { "file" => hb_FNameNameExt( cArq ), ;
-                    "reason" => iif( HB_ISOBJECT( oErr ) .AND. ;
-                                     HB_ISSTRING( oErr:description ), ;
-                                     oErr:description, "" ) } )
+                    "reason" => ErroTexto( oErr ) } )
    END SEQUENCE
 
    IF ! Used()
@@ -332,7 +357,7 @@ FUNCTION Api_File_Struct( hP )
 
    LOCAL cH  := ParStr( hP, "h" )
    LOCAL cArq := ParStr( hP, "path" )
-   LOCAL aRet, xSel, cAlias, cMotivo
+   LOCAL aRet, xSel, cAlias, cMotivo, lSemAcesso
 
    IF ! Empty( cH )
       xSel := SessSelect( cH )
@@ -353,7 +378,11 @@ FUNCTION Api_File_Struct( hP )
       RETURN Err( "ERROR_FILE_NOT_FOUND", "file not found", "path", { "file" => cArq } )
    ENDIF
 
-   IF ! EhDbfValido( cArq, @cMotivo )
+   IF ! EhDbfValido( cArq, @cMotivo, @lSemAcesso )
+      IF lSemAcesso
+         RETURN Err( "ERROR_FILE_IN_USE", "another program is using the file", "path", ;
+                     { "file" => hb_FNameNameExt( cArq ), "mode" => "shared" } )
+      ENDIF
       RETURN Err( "ERROR_NOT_A_DBF", "not a valid DBF", "path", ;
                   { "file" => hb_FNameNameExt( cArq ), "reason" => cMotivo } )
    ENDIF
@@ -440,15 +469,29 @@ STATIC FUNCTION AliasLivre( cArq )
  * Valida o cabecalho antes de abrir. Devolve .F. e o motivo em cMotivo.
  * Repete o cuidado de api_workspace: um .DBF que e INI faria o USE estourar.
  */
-STATIC FUNCTION EhDbfValido( cArq, cMotivo )
+/*
+ * `lSemAcesso` (por referencia) diz que NAO DEU PARA OLHAR.
+ *
+ * Nao e detalhe: sem ele, um arquivo que outro programa mantem aberto em
+ * exclusivo -- o ERP do cliente, o proprio DBU com /E -- recebia o veredito
+ * "nao e um DBF valido". O app afirmava algo FALSO sobre o arquivo da pessoa,
+ * que e o pior tipo de mensagem de erro: ela faz duvidar do dado.
+ *
+ * "Nao consegui abrir" nunca foi um veredito sobre o FORMATO. A existencia ja
+ * foi conferida por quem chama, entao chegar aqui e o `hb_vfOpen` falhar
+ * significa acesso negado -- quase sempre alguem usando o arquivo.
+ */
+STATIC FUNCTION EhDbfValido( cArq, cMotivo, lSemAcesso )
 
    LOCAL hFile, cBuf
    LOCAL nSig, nRegs, nHdr, nRec, nTam
 
    cMotivo := ""
+   lSemAcesso := .F.
    hFile := hb_vfOpen( cArq, FO_READ + FO_SHARED )
 
    IF hFile == NIL
+      lSemAcesso := .T.
       cMotivo := "nao foi possivel abrir para leitura"
       RETURN .F.
    ENDIF

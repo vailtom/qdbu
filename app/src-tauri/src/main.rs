@@ -2171,6 +2171,60 @@ fn selftest() -> i32 {
                 // Arrastar para a janela um caminho sem extensao que nao e
                 // pasta cai aqui, e a UI precisa da recusa para dizer a frase
                 // certa em vez de anunciar um bug.
+                /*
+                 * EM USO NAO E "NAO E UM DBF".
+                 *
+                 * Um arquivo que outro programa mantem aberto em exclusivo --
+                 * o ERP do cliente, o proprio DBU com /E -- recebia o veredito
+                 * ERROR_NOT_A_DBF, porque a validacao do cabecalho nem
+                 * conseguia abrir para ler e tratava isso como formato ruim.
+                 * O app afirmava algo FALSO sobre o arquivo da pessoa, e a
+                 * arvore riscava a linha inteira.
+                 *
+                 * `share_mode(0)` e o FILE_SHARE_NONE do Windows: e assim que
+                 * se reproduz o cliente com o arquivo aberto, sem depender de
+                 * outro processo.
+                 */
+                {
+                    use std::os::windows::fs::OpenOptionsExt;
+                    let travado = dir_run().join("emuso.dbf");
+                    let _ = std::fs::copy(&ed2, &travado);
+                    let travado_s = travado.to_string_lossy().replace('\\', "/");
+
+                    let preso = std::fs::OpenOptions::new()
+                        .read(true)
+                        .write(true)
+                        .share_mode(0)
+                        .open(&travado);
+
+                    let abriu = rpc_bruto(&hb, "file.open",
+                        &format!(r#"{{"path":"{travado_s}","exclusive":true}}"#)).unwrap_or_default();
+                    let lista = rpc_bruto(&hb, "workspace.files",
+                        &format!(r#"{{"dir":"{}"}}"#, dir_run().to_string_lossy().replace('\\', "/")))
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                    let em_uso = lista.as_ref()
+                        .and_then(|v| v.pointer("/result/files").and_then(|a| a.as_array()).cloned())
+                        .unwrap_or_default()
+                        .iter()
+                        .find(|f| f.get("name").and_then(|n| n.as_str())
+                                   .map(|n| n.eq_ignore_ascii_case("emuso.dbf")).unwrap_or(false))
+                        .and_then(|f| f.get("inUse").and_then(|b| b.as_bool()))
+                        .unwrap_or(false);
+
+                    t.ok(
+                        "INUSE: arquivo aberto por outro programa vira ERROR_FILE_IN_USE, e a arvore o marca -- nunca 'nao e um DBF'",
+                        abriu.contains("ERROR_FILE_IN_USE")
+                            && !abriu.contains("ERROR_NOT_A_DBF")
+                            && abriu.contains("exclusive")
+                            && em_uso,
+                        &format!("open {} / inUse {em_uso}", &abriu[..abriu.len().min(120)]),
+                    );
+
+                    drop(preso);
+                    let _ = std::fs::remove_file(&travado);
+                }
+
                 let nao_ha = rpc_bruto(&hb, "workspace.files", r#"{"dir":"Z:/nao/existe"}"#).unwrap_or_default();
                 t.ok(
                     "LOOSE: `dir` inexistente devolve ERROR_DIR_NOT_FOUND, e nao ERR:",

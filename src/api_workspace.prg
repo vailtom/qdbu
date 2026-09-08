@@ -398,6 +398,7 @@ FUNCTION Api_Workspace_Files( hP )
          "date"      => DToS( aItem[ F_DATE ] ), ;
          "time"      => aItem[ F_TIME ], ;
          "valid"     => hHdr[ "valid" ], ;
+         "inUse"     => hHdr[ "inUse" ], ;
          "reason"    => hHdr[ "reason" ], ;
          "fields"    => hHdr[ "fields" ], ;
          "memo"      => hHdr[ "memo" ], ;
@@ -432,6 +433,12 @@ FUNCTION Api_Workspace_Count( hP )
    hHdr := ReadHeader( cArq )
 
    IF ! hHdr[ "valid" ]
+      /* Em uso nao e invalido -- ver ReadHeader. Contar registros de um
+         arquivo que o ERP tem aberto e recusa temporaria, nao veredito. */
+      IF hHdr[ "inUse" ]
+         RETURN Err( "ERROR_FILE_IN_USE", "another program is using the file", "path", ;
+                     { "file" => hb_FNameNameExt( cArq ), "mode" => "shared" } )
+      ENDIF
       RETURN Err( "ERROR_NOT_A_DBF", "not a valid DBF", "path", ;
                   { "file" => hb_FNameNameExt( cArq ), ;
                     "reason" => hHdr[ "reason" ] } )
@@ -459,12 +466,23 @@ STATIC FUNCTION ReadHeader( cArq )
 
    LOCAL hFile, cBuf
    LOCAL nSig, nRegs, nHdr, nRec, nTam, nEsperado
-   LOCAL hRet := { "valid" => .F., "reason" => "", "records" => 0, ;
+   /*
+    * `inUse` E DIFERENTE DE `valid`, e a arvore precisa dos dois.
+    *
+    * O `Directory()` acabou de listar o arquivo, entao ele existe. Se o
+    * `hb_vfOpen` falha aqui, e acesso negado -- quase sempre outro programa
+    * com ele aberto em exclusivo, que e o normal numa pasta de cliente com o
+    * ERP rodando. Sem esta distincao a arvore marcava o arquivo como INVALIDO
+    * e o riscava, dizendo "nao e um DBF" sobre um DBF perfeito. Uma pasta
+    * inteira aparecia condenada enquanto o sistema do cliente estava aberto.
+    */
+   LOCAL hRet := { "valid" => .F., "inUse" => .F., "reason" => "", "records" => 0, ;
                    "fields" => 0, "recordSize" => 0, "memo" => .F. }
 
    hFile := hb_vfOpen( cArq, FO_READ + FO_SHARED )
 
    IF hFile == NIL
+      hRet[ "inUse" ] := .T.
       hRet[ "reason" ] := "nao foi possivel abrir para leitura"
       RETURN hRet
    ENDIF

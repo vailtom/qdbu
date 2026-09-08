@@ -109,6 +109,14 @@
   UI_UNIQUE_KEYS: "chaves únicas",
   UI_CREATE: "Criar",
   UI_CANCEL: "Cancelar",
+  UI_RETRY: "Tentar novamente",
+  UI_FILE_IN_USE_TITLE: "Arquivo em uso",
+  UI_MODE_EXCLUSIVE: "exclusivo",
+  UI_MODE_SHARED: "compartilhado",
+  ERROR_FILE_IN_USE:
+    "Não foi possível abrir '{file}' em modo {mode}: outro programa está usando o arquivo.",
+  WARN_OPEN_CANCELLED: "Abertura de '{file}' cancelada.",
+  UI_IN_USE_SHORT: "Em uso por outro programa.",
   UI_IN_FOLDER: "Na pasta",
   UI_FILTER_INDEX: "Filtrar índice…",
 

@@ -489,6 +489,14 @@ body.arrastando .divisoria { background: var(--amber); }
 .arquivo:focus-visible { outline: 1px solid var(--amber); outline-offset: -1px; }
 .arquivo.sel { background: var(--bg4); border-left-color: var(--amber); }
 .arquivo.invalido { color: var(--dim2); text-decoration: line-through; }
+/* EM USO NAO E RISCADO. Riscar diz "este arquivo nao serve"; em uso e um
+   estado que passa quando o outro programa fechar. Sublinhado pontilhado: o
+   arquivo esta la e e legivel, so nao agora. */
+.arquivo.em-uso {
+  color: var(--dim);
+  text-decoration: underline dotted var(--line2);
+  text-underline-offset: 3px;
+}
 
 /* -------------------------------------------------------------- area central */
 
