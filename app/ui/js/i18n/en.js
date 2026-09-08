@@ -975,6 +975,8 @@
   UI_TOOLBAR_LABELS: "Show labels on the toolbar",
   UI_EPOCH_INFO: "Two-digit years use the century from {year} on (SET EPOCH, fixed).",
   UI_CONN_CODEPAGE: "Codepage",
+  UI_CONN_MODE: "Default opening mode",
+  UI_CONN_MODE_EXPLAIN: "Applies to every file opened through this connection. The Open file window still decides case by case.",
   UI_CDP_INHERIT: "(inherit)",
   UI_MENU_CODEPAGE: "Connection codepage",
   UI_PIN_FILE: "Pin this codepage for the file",

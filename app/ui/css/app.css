@@ -106,6 +106,10 @@ header {
    container flex nenhum, e a caixa ficava numa linha com o rotulo na de baixo.
    Defeito que so o screenshot mostra -- no DOM esta tudo certo. */
 .linha-check { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.con-modo { margin: 12px 0 0; padding: 8px 12px 4px; border: 1px solid var(--line); border-radius: 6px; }
+.con-modo legend { padding: 0 6px; color: var(--dim); font-size: 12px; }
+.con-modo .linha-check { margin-bottom: 6px; }
+.con-modo .explica { margin: 6px 0 8px; }
 .linha-check input { display: inline-block; width: auto; margin: 0; }
 
 /* Sobre: o autor cola no titulo, como assinatura, e nao como mais um paragrafo

@@ -1316,7 +1316,10 @@
 
     <label>
       <span data-i18n="UI_FOLDER"></span>
-      <input id="con-dir" name="dir" placeholder="J:\bases\base03" required spellcheck="false">
+      <span class="com-botao">
+        <input id="con-dir" name="dir" placeholder="J:\bases\base03" required spellcheck="false">
+        <button type="button" id="con-procurar" class="ghost" data-i18n="UI_BROWSE"></button>
+      </span>
     </label>
     <label>
       <span data-i18n="UI_NAME"></span> <span class="opcional" data-i18n="UI_NAME_OPTIONAL"></span>
@@ -1326,6 +1329,21 @@
       <span data-i18n="UI_CONN_CODEPAGE"></span> <span class="opcional" data-i18n="UI_NAME_OPTIONAL"></span>
       <select id="con-codepage"></select>
     </label>
+
+    <!-- O modo de abertura PADRAO desta conexao. Vale para todo arquivo aberto
+         por ela; o dialogo "Abrir arquivo" ainda decide caso a caso. -->
+    <fieldset class="con-modo">
+      <legend data-i18n="UI_CONN_MODE"></legend>
+      <label class="linha-check">
+        <input type="checkbox" id="con-somente-leitura">
+        <span data-i18n="UI_READ_ONLY"></span>
+      </label>
+      <label class="linha-check">
+        <input type="checkbox" id="con-exclusivo">
+        <span data-i18n="UI_EXCLUSIVE"></span>
+      </label>
+      <p class="explica" data-i18n="UI_CONN_MODE_EXPLAIN"></p>
+    </fieldset>
 
     <p id="con-erro" class="erro-campo" hidden></p>
 

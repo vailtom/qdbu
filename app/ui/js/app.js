@@ -1342,9 +1342,22 @@ async function abrirArquivo(caminho, conexao, exclusivo, somenteLeitura) {
     // `exclusive` so viaja quando foi PEDIDO. Mandar `false` sempre nao muda
     // o resultado, mas faria parecer que toda abertura decide sobre o modo --
     // e quem decide, hoje, e so o /E da linha de comando.
+    /*
+     * O modo da CONEXAO e o padrao; quem chamou pedindo explicitamente vence.
+     *
+     * `undefined` (a arvore, o arrastar-e-soltar) significa "use o padrao"; o
+     * diálogo Abrir arquivo e o /E da linha de comando mandam `true`/`false` e
+     * decidem por si. Sem isto, marcar a conexao de producao como somente
+     * leitura nao teria efeito nenhum no caminho por onde os arquivos
+     * realmente sao abertos: o duplo clique na arvore.
+     */
+    const con = conexao ? (conexoes || []).find((c) => c.name === conexao) : null;
+    const excl = exclusivo === undefined ? !!(con && con.exclusive) : !!exclusivo;
+    const soLer = somenteLeitura === undefined ? !!(con && con.readOnly) : !!somenteLeitura;
+
     const pedido = { path: caminho, connection: conexao };
-    if (exclusivo) pedido.exclusive = true;
-    if (somenteLeitura) pedido.readOnly = true;
+    if (excl) pedido.exclusive = true;
+    if (soLer) pedido.readOnly = true;
     const i = await QDBU.rpc("file.open", pedido);
     await repintarDoEstado();
 
@@ -5628,14 +5641,17 @@ $("btn-nova-conexao").addEventListener("click", () => {
   $("con-nome").disabled = false;
   preencherSelectCodepage($("con-codepage"), true);
   $("con-codepage").value = "";
+  $("con-somente-leitura").checked = false;
+  $("con-exclusivo").checked = false;
   $("con-erro").hidden = true;
   $("form-conexao").querySelector("button[type=submit]").textContent = T("UI_ADD");
   dlg.showModal();
   $("con-dir").focus();
 });
 
-/* Editar o codepage de uma conexao existente. Reusa o diálogo, com pasta e
-   nome travados -- so a codepage muda (workspace.update). */
+/* Editar as propriedades de uma conexao existente -- codepage e modo de
+   abertura. Reusa o diálogo, com pasta e nome travados: o que muda depois é o
+   que a conexao DECIDE, não onde ela aponta (workspace.update). */
 let conEditando = null;
 function editarCodepageConexao(nome) {
   const con = (conexoes || []).find((c) => c.name === nome);
@@ -5646,6 +5662,8 @@ function editarCodepageConexao(nome) {
   $("con-nome").disabled = true;
   preencherSelectCodepage($("con-codepage"), true);
   $("con-codepage").value = (con && con.codepage) || "";
+  $("con-somente-leitura").checked = !!(con && con.readOnly);
+  $("con-exclusivo").checked = !!(con && con.exclusive);
   $("con-erro").hidden = true;
   $("form-conexao").querySelector("button[type=submit]").textContent = T("UI_SAVE");
   dlg.showModal();
@@ -5668,6 +5686,8 @@ $("form-conexao").addEventListener("submit", async (ev) => {
       await QDBU.rpc("workspace.update", {
         name: conEditando,
         codepage: $("con-codepage").value,
+        readOnly: $("con-somente-leitura").checked,
+        exclusive: $("con-exclusivo").checked,
       });
       dlg.close();
       await carregarConexoes();
@@ -5677,8 +5697,13 @@ $("form-conexao").addEventListener("submit", async (ev) => {
     }
     const r = await QDBU.rpc("workspace.add", {
       dir: $("con-dir").value.trim(),
-      nome: $("con-nome").value.trim(),
+      // `name`, e nao `nome`: e a chave que a DLL le (Api_Workspace_Add). Com
+      // a errada o nome digitado era ignorado e TODA conexao ficava com o nome
+      // da pasta -- calado, porque o campo e opcional e a DLL tem esse padrao.
+      name: $("con-nome").value.trim(),
       codepage: $("con-codepage").value,
+      readOnly: $("con-somente-leitura").checked,
+      exclusive: $("con-exclusivo").checked,
     });
     dlg.close();
     await carregarConexoes();

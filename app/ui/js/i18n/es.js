@@ -971,6 +971,8 @@
   UI_TOOLBAR_LABELS: "Mostrar los nombres en la barra de herramientas",
   UI_EPOCH_INFO: "Las fechas de dos dígitos usan el siglo a partir de {year} (SET EPOCH, fijo).",
   UI_CONN_CODEPAGE: "Codepage",
+  UI_CONN_MODE: "Modo de apertura predeterminado",
+  UI_CONN_MODE_EXPLAIN: "Vale para todo archivo abierto por esta conexión. La ventana Abrir archivo sigue decidiendo caso por caso.",
   UI_CDP_INHERIT: "(heredar)",
   UI_MENU_CODEPAGE: "Codepage de la conexión",
   UI_PIN_FILE: "Fijar este codepage para el archivo",

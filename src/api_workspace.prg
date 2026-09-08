@@ -34,6 +34,8 @@ FUNCTION Api_Workspace_List( hP )
          "name"   => hCon[ "name" ], ;
          "dir"    => hCon[ "dir" ], ;
          "codepage" => iif( hb_HHasKey( hCon, "codepage" ), hCon[ "codepage" ], "" ), ;
+         "readOnly"  => hb_HHasKey( hCon, "readOnly" ) .AND. hCon[ "readOnly" ], ;
+         "exclusive" => hb_HHasKey( hCon, "exclusive" ) .AND. hCon[ "exclusive" ], ;
          "existe" => hb_DirExists( hCon[ "dir" ] ) } )
    NEXT
 
@@ -42,7 +44,7 @@ FUNCTION Api_Workspace_List( hP )
 /* ------------------------------------------------------------ adicionar */
 
 /*
- * workspace.add {"nome":"Cliente A","dir":"J:\\bases\\base03"}
+ * workspace.add {"name":"Cliente A","dir":"J:\\bases\\base03"}
  *
  * Recusa (nao "ERR:") quando: falta parametro, pasta nao existe, ou ja ha
  * conexao com o mesmo nome.
@@ -82,7 +84,23 @@ FUNCTION Api_Workspace_Add( hP )
                   { "codepage" => cCdp } )
    ENDIF
 
+   /*
+    * O MODO DE ABERTURA E PROPRIEDADE DA CONEXAO, como o codepage.
+    *
+    * Uma pasta de producao de cliente marcada somente-leitura vale para TODO
+    * arquivo aberto por ela, sem ninguem precisar lembrar de marcar a caixa a
+    * cada abertura -- e esquecer uma vez e o que estraga o arquivo. Guardados
+    * so quando LIGADOS: um `false` em cada conexao no connections.json faria
+    * parecer que toda conexao decide sobre isso, e a esmagadora maioria nao
+    * decide nada.
+    */
    hCon := { "name" => cName, "dir" => cDir }
+   IF ParLog( hP, "readOnly" )
+      hCon[ "readOnly" ] := .T.
+   ENDIF
+   IF ParLog( hP, "exclusive" )
+      hCon[ "exclusive" ] := .T.
+   ENDIF
    IF ! Empty( cCdp )
       hCon[ "codepage" ] := cCdp
    ENDIF
@@ -103,7 +121,7 @@ FUNCTION Api_Workspace_Update( hP )
    LOCAL cName := Par( hP, "name" )
    LOCAL cCdp  := Par( hP, "codepage" )
    LOCAL aCon := Connections()
-   LOCAL n
+   LOCAL n, cChave
 
    IF Empty( cName )
       RETURN Err( "ERROR_PARAM_REQUIRED", "connection name is required", "name", ;
@@ -128,6 +146,16 @@ FUNCTION Api_Workspace_Update( hP )
    ELSE
       aCon[ n ][ "codepage" ] := cCdp
    ENDIF
+
+   /* Desligado SOME da conexao, em vez de virar `false`: o arquivo so guarda o
+      que foi escolhido, e ausencia ja e o padrao. */
+   FOR EACH cChave IN { "readOnly", "exclusive" }
+      IF ParLog( hP, cChave )
+         aCon[ n ][ cChave ] := .T.
+      ELSEIF hb_HHasKey( aCon[ n ], cChave )
+         hb_HDel( aCon[ n ], cChave )
+      ENDIF
+   NEXT
 
    SaveConnections( aCon )
 
@@ -160,7 +188,7 @@ FUNCTION Api_Workspace_Remove( hP )
 /* -------------------------------------------------------------- arquivos */
 
 /*
- * workspace.files {"nome":"Cliente A"} ou {"dir":"J:\\..."}
+ * workspace.files {"name":"Cliente A"} ou {"dir":"J:\\..."}
  *   -> os DBFs da pasta, com metadados.
  *
  * `registros` NAO vem aqui: contar exige abrir cada arquivo, e numa pasta com
@@ -308,6 +336,15 @@ STATIC FUNCTION ReadHeader( cArq )
    RETURN hRet
 
 /* ---------------------------------------------------------------- apoio */
+
+/* Como o Par(), mas para logico: chave ausente ou de outro tipo e .F. */
+STATIC FUNCTION ParLog( hP, cChave )
+
+   IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave )
+      RETURN .F.
+   ENDIF
+
+   RETURN HB_ISLOGICAL( hP[ cChave ] ) .AND. hP[ cChave ]
 
 STATIC FUNCTION Par( hP, cChave )
 
