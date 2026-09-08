@@ -117,6 +117,10 @@
     "Não foi possível abrir '{file}' em modo {mode}: outro programa está usando o arquivo.",
   WARN_OPEN_CANCELLED: "Abertura de '{file}' cancelada.",
   WARN_STRUCTURE_CANCELLED: "Alteração de estrutura cancelada. Nada foi alterado, e o que você montou continua aqui.",
+  WARN_STRUCTURE_CANCELLED_LOST: "Alteração de estrutura cancelada. Nada foi alterado, mas o arquivo saiu da sessão e o rascunho não pôde voltar.",
+  WARN_TAB_CHANGED: "A aba mudou enquanto o arquivo era conferido. Repita na aba que você quer.",
+  WARN_PACK_CANCELLED: "Compactação cancelada. Nada foi alterado.",
+  WARN_ZAP_CANCELLED: "Esvaziamento cancelado. Nada foi alterado.",
   UI_IN_USE_SHORT: "Em uso por outro programa.",
   UI_IN_FOLDER: "Na pasta",
   UI_FILTER_INDEX: "Filtrar índice…",
@@ -645,6 +649,8 @@
     "usando. Nada foi alterado.",
   ERROR_CANNOT_OPEN_SHARED:
     "Não foi possível reabrir '{file}' em modo compartilhado. Nada foi alterado.",
+  ERROR_RENAME_FAILED:
+    "Não foi possível colocar o arquivo novo no lugar de '{file}' — outro programa pegou o arquivo no último passo. O original continua lá, e a cópia também.",
   ERROR_BACKUP_UNVERIFIABLE:
     "A cópia '{file}' foi criada, mas não foi possível medi-la para conferir.",
 

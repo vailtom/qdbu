@@ -143,6 +143,7 @@
  *     ERROR_REOPEN_FAILED
  *     ERROR_CANNOT_LOCK_EXCLUSIVE   file
  *     ERROR_FILE_IN_USE             file, mode ("exclusive" | "shared")
+ *     ERROR_RENAME_FAILED           file   -- ja se gastou backup/conversao
  *     ERROR_FILE_READ_ONLY          method, file
  *     ERROR_CANNOT_OPEN_SHARED      file
  *     ERROR_BACKUP_UNVERIFIABLE     file

@@ -118,6 +118,10 @@
     "Could not open '{file}' in {mode} mode: another program is using the file.",
   WARN_OPEN_CANCELLED: "Opening '{file}' was cancelled.",
   WARN_STRUCTURE_CANCELLED: "Structure change cancelled. Nothing was changed, and what you built is still here.",
+  WARN_STRUCTURE_CANCELLED_LOST: "Structure change cancelled. Nothing was changed, but the file left the session and the draft could not be restored.",
+  WARN_TAB_CHANGED: "The tab changed while the file was being checked. Try again on the tab you want.",
+  WARN_PACK_CANCELLED: "Pack cancelled. Nothing was changed.",
+  WARN_ZAP_CANCELLED: "Zap cancelled. Nothing was changed.",
   UI_IN_USE_SHORT: "In use by another program.",
   UI_IN_FOLDER: "In the folder",
   UI_FILTER_INDEX: "Filter index…",
@@ -622,6 +626,8 @@
     "Nothing was altered.",
   ERROR_CANNOT_OPEN_SHARED:
     "Could not reopen '{file}' in shared mode. Nothing was altered.",
+  ERROR_RENAME_FAILED:
+    "Could not put the new file in place of '{file}' — another program took the file on the last step. The original is still there, and so is the copy.",
   ERROR_BACKUP_UNVERIFIABLE:
     "The copy '{file}' was created, but it could not be measured to verify.",
 

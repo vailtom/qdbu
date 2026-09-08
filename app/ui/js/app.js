@@ -817,7 +817,21 @@ function desenharEstrutura(a) {
   corpo.textContent = "";
 
   const lista = a.fields || [];
-  $("es-editar").hidden = !a.fields || a.detached;
+  /*
+   * SOMENTE-LEITURA ESCONDE O BOTAO, e nao adianta so a sonda do exclusivo.
+   *
+   * O aviso na entrada existe para ninguem montar uma estrutura que nao pode
+   * ser gravada -- e um handle somente-leitura e exatamente esse caso: o
+   * exclusivo se consegue, o editor abre, a pessoa digita, e o dispatcher
+   * recusa o `struct.modify` com ERROR_FILE_READ_ONLY. Uma pergunta que nao
+   * cobre esse caminho responde algo que ninguem perguntou.
+   *
+   * Escondido, e nao desabilitado: um botao apagado que ninguem explica e
+   * pior que botao nenhum; o distintivo de somente-leitura da aba ja diz por
+   * que ele nao esta la.
+   */
+  const soLeitura = !!(a.info && a.info.readOnly);
+  $("es-editar").hidden = !a.fields || a.detached || soLeitura;
   $("es-resumo-aba").textContent = lista.length
     ? T("UI_STRUCT_SUMMARY", { n: lista.length, bytes: 1 + lista.reduce((t, c) => t + Number(c.len || 0), 0) })
     : "";
@@ -1621,21 +1635,61 @@ async function garantirForm(aba) {
 const EM_USO_ESPERA_MS = 2000;
 const EM_USO_PULSO_MS = 400;
 
-/* As DUAS recusas que significam "outro programa esta com o arquivo": a de
-   abrir (`file.open`) e a de tomar o exclusivo para uma operacao que o exige
-   -- alterar estrutura, PACK, ZAP. Sao codigos diferentes porque as situacoes
-   sao diferentes, mas para quem opera a resposta e a mesma: esperar e tentar
-   de novo, ou desistir. */
-const CODIGOS_EM_USO = ["ERROR_FILE_IN_USE", "ERROR_CANNOT_LOCK_EXCLUSIVE"];
+/*
+ * As recusas que significam "outro programa esta com o arquivo".
+ *
+ * Sao codigos diferentes porque as situacoes sao diferentes -- abrir, tomar o
+ * exclusivo, voltar ao compartilhado --, mas para quem opera a resposta e a
+ * mesma: esperar e tentar de novo, ou desistir.
+ *
+ * `ERROR_CANNOT_OPEN_SHARED` FALTAVA, e a ausencia deixava o laco do
+ * "Reconectar" inerte: ele e exatamente o codigo que o `file.reconnect`
+ * devolve quando o arquivo continua tomado, entao o unico ponto para o qual
+ * aquele laco foi escrito era o unico que ele nao alcancava.
+ *
+ * `ERROR_RENAME_FAILED` NAO entra, de proposito: a causa costuma ser a mesma,
+ * mas ele acontece depois do backup e da conversao inteiros. Repetir ali
+ * refaria tudo -- e apagaria a copia da tentativa anterior.
+ */
+/*
+ * UMA OPERACAO EXCLUSIVA POR VEZ.
+ *
+ * A repeticao roda ate dois segundos SEM nada na tela -- e de proposito, para
+ * a pergunta nao piscar. Mas dois segundos calados sao tempo de sobra para
+ * alguem achar que o clique nao pegou e clicar de novo: nascem dois lacos, e
+ * quando o primeiro abre a pergunta o segundo a substitui. O SweetAlert
+ * mantem um popup so, entao a promessa do primeiro resolve como "dispensada"
+ * e aquele laco desiste sem dizer nada a ninguem. No PACK e no ZAP e pior:
+ * dois `comProgresso` disputam o mesmo temporizador de andamento.
+ */
+let emOperacaoExclusiva = false;
 
-async function insistirEmUso(tentar) {
+const IN_USE_CODES = [
+  "ERROR_FILE_IN_USE",
+  "ERROR_CANNOT_LOCK_EXCLUSIVE",
+  "ERROR_CANNOT_OPEN_SHARED",
+];
+
+async function insistirEmUso(tentar, opcoes) {
+  /*
+   * `umaVezPorRodada` desliga a repeticao SILENCIOSA e deixa so a pergunta.
+   *
+   * A repeticao de dois segundos e do DBU e vale para a OPERACAO, que ou
+   * acontece ou nao. Nao vale para a SONDA (`file.trylock`): ela fecha e
+   * reabre a area, e entre as duas coisas existe a janela da R6 em que a rede
+   * pode levar o arquivo -- a mesma janela que o `file.reopen` documenta.
+   * Girar essa janela cinco vezes por clique multiplica por cinco o risco de
+   * transformar uma pergunta em aba perdida, alem de refazer o religamento de
+   * indices e o dbSeek a cada volta, num disco de rede.
+   */
+  const umaVez = !!(opcoes && opcoes.umaVezPorRodada);
   for (;;) {
-    const ate = Date.now() + EM_USO_ESPERA_MS;
+    const ate = umaVez ? 0 : Date.now() + EM_USO_ESPERA_MS;
     let ultimo;
     for (;;) {
       ultimo = await tentar();
       // Sucesso, ou uma recusa que nao e "em uso": nao ha o que insistir.
-      if (ultimo.ok || CODIGOS_EM_USO.indexOf(ultimo.erro.codigo) < 0) return ultimo;
+      if (ultimo.ok || IN_USE_CODES.indexOf(ultimo.erro.codigo) < 0) return ultimo;
       if (Date.now() >= ate) break;
       await new Promise((f) => setTimeout(f, EM_USO_PULSO_MS));
     }
@@ -7458,7 +7512,26 @@ $("dc-reconectar").addEventListener("click", async () => {
   botao.disabled = true;
   msgDesconectado("");
   try {
-    const r = await QDBU.rpc("file.reconnect", { h: abaAtiva });
+    /*
+     * RECONECTAR TAMBEM PERGUNTA. O arquivo se perdeu (R6) e a pessoa clicou
+     * para traze-lo de volta; se a razao de nao voltar e que outro programa o
+     * tomou nesse meio-tempo, esperar dois segundos costuma resolver -- e
+     * recusar de uma vez deixaria a aba presa num estado que ela nao escolheu.
+     */
+    const tentativa = await insistirEmUso(async () => {
+      try {
+        return { ok: true, valor: await QDBU.rpc("file.reconnect", { h: abaAtiva }) };
+      } catch (err) {
+        return { ok: false, erro: err };
+      }
+    });
+    if (!tentativa.ok) {
+      // Desistir mantem a aba como estava, e a mensagem fica NO PAINEL da aba
+      // desconectada -- e ali que a pessoa esta olhando.
+      msgDesconectado(msgErro(tentativa.erro), sevErro(tentativa.erro));
+      return;
+    }
+    const r = tentativa.valor;
     await repintarDoEstado();
     hint(T("UI_RECONNECTED", { file: r.file }));
   } catch (e) {
@@ -7847,20 +7920,50 @@ $("es-editar").addEventListener("click", async () => {
    * garantias continuam necessarias -- o rascunho preservado e o tentar
    * novamente. Esta evita o trabalho jogado fora; aquelas evitam a perda.
    */
-  const r = await insistirEmUso(async () => {
-    try {
-      return { ok: true, valor: await QDBU.rpc("file.trylock", { h: abaAtiva }) };
-    } catch (err) {
-      return { ok: false, erro: err };
-    }
-  });
+  /*
+   * O HANDLE E CAPTURADO, e nao lido a cada volta.
+   *
+   * Entre o clique e o fim da pergunta ha awaits, e a pessoa pode trocar de
+   * aba. Lendo `abaAtiva` dentro do laco, a sonda mediria um arquivo e o
+   * editor abriria sobre outro -- com a estrutura fotografada de um terceiro,
+   * ja que `garantirEstrutura` foi esperado para a aba de antes. E a mesma
+   * captura que o `esAplicar` faz com `esAlvo`, e pelo mesmo motivo.
+   */
+  if (emOperacaoExclusiva) return;
+  emOperacaoExclusiva = true;
+  try {
+
+  const alvo = abaAtiva;
+  const r = await insistirEmUso(
+    async () => {
+      try {
+        return { ok: true, valor: await QDBU.rpc("file.trylock", { h: alvo }) };
+      } catch (err) {
+        return { ok: false, erro: err };
+      }
+    },
+    { umaVezPorRodada: true }
+  );
   if (!r.ok) {
+    // A sonda pode ter PERDIDO o arquivo na janela da R6: sem repintar, a aba
+    // continuaria com cara de viva sobre um handle que ja nao existe.
+    await repintarDoEstado();
     // Desistir aqui e nao abrir o editor: nada foi digitado, nada se perde.
     if (!r.desistiu) hint(msgErro(r.erro));
     return;
   }
 
+  // A aba pode ter mudado durante a pergunta: entrar no editor exige que o
+  // alvo medido ainda seja o alvo da tela.
+  if (abaAtiva !== alvo) {
+    hint(T("WARN_TAB_CHANGED"));
+    return;
+  }
+
   esEntrarNoModo(true);
+  } finally {
+    emOperacaoExclusiva = false;
+  }
 });
 
 $("es-descartar").addEventListener("click", async () => {
@@ -8105,7 +8208,7 @@ async function esAplicar() {
      Virou funcao porque agora ha DOIS caminhos que precisam dela: a recusa
      (catch) e a desistencia no "tentar novamente". Repetir o trio na mao e
      como se esquece um dos lugares. */
-  const devolverRascunho = () => {
+  const restoreDraft = () => {
     const aindaVale = abas.some((a) => a.h === guarda.alvo && !a.detached);
     if (guarda.alvo !== null && !aindaVale) return false;
     esAlvo = guarda.alvo; esOriginal = guarda.original;
@@ -8151,8 +8254,11 @@ async function esAplicar() {
          discutindo com ela. */
       if (tentativa.desistiu) {
         await repintarDoEstado();
-        devolverRascunho();
-        hint(T("WARN_STRUCTURE_CANCELLED"));
+        /* A FRASE DEPENDE DO QUE DE FATO ACONTECEU. `restoreDraft` devolve
+           .F. quando o arquivo sumiu no intervalo -- e ai nao ha rascunho na
+           tela, e prometer "o que voce montou continua aqui" seria mentira
+           logo depois de a pessoa ter perdido o trabalho. */
+        hint(T(restoreDraft() ? "WARN_STRUCTURE_CANCELLED" : "WARN_STRUCTURE_CANCELLED_LOST"));
         return;
       }
       throw tentativa.erro;
@@ -8189,7 +8295,7 @@ async function esAplicar() {
     );
   } catch (e) {
     await repintarDoEstado(); // o handle pode ter virado `detached` (R6)
-    devolverRascunho();
+    restoreDraft();
 
     await Swal.fire(
       swalBase({
@@ -8897,6 +9003,11 @@ async function perguntarBackup() {
 async function destrutiva(acao) {
   const aba = abas.find((a) => a.h === abaAtiva);
   if (!aba || aba.detached) return;
+  // Ver `emOperacaoExclusiva`: dois cliques durante a repeticao silenciosa
+  // fariam dois `comProgresso` disputarem o mesmo temporizador.
+  if (emOperacaoExclusiva) return;
+  emOperacaoExclusiva = true;
+  try {
 
   const arquivo = (aba.info && aba.info.file) || aba.alias;
   const total = (aba.info && aba.info.records) || 0;
@@ -8922,15 +9033,58 @@ async function destrutiva(acao) {
   if (comBackup === null) return; // desistiu na segunda pergunta
 
   try {
-    const r = await comProgresso(
-      QDBU.rpc(acao === "zap" ? "bulk.zap" : "bulk.pack", {
-        h: abaAtiva,
-        backup: comBackup,
-      })
-    );
+    /*
+     * PACK E ZAP TAMBEM PERGUNTAM, e pelo mesmo motivo da estrutura.
+     *
+     * Sao os outros dois `NetUse` do DBU (`NetPack`, `NetZap`): as duas
+     * operacoes exigem exclusivo, e "outro programa esta usando" e a recusa
+     * mais provavel numa pasta de cliente com o ERP aberto. Recusar de uma vez
+     * mandaria a pessoa refazer o caminho inteiro -- o aviso, a pergunta do
+     * backup, a espera -- por causa de dois segundos.
+     *
+     * Repetir e seguro: as duas recusam ao TOMAR o exclusivo, antes de tocar
+     * no arquivo. E `bulk.pack`/`bulk.zap` sao chamadas identicas a cada
+     * tentativa, sem estado acumulado entre elas.
+     */
+    /*
+     * O HANDLE E O CAPTURADO, e nao `abaAtiva`.
+     *
+     * Os dois avisos que a pessoa acabou de confirmar nomeiam o arquivo que
+     * estava ativo QUANDO ELA CLICOU. A repeticao roda ate dois segundos SEM
+     * modal na tela, entao da tempo de trocar de aba -- e mandar `abaAtiva`
+     * na volta seguinte esvaziaria um arquivo que ninguem confirmou. O
+     * `esAplicar` ja capturava o alvo pelo mesmo motivo; aqui faltava, e o
+     * laco e o que transforma um milissegundo de brecha em dois segundos.
+     */
+    const alvo = aba.h;
+    const tentativa = await insistirEmUso(async () => {
+      try {
+        return {
+          ok: true,
+          valor: await comProgresso(
+            QDBU.rpc(acao === "zap" ? "bulk.zap" : "bulk.pack", {
+              h: alvo,
+              backup: comBackup,
+            })
+          ),
+        };
+      } catch (err) {
+        return { ok: false, erro: err };
+      }
+    });
+    if (!tentativa.ok) {
+      // Desistir e escolha, nao falha -- nada foi tocado no arquivo.
+      if (tentativa.desistiu) {
+        await repintarDoEstado();
+        hint(T(acao === "zap" ? "WARN_ZAP_CANCELLED" : "WARN_PACK_CANCELLED"));
+        return;
+      }
+      throw tentativa.erro;
+    }
+    const r = tentativa.valor;
 
     // A grade em cache é de antes da operação: o arquivo mudou embaixo dela.
-    gradeDe.delete(abaAtiva);
+    gradeDe.delete(alvo);
     await repintarDoEstado();
 
     await Swal.fire(
@@ -8953,6 +9107,9 @@ async function destrutiva(acao) {
         showCancelButton: false,
       })
     );
+  }
+  } finally {
+    emOperacaoExclusiva = false;
   }
 }
 

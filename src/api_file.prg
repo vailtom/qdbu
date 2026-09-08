@@ -469,18 +469,8 @@ STATIC FUNCTION AliasLivre( cArq )
  * Valida o cabecalho antes de abrir. Devolve .F. e o motivo em cMotivo.
  * Repete o cuidado de api_workspace: um .DBF que e INI faria o USE estourar.
  */
-/*
- * `lSemAcesso` (por referencia) diz que NAO DEU PARA OLHAR.
- *
- * Nao e detalhe: sem ele, um arquivo que outro programa mantem aberto em
- * exclusivo -- o ERP do cliente, o proprio DBU com /E -- recebia o veredito
- * "nao e um DBF valido". O app afirmava algo FALSO sobre o arquivo da pessoa,
- * que e o pior tipo de mensagem de erro: ela faz duvidar do dado.
- *
- * "Nao consegui abrir" nunca foi um veredito sobre o FORMATO. A existencia ja
- * foi conferida por quem chama, entao chegar aqui e o `hb_vfOpen` falhar
- * significa acesso negado -- quase sempre alguem usando o arquivo.
- */
+/* ------------------------------------------------------------ auxiliares */
+
 /*
  * file.trylock {"h":"..."} -> { "canLock": .T. }  |  ERROR_CANNOT_LOCK_EXCLUSIVE
  *
@@ -528,7 +518,11 @@ FUNCTION Api_File_Trylock( hP )
 
    dbCloseArea()
 
-   nWa := AbreNaArea( cArq, cAlias, .T. )
+   /* `SoLeitura` tambem aqui: sem ela a sonda reabria a area GRAVAVEL, e um
+      handle somente-leitura perdia a trava do RDD so por alguem ter clicado
+      em "Editar estrutura". Todos os outros pontos que reatam um handle de
+      usuario ja passavam isto. */
+   nWa := AbreNaArea( cArq, cAlias, .T., SoLeitura( hInfo ) )
 
    IF nWa == 0
       /* Nao conseguiu: volta ao modo original e devolve a recusa. E o mesmo
@@ -547,6 +541,18 @@ FUNCTION Api_File_Trylock( hP )
 
    RETURN Ok( { "canLock" => .T. } )
 
+/*
+ * `lSemAcesso` (por referencia) diz que NAO DEU PARA OLHAR.
+ *
+ * Nao e detalhe: sem ele, um arquivo que outro programa mantem aberto em
+ * exclusivo -- o ERP do cliente, o proprio DBU com /E -- recebia o veredito
+ * "nao e um DBF valido". O app afirmava algo FALSO sobre o arquivo da pessoa,
+ * que e o pior tipo de mensagem de erro: ela faz duvidar do dado.
+ *
+ * "Nao consegui abrir" nunca foi um veredito sobre o FORMATO. A existencia ja
+ * foi conferida por quem chama, entao chegar aqui e o `hb_vfOpen` falhar
+ * significa acesso negado -- quase sempre alguem usando o arquivo.
+ */
 STATIC FUNCTION EhDbfValido( cArq, cMotivo, lSemAcesso )
 
    LOCAL hFile, cBuf
@@ -692,6 +698,19 @@ FUNCTION FileState( cH, lWithFields )
       separado. Guardado com hb_HHasKey por causa de sessao gravada antes deste
       campo existir: ela volta do disco sem ele. */
    hRet[ "readOnly" ]   := hb_HHasKey( hInfo, "readOnly" ) .AND. hInfo[ "readOnly" ]
+   /*
+    * O QUE O RDD DIZ, ao lado do que a SESSAO diz.
+    *
+    * `readOnly` acima e o que foi PEDIDO e esta anotado no handle; este e o
+    * estado real da area aberta (DBI_ISREADONLY). Os dois tem de concordar
+    * sempre -- e concordavam ate uma reabertura esquecer de repassar o
+    * somente-leitura: o handle continuava prometendo a trava que o RDD ja nao
+    * tinha, e nada na tela mudava.
+    *
+    * Divergencia aqui e defeito, e ha assercao para isso. Duas fontes que
+    * ninguem compara sao duas fontes que um dia discordam em silencio.
+    */
+   hRet[ "readOnlyRdd" ] := dbInfo( DBI_ISREADONLY )
    hRet[ "mode" ]       := iif( hInfo[ "exclusive" ], "EXCLUSIVE", "SHARED" )
    hRet[ "records" ]    := LastRec()
    hRet[ "recno" ]      := RecNo()

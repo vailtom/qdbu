@@ -155,9 +155,11 @@ STATIC FUNCTION Destrutiva( cH, cAcao, lBackup )
        * processo o tem aberto, o FRename falha, e essa e a resposta certa:
        * melhor recusar que operar com alguem lendo.
        */
+      /* Codigo proprio pelo mesmo motivo do api_struct: aqui ja se gastou
+         trabalho, e repetir do zero nao e a resposta. */
       IF FRename( cArq, cBackup ) != 0
          RETURN ReabreArea( cH, cArq, cAlias, lModoOrig, hEstado, ;
-                        Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "rename failed", "h", ;
+                        Err( "ERROR_RENAME_FAILED", "could not put the new file in place", "h", ;
                              { "file" => hb_FNameNameExt( cArq ) } ) )
       ENDIF
 

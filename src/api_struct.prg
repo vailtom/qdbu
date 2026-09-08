@@ -769,9 +769,18 @@ STATIC FUNCTION TrocaNomes( cArq, cTmp, cBackup, cExtMemo, lBackup )
    Descarta( cGuarda )
    Descarta( cMemoGua )
 
-   /* 1. o original sai do lugar */
+   /*
+    * 1. o original sai do lugar
+    *
+    * CODIGO PROPRIO, e nao ERROR_CANNOT_LOCK_EXCLUSIVE. A causa costuma ser a
+    * mesma -- outro processo pegou o arquivo --, mas a POSICAO e outra: aqui
+    * ja se gastou o backup inteiro e a conversao inteira. Se a UI tratasse
+    * isto como "em uso" ela repetiria a operacao do zero, e o `Descarta` no
+    * topo desta funcao apagaria a copia que a tentativa anterior fez. Repetir
+    * so e barato antes de escrever.
+    */
    IF FRename( cArq, cGuarda ) != 0
-      RETURN Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "rename failed", "h", ;
+      RETURN Err( "ERROR_RENAME_FAILED", "could not put the new file in place", "h", ;
                   { "file" => hb_FNameNameExt( cArq ) } )
    ENDIF
    IF lTinhaMemo
@@ -785,7 +794,7 @@ STATIC FUNCTION TrocaNomes( cArq, cTmp, cBackup, cExtMemo, lBackup )
       IF lTinhaMemo
          FRename( cMemoGua, cMemoArq )
       ENDIF
-      RETURN Err( "ERROR_CANNOT_LOCK_EXCLUSIVE", "rename failed", "h", ;
+      RETURN Err( "ERROR_RENAME_FAILED", "could not put the new file in place", "h", ;
                   { "file" => hb_FNameNameExt( cArq ) } )
    ENDIF
 

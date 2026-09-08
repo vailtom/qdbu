@@ -470,7 +470,21 @@ FUNCTION ReabreArea( cH, cArq, cAlias, lModo, hEstado, xErroOriginal, lSemIndice
       dbCloseArea()
    ENDIF
 
-   nWa := AbreNaArea( cArq, cAlias, lModo )
+   /*
+    * O SOMENTE-LEITURA VOLTA JUNTO COM O MODO.
+    *
+    * Faltava, e o 4o parametro do `AbreNaArea` caía em `.F.`: a area voltava
+    * GRAVAVEL enquanto o `hInfo[ "readOnly" ]` continuava dizendo `.T.` -- o
+    * `file.info` prometia uma trava que o RDD ja nao tinha. Nao aparecia
+    * porque as destrutivas que passam por aqui sao barradas antes, no
+    * dispatcher; o `file.trylock`, que NAO escreve e por isso nao e barrado,
+    * tornou o caminho alcancavel.
+    *
+    * A trava de verdade e a do RDD (ver "Somente leitura e do RDD, nao da
+    * tela"): restaurar o modo sem restaurar isto desfaz a unica garantia que
+    * vale para todo caminho de escrita.
+    */
+   nWa := AbreNaArea( cArq, cAlias, lModo, SoLeitura( SessHandle( cH ) ) )
 
    IF nWa == 0
       SessDetach( cH, "ERROR_REOPEN_FAILED" )

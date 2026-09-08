@@ -2257,8 +2257,13 @@ fn selftest() -> i32 {
                     let h = abre(&format!(r#"{{"path":"{alvo_s}"}}"#));
                     let hs = hde(&h);
 
+                    /* A FIXTURE TEM DE SER AFIRMADA, e nao suposta. Sem
+                       isto, uma copia que falhou ou uma trava negada fazem o
+                       trylock passar -- e a asercao culpa o codigo por um
+                       cenario que nunca existiu. */
                     let outro = std::fs::OpenOptions::new()
                         .read(true).write(true).share_mode(3).open(&alvo);
+                    let travou = outro.is_ok();
                     let com_outro = rpc_bruto(&hb, "file.trylock",
                         &format!(r#"{{"h":"{hs}"}}"#)).unwrap_or_default();
                     drop(outro);
@@ -2277,18 +2282,58 @@ fn selftest() -> i32 {
 
                     t.ok(
                         "TRYLOCK: recusa com outro programa no arquivo, libera sem ele, e DEVOLVE a area como estava",
-                        com_outro.contains("ERROR_CANNOT_LOCK_EXCLUSIVE")
+                        travou
+                            && com_outro.contains("ERROR_CANNOT_LOCK_EXCLUSIVE")
                             && sozinho.contains("canLock")
                             && !sozinho.contains("ERROR")
                             && ainda_le.contains("rows")
                             && !modo,
-                        &format!("com outro {} / sozinho {} / le {} / exclusivo {modo}",
+                        &format!("fixture travou {travou} / com outro {} / sozinho {} / le {} / exclusivo {modo}",
                                  com_outro.contains("ERROR_CANNOT_LOCK_EXCLUSIVE"),
                                  sozinho.contains("canLock"),
                                  ainda_le.contains("rows")),
                     );
 
                     let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{hs}"}}"#));
+
+                    /*
+                     * A SONDA NAO PODE DESFAZER O SOMENTE-LEITURA.
+                     *
+                     * Ela fecha e reabre a area, e o 4o parametro do
+                     * `AbreNaArea` caía em `.F.`: a area voltava GRAVAVEL
+                     * enquanto o handle continuava anunciando readOnly. A
+                     * trava de verdade e a do RDD, entao isso a desfazia por
+                     * inteiro -- e sem barulho, porque `file.info` seguia
+                     * dizendo `true`.
+                     *
+                     * A prova nao e o que o `file.info` diz: e o RDD RECUSAR
+                     * a escrita depois da sonda.
+                     */
+                    let hro2 = abre(&format!(r#"{{"path":"{alvo_s}","readOnly":true}}"#));
+                    let h2 = hde(&hro2);
+                    let _ = rpc_bruto(&hb, "file.trylock", &format!(r#"{{"h":"{h2}"}}"#));
+                    let inf = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h2}"}}"#))
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                    let pedido = inf.as_ref()
+                        .and_then(|v| v.pointer("/result/readOnly").and_then(|b| b.as_bool()))
+                        .unwrap_or(false);
+                    // O QUE O RDD DIZ. Sem isto a assercao mediria a lista do
+                    // dispatcher, que barra o zap antes de chegar ao RDD --
+                    // ela passaria com a trava de verdade ja desfeita.
+                    let real = inf.as_ref()
+                        .and_then(|v| v.pointer("/result/readOnlyRdd").and_then(|b| b.as_bool()))
+                        .unwrap_or(false);
+                    let recusa = rpc_bruto(&hb, "bulk.zap", &format!(r#"{{"h":"{h2}"}}"#))
+                        .unwrap_or_default();
+                    t.ok(
+                        "TRYLOCK: a sonda NAO desfaz o somente-leitura -- o RDD continua com a area travada depois dela",
+                        pedido && real && recusa.contains("ERROR_FILE_READ_ONLY"),
+                        &format!("handle diz {pedido} / RDD diz {real} / zap {}",
+                                 &recusa[..recusa.len().min(80)]),
+                    );
+                    let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h2}"}}"#));
+
                     let _ = std::fs::remove_file(&alvo);
                     let _ = std::fs::remove_file(&alvo_dbt);
                 }
