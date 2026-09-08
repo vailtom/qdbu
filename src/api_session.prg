@@ -151,6 +151,10 @@ FUNCTION Api_Session_Save( hP )
     * -- vira argumento de Directory(), nunca expressao.
     */
    hState[ "looseFolder" ] := ParStr( hP, "looseFolder" )
+   /* Recolhido e um estado, nao uma largura: guardar `panelWidth: 0` faria o
+      painel voltar sem largura nenhuma ao reabrir, e a largura escolhida se
+      perderia. Sao duas informacoes, e cada uma no seu campo. */
+   hState[ "panelHidden" ] := ParLog( hP, "panelHidden" )
 
    hb_MemoWrit( SessionFile(), hb_jsonEncode( hState, .T. ) )
 
@@ -183,7 +187,7 @@ FUNCTION Api_Session_Forget( hP )
 STATIC FUNCTION Defaults()
    RETURN { "panelWidth" => 320, "expanded" => {}, "openFiles" => {}, ;
             "activeTab" => "", "tabOrder" => {}, "pageSize" => 200, ;
-            "looseFolder" => "" }
+            "looseFolder" => "", "panelHidden" => .F. }
 
 /* Reads the saved arrangement. A corrupt file must never stop the app. */
 STATIC FUNCTION ReadUi()
@@ -213,7 +217,9 @@ STATIC FUNCTION ReadUi()
       "pageSize"   => iif( hb_HHasKey( xRead, "pageSize" ) .AND. HB_ISNUMERIC( xRead[ "pageSize" ] ), ;
                            xRead[ "pageSize" ], 200 ), ;
       "looseFolder" => iif( hb_HHasKey( xRead, "looseFolder" ) .AND. HB_ISSTRING( xRead[ "looseFolder" ] ), ;
-                           xRead[ "looseFolder" ], "" ) }
+                           xRead[ "looseFolder" ], "" ), ;
+      "panelHidden" => iif( hb_HHasKey( xRead, "panelHidden" ) .AND. HB_ISLOGICAL( xRead[ "panelHidden" ] ), ;
+                           xRead[ "panelHidden" ], .F. ) }
 
 STATIC FUNCTION ParStr( hP, cKey )
 
@@ -230,6 +236,14 @@ STATIC FUNCTION ParNum( hP, cKey, nDefault )
    ENDIF
 
    RETURN iif( HB_ISNUMERIC( hP[ cKey ] ), hP[ cKey ], nDefault )
+
+STATIC FUNCTION ParLog( hP, cKey )
+
+   IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cKey )
+      RETURN .F.
+   ENDIF
+
+   RETURN iif( HB_ISLOGICAL( hP[ cKey ] ), hP[ cKey ], .F. )
 
 STATIC FUNCTION ParArr( hP, cKey )
 

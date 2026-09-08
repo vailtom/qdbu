@@ -37,6 +37,7 @@
   UI_SEARCH_PLACEHOLDER: "Buscar conexão ou arquivo…",
   UI_CONNECTIONS: "Conexões",
   UI_PANEL_WIDTH: "Largura do painel",
+  UI_TOGGLE_PANEL: "Recolher ou mostrar o painel (Ctrl+B)",
   UI_DRAG_RESIZE: "Arraste para redimensionar (duplo clique volta ao padrão)",
   UI_EMPTY_HINT:
     "Cadastre uma conexão — uma pasta com arquivos DBF — e dê duplo clique " +

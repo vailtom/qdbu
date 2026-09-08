@@ -273,6 +273,36 @@ dialog .idioma-lista { left: 0; right: auto; }
   content: ""; position: absolute; inset: 0 -3px; /* area de clique maior */
 }
 .divisoria:hover, .divisoria:focus-visible { background: var(--amber); outline: none; }
+
+/* O botao de recolher: uma meia-pastilha na borda do painel. `z-index` porque
+   ele precisa ficar acima do `::after` da divisoria, que e a area de clique
+   ampliada do arraste -- sem isso o clique viraria arraste de zero pixel. */
+.alterna-painel {
+  position: absolute; z-index: 2;
+  top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 14px; height: 40px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg3); color: var(--dim);
+  border: 1px solid var(--line2); border-radius: 4px;
+  cursor: pointer; font-size: 11px; line-height: 1;
+  opacity: 0; transition: opacity .12s;
+}
+.alterna-painel::before { content: "‹"; }
+.divisoria:hover .alterna-painel,
+.alterna-painel:focus-visible { opacity: 1; }
+.alterna-painel:hover { color: var(--amber); border-color: var(--amber); }
+
+/* RECOLHIDO: o painel sai, a divisoria fica -- e com ela o caminho de volta,
+   sempre visivel. Deixar de mostrar o botao aqui prenderia a pessoa fora do
+   painel sem nada na tela dizendo como voltar. */
+body.painel-oculto .painel { display: none; }
+/* A DIVISORIA ENGORDA AO RECOLHER, e nao e estetica: com 5px na borda da
+   janela, o botao de 14px centrado nela nascia em x=-4 -- metade do caminho
+   de volta fora da tela. Medido por CDP, nao suposto. */
+body.painel-oculto .divisoria { width: 16px; cursor: pointer; }
+body.painel-oculto .divisoria:hover { background: var(--line); }
+body.painel-oculto .alterna-painel { opacity: 1; }
+body.painel-oculto .alterna-painel::before { content: "›"; }
 body.arrastando { cursor: col-resize; user-select: none; }
 body.arrastando .divisoria { background: var(--amber); }
 

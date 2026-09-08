@@ -2232,6 +2232,25 @@ fn selftest() -> i32 {
                     &format!("gravado wt -> {t_wt:?} / gravado vazio -> {t_vazio:?}"),
                 );
 
+                // Recolhido e ESTADO, e nao largura zero: a largura escolhida
+                // tem de sobreviver ao recolher, senao o painel volta sem ela.
+                let _ = rpc_bruto(&hb, "session.save",
+                    r#"{"panelWidth":275,"panelHidden":true}"#);
+                let ses_pan = rpc_bruto(&hb, "session.load", "{}")
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let oculto = ses_pan.as_ref()
+                    .and_then(|v| v.pointer("/result/panelHidden").and_then(|b| b.as_bool()))
+                    .unwrap_or(false);
+                let larg = ses_pan.as_ref()
+                    .and_then(|v| v.pointer("/result/panelWidth").and_then(|n| n.as_i64()))
+                    .unwrap_or(0);
+                t.ok(
+                    "PANEL: `panelHidden` vai e volta, e NAO apaga a largura escolhida",
+                    oculto && larg == 275,
+                    &format!("panelHidden {oculto} / panelWidth {larg}"),
+                );
+
                 t.ok(
                     "LOOSE: `looseFolder` vai e volta na sessao, e volta VAZIO quando nao ha pasta avulsa",
                     volta == dir_ses && vazio.is_empty(),

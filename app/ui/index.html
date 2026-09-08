@@ -108,7 +108,16 @@
   </aside>
 
   <div id="divisoria" class="divisoria" role="separator" aria-orientation="vertical"
-       data-i18n-aria="UI_PANEL_WIDTH" tabindex="0" data-i18n-title="UI_DRAG_RESIZE"></div>
+       data-i18n-aria="UI_PANEL_WIDTH" tabindex="0" data-i18n-title="UI_DRAG_RESIZE">
+    <!-- O BOTAO MORA NA DIVISORIA, e nao dentro do painel: dentro, ele sumiria
+         junto com o que esconde e nao haveria caminho de volta. Aqui ele fica
+         na fronteira, que continua na tela nos dois estados. Discreto quando
+         aberto (aparece no hover), SEMPRE visivel quando recolhido -- e a
+         mesma razao do "+" das abas, que nao some quando nao ha aba nenhuma:
+         e justamente quando nao ha nada que ele mais importa. -->
+    <button type="button" id="btn-painel" class="alterna-painel"
+            data-i18n-title="UI_TOGGLE_PANEL" aria-expanded="true"></button>
+  </div>
 
   <main class="area">
     <!--

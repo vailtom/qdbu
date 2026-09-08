@@ -4634,6 +4634,21 @@ $("pg-buscar").addEventListener("keydown", (ev) => {
 
 $("pg-proximo").addEventListener("click", () => buscar(ultimaBusca, false));
 
+/* Ctrl+B recolhe e traz de volta o painel -- a mesma tecla do VS Code e de
+   praticamente todo editor, entao quem ja programa nao precisa aprender nada.
+   Fica FORA de campo de texto: num input, Ctrl+B pode ser negrito noutro
+   contexto, e roubar a tecla de quem esta digitando seria pior que nao ter o
+   atalho. Modal aberto tambem nao: o painel esta atras dela. */
+document.addEventListener("keydown", (ev) => {
+  if (!ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+  if (String(ev.key).toLowerCase() !== "b") return;
+  const el = document.activeElement;
+  if (el && el.matches && el.matches("input, select, textarea")) return;
+  if (document.querySelector("dialog[open]")) return;
+  ev.preventDefault();
+  alternarPainel();
+});
+
 document.addEventListener("keydown", (ev) => {
   if (ev.key !== "F3" || !abaAtiva) return;
   ev.preventDefault();
@@ -5361,7 +5376,11 @@ async function salvarSessao() {
   try {
     const ativa = abas.find((a) => a.h === abaAtiva);
     await QDBU.rpc("session.save", {
-      panelWidth: Math.round($("painel").getBoundingClientRect().width),
+      // Recolhido, a medicao do DOM e zero -- ver `ultimaLargura`. Medir o
+      // que esta na tela so vale quando ha algo na tela.
+      panelWidth: painelOculto
+        ? ultimaLargura
+        : Math.round($("painel").getBoundingClientRect().width),
       expanded: [...expandidas],
       /*
        * A PASTA AVULSA VOLTA NO PROXIMO ARRANQUE (decisao do autor,
@@ -5374,6 +5393,9 @@ async function salvarSessao() {
        * mudam. Caminho novo que mexa em `avulsa` precisa de `agendarSalvar()`.
        */
       looseFolder: (avulsa && avulsa.dir) || "",
+      // Recolhido e ESTADO, e nao largura zero: guardar `panelWidth: 0` faria
+      // o painel voltar sem largura nenhuma, perdendo a que foi escolhida.
+      panelHidden: painelOculto,
       // caminho, nao handle: handle so existe na sessao viva
       // A selecao de colunas vai junto do ARQUIVO, nao solta: e por arquivo que
       // ela faz sentido, e assim some sozinha quando o arquivo sai da sessao.
@@ -5448,6 +5470,7 @@ async function restaurarSessao() {
   }
 
   larguraPainel(est.panelWidth || PAINEL_PADRAO);
+  aplicarPainelOculto(!!est.panelHidden);
 
   // O <select> so aceita os valores que ele oferece; um pageSize gravado a mao
   // fora da lista deixaria o campo em branco mostrando outra coisa.
@@ -5590,10 +5613,51 @@ const PAINEL_PADRAO = 320;
 const PAINEL_MIN = 160;
 const PAINEL_MAX_FRACAO = 0.6;
 
+/*
+ * RECOLHER O PAINEL -- pedido do autor em 08/09/2026, vindo de uma maquina de
+ * cliente com tela pequena: com 1435px de janela, 300px de painel sao 21% da
+ * largura tirados da grade, que e onde o trabalho acontece.
+ *
+ * Recolher e diferente de estreitar. O minimo de 160px existe para o nome da
+ * conexao continuar legivel; quem nao precisa da arvore agora nao quer 160px
+ * dela, quer zero -- e quer os 160 de volta quando precisar, sem reajustar
+ * nada. Por isso e um ESTADO proprio, e a largura escolhida fica guardada
+ * intacta por baixo.
+ */
+let painelOculto = false;
+
+function aplicarPainelOculto(oculto) {
+  painelOculto = !!oculto;
+  document.body.classList.toggle("painel-oculto", painelOculto);
+  const b = $("btn-painel");
+  if (b) b.setAttribute("aria-expanded", String(!painelOculto));
+  // A divisoria deixa de ser um controle de tamanho quando nao ha o que
+  // dimensionar: sem isto ela continuaria anunciando "separator" ajustavel
+  // por setas para um painel que nao esta na tela.
+  $("divisoria").setAttribute("aria-hidden", String(painelOculto));
+}
+
+function alternarPainel() {
+  aplicarPainelOculto(!painelOculto);
+  agendarSalvar();
+}
+
+/*
+ * A ULTIMA LARGURA VALIDA, guardada aqui e nao lida do DOM na hora de gravar.
+ *
+ * Recolhido, o painel e `display:none` e `getBoundingClientRect().width` da
+ * ZERO. A sessao gravava esse zero, e na volta `est.panelWidth || PADRAO`
+ * caia no padrao -- a largura escolhida sumia toda vez que alguem recolhia o
+ * painel antes de fechar o app. Nada quebrava e nada avisava: o painel so
+ * voltava com outro tamanho.
+ */
+let ultimaLargura = PAINEL_PADRAO;
+
 function larguraPainel(px) {
   const max = Math.round(window.innerWidth * PAINEL_MAX_FRACAO);
   const v = Math.max(PAINEL_MIN, Math.min(px, max));
   $("painel").style.width = v + "px";
+  ultimaLargura = v;
   agendarSalvar();
   return v;
 }
@@ -5604,6 +5668,7 @@ function larguraPainel(px) {
   let arrastando = false;
 
   div.addEventListener("pointerdown", (ev) => {
+    if (painelOculto) return;
     arrastando = true;
     div.setPointerCapture(ev.pointerId);
     document.body.classList.add("arrastando");
@@ -5627,7 +5692,24 @@ function larguraPainel(px) {
   div.addEventListener("pointerup", solta);
   div.addEventListener("pointercancel", solta);
 
-  div.addEventListener("dblclick", () => larguraPainel(PAINEL_PADRAO));
+  /* O clique no BOTAO nao pode virar arraste: o pointerdown da divisoria ja
+     armou `arrastando`, e o pointermove seguinte redimensionaria para a
+     posicao do cursor -- que e onde o botao esta, ou seja, quase zero. */
+  $("btn-painel").addEventListener("pointerdown", (ev) => ev.stopPropagation());
+  $("btn-painel").addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    alternarPainel();
+  });
+
+  // Recolhido, a divisoria inteira reabre: um alvo de 5px pede mira, e quem
+  // acabou de esconder o painel nao deveria precisar dela para desfazer.
+  div.addEventListener("click", () => {
+    if (painelOculto) alternarPainel();
+  });
+
+  div.addEventListener("dblclick", () => {
+    if (!painelOculto) larguraPainel(PAINEL_PADRAO);
+  });
 
   // Teclado: setas ajustam, Home volta ao padrao.
   div.addEventListener("keydown", (ev) => {

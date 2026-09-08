@@ -207,12 +207,40 @@ async function main() {
         ArrowDown: { code: "ArrowDown", key: "ArrowDown", windowsVirtualKeyCode: 40 },
         ArrowUp: { code: "ArrowUp", key: "ArrowUp", windowsVirtualKeyCode: 38 },
       };
-      const t = mapa[nome];
-      if (!t) { out = "tecla desconhecida: " + nome + " (use " + Object.keys(mapa).join("|") + ")"; break; }
-      const mod = args[1] === "shift" ? 8 : 0;
+      /*
+       * LETRA SOLTA TAMBEM, e nao so as cinco nomeadas.
+       *
+       * A lista fechada nao dava para testar um atalho como Ctrl+B: a
+       * ferramenta respondia "tecla desconhecida" e o atalho ficaria sem
+       * prova nenhuma. Ferramenta que nao alcanca o recurso e ferramenta que
+       * aprova o recurso por omissao -- a mesma familia das tres mentiras que
+       * este arquivo ja precisou corrigir.
+       *
+       * `windowsVirtualKeyCode` de uma letra e o codigo da MAIUSCULA, e o
+       * `code` e "KeyX": sem os dois o Chrome entrega um evento sem `key`
+       * utilizavel, e o manipulador do app nao reconhece nada.
+       */
+      let t = mapa[nome];
+      if (!t && /^[a-z0-9]$/i.test(nome)) {
+        const L = nome.toUpperCase();
+        t = {
+          code: (/[0-9]/.test(L) ? "Digit" : "Key") + L,
+          key: nome.toLowerCase(),
+          windowsVirtualKeyCode: L.charCodeAt(0),
+        };
+      }
+      if (!t) {
+        out = "tecla desconhecida: " + nome +
+              " (use " + Object.keys(mapa).join("|") + ", ou uma letra/digito)";
+        break;
+      }
+      /* Modificadores do CDP: Alt 1, Ctrl 2, Meta 4, Shift 8 -- somados. */
+      const MOD = { alt: 1, ctrl: 2, meta: 4, shift: 8 };
+      const pedidos = args.slice(1).map((x) => String(x).toLowerCase());
+      const mod = pedidos.reduce((n, x) => n + (MOD[x] || 0), 0);
       await enviar(ws, "Input.dispatchKeyEvent", { type: "rawKeyDown", modifiers: mod, ...t });
       await enviar(ws, "Input.dispatchKeyEvent", { type: "keyUp", modifiers: mod, ...t });
-      out = "tecla: " + (mod ? "Shift+" : "") + nome;
+      out = "tecla: " + pedidos.filter((x) => MOD[x]).map((x) => x + "+").join("") + nome;
       break;
     }
 

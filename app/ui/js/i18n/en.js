@@ -42,6 +42,7 @@
   UI_SEARCH_PLACEHOLDER: "Search connection or file…",
   UI_CONNECTIONS: "Connections",
   UI_PANEL_WIDTH: "Panel width",
+  UI_TOGGLE_PANEL: "Collapse or show the panel (Ctrl+B)",
   UI_DRAG_RESIZE: "Drag to resize (double click restores the default)",
   UI_EMPTY_HINT:
     "Register a connection — a folder holding DBF files — then double click " +
