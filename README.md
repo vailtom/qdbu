@@ -14,10 +14,11 @@ structure changes, PACK and ZAP operations, and imports and exports common data
 formats. It is designed for the files that are still in use: including large
 tables, network paths, legacy naming conventions and mixed codepages.
 
-## New in 00.75: build xBase expressions instead of typing them blind
+## Build xBase expressions instead of typing them blind
 
-Six places in QDbu accept xBase expressions: the table filter, index key, index
-FOR condition, and the WITH, FOR and WHILE expressions used by bulk REPLACE.
+Six places in QDbu open the expression builder: the table filter, the index key
+and its FOR condition, the WITH of a bulk replace, and the FOR and WHILE that
+scope every bulk operation — replace, delete, recall and append from.
 
 The new expression builder puts the current DBF fields, every operator and a
 catalog of **126 Harbour/xBase functions** next to the editor. Each item has a

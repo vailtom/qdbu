@@ -15,11 +15,11 @@ formatos comuns de dados. Foi feito para arquivos que continuam em uso:
 inclusive tabelas grandes, caminhos de rede, convenções antigas de nomes e
 codepages diferentes.
 
-## Novo na 00.75: construa expressões xBase em vez de digitá-las às cegas
+## Construa expressões xBase em vez de digitá-las às cegas
 
-Seis pontos do QDbu aceitam expressões xBase: o filtro da tabela, a chave do
-índice, o FOR do índice e as expressões WITH, FOR e WHILE usadas pelo REPLACE em
-massa.
+Seis pontos do QDbu abrem o construtor de expressões: o filtro da tabela, a
+chave do índice e o FOR dele, o WITH do repacar em massa, e o FOR e o WHILE que
+delimitam toda operação em massa — repacar, excluir, recuperar e incluir de.
 
 O novo construtor de expressões coloca ao lado do editor os campos do DBF atual,
 todos os operadores e um catálogo de **126 funções Harbour/xBase**. Cada item tem
