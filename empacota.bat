@@ -27,6 +27,32 @@ if not errorlevel 1 (
   exit /b 1
 )
 
+rem ---- O README NAO PODE ESTAR ATRASADO --------------------------------
+rem A 00.76 foi empacotada, marcada e publicada com os tres README ainda
+rem dizendo 00.75. Nada quebrou e nada avisou: a primeira tela do
+rem repositorio publico so mentia sobre qual versao estava la.
+rem
+rem Item de checklist se esquece; trilho que FALHA nao. Daqui nao sai .zip
+rem com o README atrasado -- e a mesma disciplina do i18n.mjs e do
+rem catalogo.mjs, que tambem saem com codigo 1 em vez de so imprimir.
+where node >nul 2>&1
+if errorlevel 1 (
+  echo.
+  echo [%~nx0] node nao esta no PATH -- sem ele nao da para conferir se o
+  echo          README bate com a versao do binario. Instale o Node ou rode
+  echo          `node app\devtools\versao.mjs` a mao antes de publicar.
+  echo.
+  exit /b 1
+)
+node "%QDBU_HOME%\app\devtools\versao.mjs"
+if errorlevel 1 (
+  echo.
+  echo [%~nx0] O README nao bate com a versao do binario -- veja acima.
+  echo          Corrija com: node app\devtools\versao.mjs --corrigir
+  echo.
+  exit /b 1
+)
+
 rem ---- A DLL PRECISA EXISTIR ANTES DO CARGO ----------------------------
 rem Resolvido pelo build script do tauri-build em todo `cargo build`, nao
 rem so ao empacotar: ausente, aborta com ResourcePathNotFound e a mensagem
