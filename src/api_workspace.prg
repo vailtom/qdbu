@@ -30,16 +30,32 @@ FUNCTION Api_Workspace_List( hP )
    HB_SYMBOL_UNUSED( hP )
 
    FOR EACH hCon IN Connections()
-      AAdd( aRet, { ;
-         "name"   => hCon[ "name" ], ;
-         "dir"    => hCon[ "dir" ], ;
-         "codepage" => iif( hb_HHasKey( hCon, "codepage" ), hCon[ "codepage" ], "" ), ;
-         "readOnly"  => hb_HHasKey( hCon, "readOnly" ) .AND. hCon[ "readOnly" ], ;
-         "exclusive" => hb_HHasKey( hCon, "exclusive" ) .AND. hCon[ "exclusive" ], ;
-         "existe" => hb_DirExists( hCon[ "dir" ] ) } )
+      AAdd( aRet, ConexaoResumo( hCon ) )
    NEXT
 
    RETURN Ok( { "connections" => aRet } )
+
+/*
+ * O RESUMO DE UMA CONEXAO PARA A TELA -- montado num lugar so.
+ *
+ * `workspace.list` e `session.state` devolvem a MESMA lista, e estavam
+ * montando cada um o seu: um dizia "existe", o outro "exists", e o
+ * `session.state` nem sabia de `codepage` nem do modo de abertura. A tela le a
+ * lista das duas vias -- do arranque vem uma, de cada adicao/remocao vem a
+ * outra --, entao a divergencia aparecia como defeito que "comecou do nada":
+ * adicionar uma conexao fazia TODAS ganharem "Pasta nao encontrada", porque a
+ * chave que a tela lia passava a nao existir.
+ *
+ * Duas listas iguais escritas em dois lugares divergem. Esta e a unica.
+ */
+FUNCTION ConexaoResumo( hCon )
+   RETURN { ;
+      "name"      => hCon[ "name" ], ;
+      "dir"       => hCon[ "dir" ], ;
+      "codepage"  => iif( hb_HHasKey( hCon, "codepage" ), hCon[ "codepage" ], "" ), ;
+      "readOnly"  => hb_HHasKey( hCon, "readOnly" ) .AND. hCon[ "readOnly" ], ;
+      "exclusive" => hb_HHasKey( hCon, "exclusive" ) .AND. hCon[ "exclusive" ], ;
+      "exists"    => hb_DirExists( hCon[ "dir" ] ) }
 
 /* ------------------------------------------------------------ adicionar */
 

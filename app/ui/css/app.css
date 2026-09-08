@@ -311,8 +311,14 @@ body.arrastando .divisoria { background: var(--amber); }
 }
 
 /* O aviso nao encolhe: "pasta nao encontrada" pela metade nao avisa nada. */
+/* O AVISO CAI PARA A LINHA DE BAIXO, alinhado sob o nome.
+   Com `flex: none` numa mesma linha ele nao encolhia e comia os 179px do
+   painel: o nome, que encolhe com reticencias, ia a ZERO e a conexao ficava
+   sem identificacao -- so o aviso. Quando a pasta some de verdade a pessoa
+   precisa das duas coisas, qual conexao e qual o problema. */
+.conexao .cab { flex-wrap: wrap; }
 .conexao .aviso {
-  flex: none;
+  flex: 0 0 100%; margin-left: 16px;
   font-size: 10.5px; color: var(--red);
   background: rgba(224,104,95,.12); padding: 1px 6px; border-radius: 3px;
 }

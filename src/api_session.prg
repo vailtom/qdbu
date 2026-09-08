@@ -46,10 +46,9 @@ FUNCTION Api_Session_State( hP )
    HB_SYMBOL_UNUSED( hP )
 
    FOR EACH hCon IN Connections()
-      AAdd( aConn, { ;
-         "name"   => hCon[ "name" ], ;
-         "dir"    => hCon[ "dir" ], ;
-         "exists" => hb_DirExists( hCon[ "dir" ] ) } )
+      /* Mesmo resumo do workspace.list -- ver ConexaoResumo em
+         api_workspace.prg. A tela le a lista pelas duas vias. */
+      AAdd( aConn, ConexaoResumo( hCon ) )
    NEXT
 
    FOR EACH hInfo IN SessOpenFiles()
