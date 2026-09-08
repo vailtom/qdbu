@@ -2625,11 +2625,26 @@ fn selftest() -> i32 {
         &format!("{:?}", arg(&["--selftest", "--help"])),
     );
 
+    /*
+     * A GRAFIA DA TELA: maior SEM zero a esquerda, menor com DOIS digitos.
+     *
+     * Era o par com os dois preenchidos, e `00.76` foi invencao nossa -- o
+     * Clipper escrevia `5.2e`, nunca `05.02`. Heranca dele e o PAR (versao
+     * mais data de linkedicao), nao o zero. E o zero fazia o mesmo binario se
+     * apresentar de tres formas: na janela, no pacote e na tag.
+     *
+     * A asercao mede a FORMA e nao o valor: conferir o numero aqui faria
+     * deste arquivo mais um lugar onde a versao mora, e o projeto inteiro
+     * depende de ela morar num so.
+     */
+    let (v_maior, v_menor) = VERSAO.split_once('.').unwrap_or(("", ""));
     t.ok(
-        "VER: a versao de exibicao e NN.NN, carimbada pelo build.rs",
-        VERSAO.len() == 5
-            && VERSAO.as_bytes()[2] == b'.'
-            && VERSAO.chars().enumerate().all(|(i, c)| i == 2 || c.is_ascii_digit()),
+        "VER: a versao de exibicao nao leva zero a esquerda no maior, e o menor tem dois digitos",
+        !v_maior.is_empty()
+            && v_maior.chars().all(|c| c.is_ascii_digit())
+            && (v_maior == "0" || !v_maior.starts_with('0'))
+            && v_menor.len() == 2
+            && v_menor.chars().all(|c| c.is_ascii_digit()),
         &format!("VERSAO={VERSAO:?}"),
     );
     t.ok(
@@ -2638,7 +2653,7 @@ fn selftest() -> i32 {
         &format!("COMPILADO={COMPILADO:?}"),
     );
     t.ok(
-        "VER: o titulo e 'QDbu vNN.NN - Database Utility' -- e QDbu, nao QDBU",
+        "VER: o titulo e 'QDbu vN.NN - Database Utility' -- e QDbu, nao QDBU",
         titulo_janela() == format!("QDbu v{VERSAO} - Database Utility"),
         &titulo_janela(),
     );

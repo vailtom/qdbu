@@ -120,7 +120,7 @@ columns, active index order, filters and the opening mode of each file.
 
 ## Download
 
-**QDbu 00.76** is a pre-release for Windows 32-bit. It ships as a portable
+**QDbu 0.76** is a pre-release for Windows 32-bit. It ships as a portable
 package: extract it and run the executable. No installer is required.
 
 [Download the latest release](https://github.com/vailtom/qdbu/releases/latest)

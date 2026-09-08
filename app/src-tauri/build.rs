@@ -28,7 +28,21 @@ fn main() {
         .and_then(|v| v.parse().ok())
         .unwrap_or(0);
 
-    println!("cargo:rustc-env=QDBU_VERSAO={major:02}.{minor:02}");
+    /*
+     * O MAIOR NAO LEVA ZERO A ESQUERDA, e o menor leva.
+     *
+     * `00.76` foi invencao nossa: o Clipper escrevia `5.2e` e `5.3a`, nunca
+     * `05.02` -- o que e heranca dele e o PAR (versao mais data de
+     * linkedicao), nao o preenchimento. E o zero criava tres grafias para o
+     * mesmo binario: `00.76` na janela, `0.76.0` no pacote e `v0.76.0` na
+     * tag. Quem baixava `qdbu-0.76.0.zip` e lia `v00.76` no titulo tinha
+     * motivo para achar que pegou outra coisa.
+     *
+     * O menor CONTINUA com dois digitos porque e um contador de dois digitos
+     * neste projeto -- 01, 75, 76 --, e `0.8` depois de `0.76` leria como
+     * salto para tras.
+     */
+    println!("cargo:rustc-env=QDBU_VERSAO={major}.{minor:02}");
 
     // Hora LOCAL, nao UTC: quem le "compilado em" quer a hora do relogio da
     // maquina que compilou, que e a referencia com que a pessoa se lembra do

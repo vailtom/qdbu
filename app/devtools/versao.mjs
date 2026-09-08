@@ -38,15 +38,27 @@ if (!mVer) {
 }
 const [, maior, menor, patch] = mVer;
 
-// O PAR `NN.NN` e a grafia da TELA (convencao do Clipper); a TAG e semver.
-// Os dois aparecem em lugares diferentes e nao se misturam: ferramenta
-// nenhuma ordena por `00.76`, e ninguem le `v0.76.0` na janela Sobre.
-const par = `${String(maior).padStart(2, "0")}.${String(menor).padStart(2, "0")}`;
+// O PAR e a grafia da TELA; a TAG e semver. Os dois aparecem em lugares
+// diferentes e nao se misturam: ferramenta nenhuma ordena pelo par -- e por
+// isso a tag existe --, e ninguem le `v0.76.0` na janela Sobre.
+// O maior SEM zero a esquerda, o menor COM dois digitos -- a mesma regra do
+// build.rs, que e quem carimba o binario. Duas fontes divergindo aqui seria o
+// proprio defeito que este arquivo veio impedir.
+const par = `${maior}.${String(menor).padStart(2, "0")}`;
 const tag = `v${maior}.${menor}.${patch}`;
 
-// Um `00.NN` solto no texto, e uma tag `v0.N.N`. O `\b` de tras evita casar
-// com o comeco de um numero maior.
-const RE_PAR = /\b\d{2}\.\d{2}\b/g;
+/*
+ * O PAR E PROCURADO ANCORADO NO NOME DO PRODUTO, e nao solto.
+ *
+ * Solto, o padrao era `\d{2}\.\d{2}`. Sem o zero a esquerda ele teria de
+ * aceitar um digito antes do ponto, e passaria a casar com qualquer `1.65`
+ * numa frase. Auditor que acusa numero de preco e auditor que alguem
+ * desliga; ancorado, ele so olha onde a versao de fato e anunciada.
+ *
+ * Grupo 1 e o prefixo (`QDbu ` ou `QDbu v`), preservado na correcao; grupo 2
+ * e o numero, que e o que se compara e se troca.
+ */
+const RE_PAR = /(QDbu\s+v?)(\d{1,3}\.\d{2})\b/g;
 const RE_TAG = /\bv\d+\.\d+\.\d+\b/g;
 
 // ---------------------------------------------------------------- conferir
@@ -73,8 +85,10 @@ for (const nome of ALVOS) {
       re.lastIndex = 0;
       let m;
       while ((m = re.exec(linha)) !== null) {
+        // No par o numero e o grupo 2; na tag o casamento inteiro ja e ele.
+        const achado = re === RE_PAR ? m[2] : m[0];
         const esperado = re === RE_PAR ? par : tag;
-        achados.push({ n: i + 1, achado: m[0], esperado, linha: linha.trim() });
+        achados.push({ n: i + 1, achado, esperado, linha: linha.trim() });
       }
     }
   });
@@ -100,10 +114,10 @@ for (const nome of ALVOS) {
 
   if (corrigir) {
     let novo = texto;
-    for (const re of [RE_PAR, RE_TAG]) {
-      const esperado = re === RE_PAR ? par : tag;
-      novo = novo.replace(re, esperado);
-    }
+    // O prefixo do par volta como estava -- trocar "QDbu v0.75" por um numero
+    // solto arrancaria o nome do produto da frase.
+    novo = novo.replace(RE_PAR, (_todo, prefixo) => prefixo + par);
+    novo = novo.replace(RE_TAG, tag);
     writeFileSync(caminho, novo);
     for (const e of errados) {
       console.log(`  corrigido ${nome}:${e.n}  ${e.achado} -> ${e.esperado}`);
