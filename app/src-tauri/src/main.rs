@@ -1875,6 +1875,69 @@ fn selftest() -> i32 {
                     &format!("upd {upd:?} / codepage {cc} origem {oc}"),
                 );
                 let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&hc)));
+
+                // 4b. MODO DE ABERTURA DA CONEXAO -- as tres propriedades que a
+                //     regressao do dia 08/09 expos, e que so uma assercao pega.
+                let campos = |m: &str| -> Vec<String> {
+                    rpc_bruto(&hb, m, "{}")
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                        .and_then(|v| {
+                            let p = if m == "workspace.list" { "/result/connections/0" } else { "/result/connections/0" };
+                            v.pointer(p).and_then(|c| c.as_object()).map(|o| {
+                                let mut k: Vec<String> = o.keys().cloned().collect();
+                                k.sort();
+                                k
+                            })
+                        })
+                        .unwrap_or_default()
+                };
+                let kw = campos("workspace.list");
+                let ks = campos("session.state");
+                t.ok(
+                    "CONN: workspace.list e session.state descrevem a conexao com AS MESMAS chaves",
+                    !kw.is_empty() && kw == ks,
+                    &format!("workspace.list {kw:?} / session.state {ks:?}"),
+                );
+
+                // `readOnly` vai e volta, e `workspace.update` PARCIAL nao o apaga.
+                let _ = rpc_bruto(&hb, "workspace.update", r#"{"name":"cfgconn","readOnly":true}"#);
+                let leu = |campo: &str| -> bool {
+                    rpc_bruto(&hb, "workspace.list", "{}")
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                        .and_then(|v| {
+                            v.pointer("/result/connections")
+                                .and_then(|a| a.as_array())
+                                .and_then(|a| a.iter().find(|c| c.get("name").and_then(|n| n.as_str()) == Some("cfgconn")).cloned())
+                        })
+                        .and_then(|c| c.get(campo).and_then(|x| x.as_bool()))
+                        .unwrap_or(false)
+                };
+                let marcou = leu("readOnly");
+                let _ = rpc_bruto(&hb, "workspace.update", r#"{"name":"cfgconn","codepage":"PTISO"}"#);
+                let sobreviveu = leu("readOnly");
+                t.ok(
+                    "CONN: readOnly volta no list, e um update parcial NAO o apaga",
+                    marcou && sobreviveu,
+                    &format!("apos marcar {marcou} / apos update so de codepage {sobreviveu}"),
+                );
+
+                // E o arquivo aberto por ela HERDA o modo, sem o pedido dizer nada --
+                // e a heranca que tres das quatro portas de abertura nao faziam.
+                let hro = abre(&format!(r#"{{"path":"{ed2_s}","connection":"cfgconn"}}"#));
+                let ro = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{}"}}"#, hde(&hro)))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/readOnly").and_then(|b| b.as_bool()))
+                    .unwrap_or(false);
+                let zap = rpc_bruto(&hb, "bulk.zap", &format!(r#"{{"h":"{}"}}"#, hde(&hro))).unwrap_or_default();
+                t.ok(
+                    "CONN: arquivo aberto pela conexao somente-leitura herda o modo e recusa ZAP",
+                    ro && zap.contains("ERROR_FILE_READ_ONLY"),
+                    &format!("readOnly {ro} / zap {}", &zap[..zap.len().min(90)]),
+                );
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&hro)));
                 let _ = rpc_bruto(&hb, "workspace.remove", r#"{"name":"cfgconn"}"#);
 
                 // 5. persist:file fixa no .qdbu/ e vence a conexao ao reabrir (origem=file)

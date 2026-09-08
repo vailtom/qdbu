@@ -22,16 +22,40 @@
 FUNCTION Api_File_Open( hP )
 
    LOCAL cArq  := ParStr( hP, "path" )
-   LOCAL lExcl := ParLog( hP, "exclusive", .F. )
-   LOCAL lLer  := ParLog( hP, "readOnly", .F. )
    LOCAL cConn := ParStr( hP, "connection" )
    LOCAL cCdp  := ParStr( hP, "codepage" )
+   LOCAL lExcl, lLer, hCon
    LOCAL cAlias, cH, hJa, nArea, cMotivo, oErr, cOrigem
 
    IF Empty( cArq )
       RETURN Err( "ERROR_PARAM_REQUIRED", "file path is required", "path", ;
                   { "param" => "path" } )
    ENDIF
+
+   /*
+    * O MODO DE ABERTURA HERDA DA CONEXAO -- e a heranca mora AQUI, nao na tela.
+    *
+    * O pedido vence sempre: o dialogo Abrir arquivo e o /E da linha de comando
+    * mandam a escolha e ela e respeitada. Sem escolha no pedido, vale o padrao
+    * da conexao dona da pasta.
+    *
+    * Estava sendo resolvido no JS, e das quatro portas de abertura tres
+    * passavam a conexao como nula -- arrastar e soltar, o dialogo e a linha de
+    * comando. Marcar a producao como somente-leitura nao protegia quem
+    * arrastasse o arquivo para a janela, que e o caminho mais comum de todos.
+    *
+    * Aqui e o mesmo lugar onde a cascata de codepage se resolve, e pelo mesmo
+    * motivo: porta nova nasce protegida sem ninguem precisar lembrar.
+    */
+   IF Empty( cConn )
+      hCon := ModoDaPasta( cArq )
+   ELSE
+      hCon := ConexaoPorNome( cConn )
+      hCon := { "readOnly"  => ConexaoLiga( hCon, "readOnly" ), ;
+                "exclusive" => ConexaoLiga( hCon, "exclusive" ) }
+   ENDIF
+   lExcl := ParLog( hP, "exclusive", hCon[ "exclusive" ] )
+   lLer  := ParLog( hP, "readOnly",  hCon[ "readOnly" ] )
 
    /* Codepage: se veio explicito no pedido, tem de ser valido e vence tudo.
       Senao, a CASCATA decide -- arquivo > conexao > global > PT850 (config.prg).

@@ -318,7 +318,12 @@ body.arrastando .divisoria { background: var(--amber); }
    precisa das duas coisas, qual conexao e qual o problema. */
 .conexao .cab { flex-wrap: wrap; }
 .conexao .aviso {
-  flex: 0 0 100%; margin-left: 16px;
+  /* `calc` porque a margem fica FORA do basis (box-sizing nao a inclui): com
+     100% cheios o aviso estourava a linha e a arvore ganhava barra horizontal.
+     E `order` o poe depois do "...", senao ele abria a segunda linha e
+     empurrava o botao para uma terceira -- uma faixa em branco por conexao,
+     ja que o botao e invisivel ate o hover. */
+  order: 9; flex: 0 0 calc(100% - 16px); margin-left: 16px;
   font-size: 10.5px; color: var(--red);
   background: rgba(224,104,95,.12); padding: 1px 6px; border-radius: 3px;
 }

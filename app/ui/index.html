@@ -1311,7 +1311,10 @@
 
 <dialog id="dlg-conexao">
   <form method="dialog" id="form-conexao">
-    <h2 data-i18n="UI_NEW_CONNECTION_TITLE"></h2>
+    <!-- Sem `data-i18n`: o titulo diz se a janela esta CRIANDO ou EDITANDO, e
+         quem o pinta e quem a abre. Com a chave fixa aqui, trocar de idioma no
+         meio de uma edicao o reescreveria como "Nova conexao". -->
+    <h2></h2>
     <p class="explica" data-i18n="UI_CONNECTION_EXPLAIN"></p>
 
     <label>

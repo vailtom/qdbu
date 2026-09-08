@@ -1343,21 +1343,15 @@ async function abrirArquivo(caminho, conexao, exclusivo, somenteLeitura) {
     // o resultado, mas faria parecer que toda abertura decide sobre o modo --
     // e quem decide, hoje, e so o /E da linha de comando.
     /*
-     * O modo da CONEXAO e o padrao; quem chamou pedindo explicitamente vence.
-     *
-     * `undefined` (a arvore, o arrastar-e-soltar) significa "use o padrao"; o
-     * diálogo Abrir arquivo e o /E da linha de comando mandam `true`/`false` e
-     * decidem por si. Sem isto, marcar a conexao de producao como somente
-     * leitura nao teria efeito nenhum no caminho por onde os arquivos
-     * realmente sao abertos: o duplo clique na arvore.
+     * O MODO SO VIAJA QUANDO FOI PEDIDO. A heranca da conexao e resolvida na
+     * DLL (`Api_File_Open`), junto da cascata de codepage e pelo mesmo motivo:
+     * daqui saem QUATRO portas -- arvore, arrastar-e-soltar, dialogo e linha
+     * de comando -- e tres delas nao sabem de que conexao o arquivo veio.
+     * Resolvendo la, porta nova nasce protegida sem ninguem lembrar.
      */
-    const con = conexao ? (conexoes || []).find((c) => c.name === conexao) : null;
-    const excl = exclusivo === undefined ? !!(con && con.exclusive) : !!exclusivo;
-    const soLer = somenteLeitura === undefined ? !!(con && con.readOnly) : !!somenteLeitura;
-
     const pedido = { path: caminho, connection: conexao };
-    if (excl) pedido.exclusive = true;
-    if (soLer) pedido.readOnly = true;
+    if (exclusivo) pedido.exclusive = true;
+    if (somenteLeitura) pedido.readOnly = true;
     const i = await QDBU.rpc("file.open", pedido);
     await repintarDoEstado();
 
@@ -5597,12 +5591,9 @@ function nomeDaPasta(caminho) {
    `D:\backup\lucrimax` sao duas conexoes legitimas cujo nome derivado colide.
    Sem isto a segunda so descobria o problema ao clicar em Adicionar, e a
    pessoa tinha de inventar um nome do nada. */
-function nomeLivreConexao(base, ignorar) {
+function nomeLivreConexao(base) {
   const arruma = (t) => String(t || "").trim().toLowerCase();
-  const meu = arruma(ignorar);
-  const usados = new Set(
-    (conexoes || []).map((c) => arruma(c.name)).filter((n) => n && n !== meu)
-  );
+  const usados = new Set((conexoes || []).map((c) => arruma(c.name)).filter(Boolean));
   if (!usados.has(arruma(base))) return base;
   for (let i = 2; i < 1000; i++) {
     const tentativa = base + " (" + i + ")";
@@ -5611,25 +5602,33 @@ function nomeLivreConexao(base, ignorar) {
   return base;
 }
 
-/* Escolher a pasta da conexao pelo dialogo do sistema.
-   `directory: true` e a unica diferenca para o `#ab-procurar`, que escolhe
-   ARQUIVO. Mesma via (tauri-plugin-dialog) porque o frontend e HTML/JS
-   estatico: nao ha pacote npm a importar, e so o sistema sabe quais pastas
-   existem e o que ja esta dentro delas. */
-$("con-procurar").addEventListener("click", async () => {
+/* O SELETOR DO SISTEMA, num lugar so.
+
+   Via tauri-plugin-dialog porque o frontend e HTML/JS estatico: nao ha pacote
+   npm a importar, e so o sistema sabe quais pastas existem e o que ja esta
+   dentro delas. Devolve o caminho escolhido, ou "" quando a pessoa cancelou --
+   cancelar nao e erro. Lanca so o que e erro de verdade.
+
+   Era codigo repetido em `#con-procurar` e `#ab-procurar`: as mesmas vinte e
+   cinco linhas duas vezes, diferindo em tres detalhes. Consertar a semantica
+   do cancelamento num deles e esquecer o outro e exatamente o defeito que a
+   tabela de mentiras do `cdp.mjs` registra. */
+async function escolherNoSistema(opcoes) {
   const inv = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
-  if (!inv) {
-    $("con-erro").textContent = T("ERROR_DIALOG_UNAVAILABLE");
-    $("con-erro").hidden = false;
-    return;
-  }
+  if (!inv) throw new Error(T("ERROR_DIALOG_UNAVAILABLE"));
+  const escolhido = await inv("plugin:dialog|open", { options: opcoes });
+  if (!escolhido) return "";
+  // `multiple: false` devolve string, mas a API sabe devolver lista tambem.
+  return Array.isArray(escolhido) ? escolhido[0] : escolhido;
+}
+
+$("con-procurar").addEventListener("click", async () => {
   try {
-    const escolhido = await inv("plugin:dialog|open", {
-      options: { title: T("UI_PICK_FOLDER_TITLE"), multiple: false, directory: true },
+    const escolhido = await escolherNoSistema({
+      title: T("UI_PICK_FOLDER_TITLE"), multiple: false, directory: true,
     });
-    // Cancelar no dialogo do sistema volta null -- e cancelar, nao erro.
     if (!escolhido) return;
-    $("con-dir").value = Array.isArray(escolhido) ? escolhido[0] : escolhido;
+    $("con-dir").value = escolhido;
     $("con-erro").hidden = true;
     // O nome herda o da pasta enquanto a pessoa nao escreveu um -- e ja nasce
     // LIVRE: duas unidades com a mesma pasta ("lucrimax") sao duas conexoes
@@ -5708,11 +5707,13 @@ $("btn-nova-conexao").addEventListener("click", () => {
   $("con-nome").value = "";
   $("con-dir").disabled = false;
   $("con-nome").disabled = false;
+  $("con-procurar").disabled = false;
   preencherSelectCodepage($("con-codepage"), true);
   $("con-codepage").value = "";
   $("con-somente-leitura").checked = false;
   $("con-exclusivo").checked = false;
   $("con-erro").hidden = true;
+  $("dlg-conexao").querySelector("h2").textContent = T("UI_NEW_CONNECTION_TITLE");
   $("form-conexao").querySelector("button[type=submit]").textContent = T("UI_ADD");
   dlg.showModal();
   $("con-dir").focus();
@@ -5722,18 +5723,25 @@ $("btn-nova-conexao").addEventListener("click", () => {
    abertura. Reusa o diálogo, com pasta e nome travados: o que muda depois é o
    que a conexao DECIDE, não onde ela aponta (workspace.update). */
 let conEditando = null;
-function editarCodepageConexao(nome) {
+function editarConexao(nome) {
   const con = (conexoes || []).find((c) => c.name === nome);
   conEditando = nome;
   $("con-dir").value = con ? con.dir : "";
   $("con-nome").value = nome;
   $("con-dir").disabled = true;
   $("con-nome").disabled = true;
+  // Travar so o campo deixava o Procurar escrever nele -- e a pasta escolhida
+  // sumia sem aviso, porque `workspace.update` nao a envia.
+  $("con-procurar").disabled = true;
   preencherSelectCodepage($("con-codepage"), true);
   $("con-codepage").value = (con && con.codepage) || "";
   $("con-somente-leitura").checked = !!(con && con.readOnly);
   $("con-exclusivo").checked = !!(con && con.exclusive);
   $("con-erro").hidden = true;
+  // O titulo tem de dizer o que a janela esta fazendo: a mesma janela serve
+  // para criar e para editar, e "Nova conexao" sobre uma conexao existente e
+  // uma afirmacao falsa na maior fonte da tela.
+  $("dlg-conexao").querySelector("h2").textContent = T("UI_EDIT_CONNECTION_TITLE");
   $("form-conexao").querySelector("button[type=submit]").textContent = T("UI_SAVE");
   dlg.showModal();
   $("con-codepage").focus();
@@ -5806,7 +5814,8 @@ $("form-conexao").addEventListener("submit", async (ev) => {
     erro.textContent = msgErro(e);
     erro.hidden = false;
     if (e.campo === "dir") $("con-dir").classList.add("culpado");
-    if (e.campo === "nome") $("con-nome").classList.add("culpado");
+    // "name", que e como a DLL nomeia o campo -- ver Api_Workspace_Add.
+    if (e.campo === "name") $("con-nome").classList.add("culpado");
   }
 });
 
@@ -6223,7 +6232,7 @@ function menuConexao(botao) {
 
   // Destrutivo separado por uma linha: e o unico daqui que apaga cadastro, e
   // colar ele nos outros convida ao clique errado.
-  itemMenu(cx, "\u2691", "UI_MENU_CODEPAGE", () => editarCodepageConexao(nome));
+  itemMenu(cx, "\u2691", "UI_MENU_CONNECTION_EDIT", () => editarConexao(nome));
   itemMenu(cx, "×", "UI_MENU_REMOVE", () => removerConexao(nome), "risco");
 
   // Posiciona so depois de preenchido -- antes disso a altura nao existe.

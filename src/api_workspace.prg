@@ -48,13 +48,71 @@ FUNCTION Api_Workspace_List( hP )
  *
  * Duas listas iguais escritas em dois lugares divergem. Esta e a unica.
  */
+/* Uma marca logica da conexao, tolerante ao que o arquivo trouxer.
+   `connections.json` e editavel a mao e ja foi escrito por outras ferramentas:
+   um `"readOnly": 1` faria o `.AND.` levantar erro de argumento -- e como o
+   `session.state` passa por aqui, o app inteiro deixaria de subir. */
+FUNCTION ConexaoLiga( hCon, cChave )
+   RETURN HB_ISHASH( hCon ) .AND. hb_HHasKey( hCon, cChave ) .AND. ;
+          HB_ISLOGICAL( hCon[ cChave ] ) .AND. hCon[ cChave ]
+
+/* O modo de abertura que a PASTA deste arquivo impoe, como {readOnly, exclusive}.
+ *
+ * E o que permite ao `file.open` herdar sem depender de quem chamou lembrar de
+ * passar o nome da conexao -- mesma ideia da cascata de codepage, que tambem
+ * se resolve aqui dentro e nao na tela.
+ *
+ * DUAS CONEXOES PODEM APONTAR PARA A MESMA PASTA, e e legitimo: uma de
+ * trabalho e uma marcada somente-leitura para consultar sem risco. Nesse caso
+ * vale a MAIS RESTRITIVA, nao a primeira da lista -- se alguem se deu ao
+ * trabalho de dizer "esta pasta e somente leitura", uma segunda conexao
+ * esquecida nao pode desfazer a protecao. Restricao soma; nunca subtrai. */
+FUNCTION ModoDaPasta( cArq )
+
+   LOCAL h, cDir
+   LOCAL hModo := { "readOnly" => .F., "exclusive" => .F. }
+
+   IF Empty( cArq )
+      RETURN hModo
+   ENDIF
+
+   cDir := Upper( hb_DirSepDel( hb_FNameDir( CaminhoOS( cArq ) ) ) )
+
+   FOR EACH h IN Connections()
+      IF HB_ISHASH( h ) .AND. hb_HHasKey( h, "dir" ) .AND. ;
+         Upper( hb_DirSepDel( CaminhoOS( h[ "dir" ] ) ) ) == cDir
+         hModo[ "readOnly" ]  := hModo[ "readOnly" ]  .OR. ConexaoLiga( h, "readOnly" )
+         hModo[ "exclusive" ] := hModo[ "exclusive" ] .OR. ConexaoLiga( h, "exclusive" )
+      ENDIF
+   NEXT
+
+   RETURN hModo
+
+/* A conexao de nome `cConn`, ou NIL. */
+FUNCTION ConexaoPorNome( cConn )
+
+   LOCAL h
+
+   IF Empty( cConn )
+      RETURN NIL
+   ENDIF
+
+   FOR EACH h IN Connections()
+      IF HB_ISHASH( h ) .AND. hb_HHasKey( h, "name" ) .AND. ;
+         Upper( h[ "name" ] ) == Upper( cConn )
+         RETURN h
+      ENDIF
+   NEXT
+
+   RETURN NIL
+
 FUNCTION ConexaoResumo( hCon )
    RETURN { ;
       "name"      => hCon[ "name" ], ;
       "dir"       => hCon[ "dir" ], ;
       "codepage"  => iif( hb_HHasKey( hCon, "codepage" ), hCon[ "codepage" ], "" ), ;
-      "readOnly"  => hb_HHasKey( hCon, "readOnly" ) .AND. hCon[ "readOnly" ], ;
-      "exclusive" => hb_HHasKey( hCon, "exclusive" ) .AND. hCon[ "exclusive" ], ;
+      "readOnly"  => ConexaoLiga( hCon, "readOnly" ), ;
+      "exclusive" => ConexaoLiga( hCon, "exclusive" ), ;
       "exists"    => hb_DirExists( hCon[ "dir" ] ) }
 
 /* ------------------------------------------------------------ adicionar */
@@ -111,10 +169,10 @@ FUNCTION Api_Workspace_Add( hP )
     * decide nada.
     */
    hCon := { "name" => cName, "dir" => cDir }
-   IF ParLog( hP, "readOnly" )
+   IF ParLog( hP, "readOnly", .F. )
       hCon[ "readOnly" ] := .T.
    ENDIF
-   IF ParLog( hP, "exclusive" )
+   IF ParLog( hP, "exclusive", .F. )
       hCon[ "exclusive" ] := .T.
    ENDIF
    IF ! Empty( cCdp )
@@ -163,13 +221,24 @@ FUNCTION Api_Workspace_Update( hP )
       aCon[ n ][ "codepage" ] := cCdp
    ENDIF
 
-   /* Desligado SOME da conexao, em vez de virar `false`: o arquivo so guarda o
-      que foi escolhido, e ausencia ja e o padrao. */
+   /*
+    * SO MEXE NO QUE O PEDIDO TROUXE.
+    *
+    * Antes, omitir a chave APAGAVA a marca -- um `workspace.update` mandando
+    * so {name, codepage} limpava calado o somente-leitura de uma conexao de
+    * producao. O proprio --selftest faz exatamente essa chamada. Atualizacao
+    * parcial nao pode virar substituicao total.
+    *
+    * Desligado SOME da conexao em vez de virar `false`: o arquivo guarda so o
+    * que foi escolhido, e ausencia ja e o padrao.
+    */
    FOR EACH cChave IN { "readOnly", "exclusive" }
-      IF ParLog( hP, cChave )
-         aCon[ n ][ cChave ] := .T.
-      ELSEIF hb_HHasKey( aCon[ n ], cChave )
-         hb_HDel( aCon[ n ], cChave )
+      IF hb_HHasKey( hP, cChave )
+         IF ParLog( hP, cChave, .F. )
+            aCon[ n ][ cChave ] := .T.
+         ELSEIF hb_HHasKey( aCon[ n ], cChave )
+            hb_HDel( aCon[ n ], cChave )
+         ENDIF
       ENDIF
    NEXT
 
@@ -353,14 +422,16 @@ STATIC FUNCTION ReadHeader( cArq )
 
 /* ---------------------------------------------------------------- apoio */
 
-/* Como o Par(), mas para logico: chave ausente ou de outro tipo e .F. */
-STATIC FUNCTION ParLog( hP, cChave )
+/* Mesma forma dos outros oito modulos: (hash, chave, padrao). Uma nona copia
+   com aridade diferente era convite a chamar ParLog(hP,"x",.T.) aqui e receber
+   .F. calado -- o Harbour aceita o argumento a mais sem reclamar. */
+STATIC FUNCTION ParLog( hP, cChave, lPadrao )
 
    IF ! HB_ISHASH( hP ) .OR. ! hb_HHasKey( hP, cChave )
-      RETURN .F.
+      RETURN lPadrao
    ENDIF
 
-   RETURN HB_ISLOGICAL( hP[ cChave ] ) .AND. hP[ cChave ]
+   RETURN iif( HB_ISLOGICAL( hP[ cChave ] ), hP[ cChave ], lPadrao )
 
 STATIC FUNCTION Par( hP, cChave )
 
@@ -459,9 +530,12 @@ FUNCTION Connections()
 
    RETURN aCon
 
+/* O RETORNO DE hb_MemoWrit E O RESULTADO -- ele nao levanta erro numa pasta
+   somente-leitura, devolve .F. e segue. Descartar o valor fazia esta funcao
+   responder "gravei" sobre um disco que recusou, e a escolha voltava atras
+   sozinha no proximo arranque. Mesma correcao ja feita em config.prg. */
 STATIC FUNCTION SaveConnections( aCon )
 
    SessSetConnections( aCon )
-   hb_MemoWrit( ArqConnections(), hb_jsonEncode( aCon, .T. ) )
 
-   RETURN .T.
+   RETURN hb_MemoWrit( ArqConnections(), hb_jsonEncode( aCon, .T. ) )
