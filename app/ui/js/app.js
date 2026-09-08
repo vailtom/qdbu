@@ -5576,6 +5576,39 @@ function abrirDialogoAbrir() {
   $("ab-path").focus();
 }
 
+/* Escolher a pasta da conexao pelo dialogo do sistema.
+   `directory: true` e a unica diferenca para o `#ab-procurar`, que escolhe
+   ARQUIVO. Mesma via (tauri-plugin-dialog) porque o frontend e HTML/JS
+   estatico: nao ha pacote npm a importar, e so o sistema sabe quais pastas
+   existem e o que ja esta dentro delas. */
+$("con-procurar").addEventListener("click", async () => {
+  const inv = window.__TAURI__ && window.__TAURI__.core && window.__TAURI__.core.invoke;
+  if (!inv) {
+    $("con-erro").textContent = T("ERROR_DIALOG_UNAVAILABLE");
+    $("con-erro").hidden = false;
+    return;
+  }
+  try {
+    const escolhido = await inv("plugin:dialog|open", {
+      options: { title: T("UI_PICK_FOLDER_TITLE"), multiple: false, directory: true },
+    });
+    // Cancelar no dialogo do sistema volta null -- e cancelar, nao erro.
+    if (!escolhido) return;
+    $("con-dir").value = Array.isArray(escolhido) ? escolhido[0] : escolhido;
+    $("con-erro").hidden = true;
+    // O nome herda o da pasta enquanto a pessoa nao escreveu um -- e o que ela
+    // ia digitar de qualquer jeito.
+    const nome = $("con-nome");
+    if (!nome.value.trim()) {
+      const partes = $("con-dir").value.split(/[\/]/).filter(Boolean);
+      if (partes.length) nome.value = partes[partes.length - 1];
+    }
+  } catch (e) {
+    $("con-erro").textContent = msgErro(e);
+    $("con-erro").hidden = false;
+  }
+});
+
 $("btn-abrir").addEventListener("click", abrirDialogoAbrir);
 $("ab-cancelar").addEventListener("click", () => $("dlg-abrir").close());
 

@@ -1076,6 +1076,7 @@
   UI_OPEN_FILE_EXPLAIN:
     "Um DBF solto, sem cadastrar a pasta. Para voltar a ele depois, cadastre a pasta como conexão.",
   UI_OPEN_DIALOG_TITLE: "Escolher arquivo DBF",
+  UI_PICK_FOLDER_TITLE: "Escolher a pasta com os arquivos DBF",
   UI_BROWSE: "Procurar…",
   UI_OPEN: "Abrir",
   UI_READ_ONLY: "Somente leitura",
@@ -1661,7 +1662,7 @@
   UI_IA_KEY_UNSET: "(não configurada)",
   UI_IA_KEY_BROKEN: "(arquivo de configuração ilegível — informe a chave para recriá-lo)",
   UI_IA_EXPLAIN: "Com a chave configurada, o botão ✦ do construtor de expressão passa a funcionar: você descreve o que quer e recebe a expressão pronta. O endereço aceita qualquer serviço no formato \"chat completions\" — OpenAI, um Ollama local, um proxy da empresa.",
-  UI_IA_NO_KEY: "Para usar o assistente, informe a chave da API em Preferências (⚙). Ele descreve a expressão que você quer em palavras e devolve a expressão pronta.",
+  UI_IA_NO_KEY: "Para usar o assistente, informe a chave da API em Preferências (⚙). Você descreve em palavras a expressão que quer, e ele a devolve pronta.",
   UI_IA_OPEN_PREFS: "Abrir Preferências",
   UI_IA_ASK: "IA",
   UI_IA_ASK_TITLE: "Descrever em palavras o que a expressão deve fazer",

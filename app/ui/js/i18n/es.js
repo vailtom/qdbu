@@ -1039,6 +1039,7 @@
   UI_OPEN_FILE_EXPLAIN:
     "Un DBF suelto, sin registrar su carpeta. Para volver a él más tarde, registre la carpeta como conexión.",
   UI_OPEN_DIALOG_TITLE: "Elegir archivo DBF",
+  UI_PICK_FOLDER_TITLE: "Elegir la carpeta con los archivos DBF",
   UI_BROWSE: "Examinar…",
   UI_OPEN: "Abrir",
   UI_READ_ONLY: "Solo lectura",

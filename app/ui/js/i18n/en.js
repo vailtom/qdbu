@@ -1043,6 +1043,7 @@
   UI_OPEN_FILE_EXPLAIN:
     "A single DBF, without registering its folder. To come back to it later, register the folder as a connection.",
   UI_OPEN_DIALOG_TITLE: "Choose a DBF file",
+  UI_PICK_FOLDER_TITLE: "Choose the folder with the DBF files",
   UI_BROWSE: "Browse…",
   UI_OPEN: "Open",
   UI_READ_ONLY: "Read-only",
