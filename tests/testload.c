@@ -156,7 +156,27 @@ int main( int argc, char * argv[] )
    Try_( "rpc", "isto nao e json", 8192 );
 
    printf( "\n-- workspace: pasta inexistente = recusa com campo culpado --\n" );
-   Try_( "rpc", "{\"id\":\"r-3\",\"method\":\"workspace.add\",\"params\":{\"nome\":\"X\",\"dir\":\"Z:/nao/existe\"}}", 8192 );
+   /* `name`, e nao `nome`: e a chave que Api_Workspace_Add le. Com a errada o
+      nome vinha vazio e a DLL derivava o da pasta -- o teste passava sem nunca
+      ter exercitado o campo. E o mesmo par que escondeu o nome da conexao na
+      UI por semanas. */
+   Try_( "rpc", "{\"id\":\"r-3\",\"method\":\"workspace.add\",\"params\":{\"name\":\"X\",\"dir\":\"Z:/nao/existe\"}}", 8192 );
+
+   /* PASTA AVULSA: `workspace.files` aceita `dir` CRU, sem conexao cadastrada.
+      E o contrato inteiro do recurso -- se ele quebrar, a pasta avulsa deixa de
+      ter o que listar, e nenhum teste de UI diria por que. */
+   printf( "\n-- workspace.files por DIR, sem conexao cadastrada (pasta avulsa) --\n" );
+   Try_( "rpc", "{\"id\":\"r-4\",\"method\":\"workspace.files\",\"params\":{\"dir\":\"tests/fixtures\"}}", 65536 );
+
+   /* Pasta que nao existe volta RECUSA DE NEGOCIO, nunca "ERR:" -- arrastar
+      para a janela um caminho sem extensao que nao e pasta cai exatamente
+      aqui, e a UI precisa da recusa para dizer a frase certa. */
+   printf( "\n-- workspace.files por DIR inexistente = recusa, nao ERR: --\n" );
+   Try_( "rpc", "{\"id\":\"r-5\",\"method\":\"workspace.files\",\"params\":{\"dir\":\"Z:/nao/existe\"}}", 8192 );
+
+   /* Sem `name` e sem `dir` nao ha o que listar: recusa nomeando o parametro. */
+   printf( "\n-- workspace.files sem name e sem dir = recusa --\n" );
+   Try_( "rpc", "{\"id\":\"r-6\",\"method\":\"workspace.files\",\"params\":{}}", 8192 );
 
    printf( "\n-- buffer pequeno de proposito (8 bytes), deve realocar --\n" );
    Try_( "Api_Meta_Version", "", 8 );

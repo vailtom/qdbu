@@ -309,8 +309,28 @@
   UI_FOLDER_NOT_FOUND: "Folder not found.",
   UI_CONNECTION_ACTIONS: "Actions for the connection {name}",
   UI_MENU_OPEN_FOLDER: "Open in Explorer",
+  UI_MENU_OPEN_TERMINAL: "Open in Terminal",
+  UI_TERMINAL_APP: "Terminal",
+  UI_TERM_CMD: "Command Prompt",
+  UI_TERM_POWERSHELL: "Windows PowerShell",
+  UI_TERM_PWSH: "PowerShell 7",
+  UI_TERM_WT: "Windows Terminal",
+  WARN_TERMINAL_UNC:
+    "cmd.exe does not accept '{dir}' as the current folder and will open in C:\\Windows.",
+  ERROR_OPEN_TERMINAL_FAILED: "Could not open the terminal[[: {detail}]].",
   UI_MENU_RELOAD: "Refresh the file list",
   UI_MENU_REMOVE: "Remove the connection",
+  // -------------------------------------------------------- loose folder
+  UI_SECTION_LOOSE: "Loose folder",
+  UI_OPEN_LOOSE_FOLDER: "Open loose folder…",
+  UI_PICK_LOOSE_FOLDER_TITLE: "Choose the folder to open without registering",
+  UI_LOOSE_ACTIONS: "Loose folder actions {name}",
+  UI_MENU_LOOSE_REGISTER: "Save as connection",
+  UI_MENU_LOOSE_CLOSE: "Close folder",
+  INFO_LOOSE_IS_CONNECTION: "This folder is already the connection '{name}'.",
+  ERROR_DROP_LOOSE_TAKEN:
+    "A loose folder is already open ('{name}'). Close it, or switch using the folder button.",
+  UI_PATH_FOOTER_EMPTY: "Select a folder or a file.",
   ERROR_OPEN_FOLDER_FAILED: "Could not open the folder: {detail}.",
   UI_NOT_A_DBF_SHORT: "NOT A DBF: {reason}.",
   UI_DOUBLE_CLICK_TO_OPEN: "double click to open",
@@ -1035,10 +1055,8 @@
   ERROR_CLI_UNKNOWN_OPTION: "Unrecognised command-line option: {option}.",
   // ------------------------------------------------------------ drag and drop
   UI_DROP_HERE: "Drop to open",
-  UI_DROP_HINT: "DBF files. Folders are registered under + Connection.",
+  UI_DROP_HINT: "DBF files, or a folder to open without registering.",
   ERROR_DROP_NOT_A_DBF: "'{file}' is not a .DBF.",
-  ERROR_DROP_NOT_A_FILE:
-    "'{file}' is not a .DBF file. If it is a folder, register it under + Connection.",
   // ------------------------------------------------------------ open file
   UI_OPEN_FILE: "Open file",
   UI_OPEN_FILE_TITLE: "Open file",

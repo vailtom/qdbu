@@ -462,6 +462,131 @@ fn abrir_pasta(caminho: String) -> Result<(), String> {
         .map_err(|e| format!("nao foi possivel abrir o Explorer: {e}"))
 }
 
+/*
+ * OS TERMINAIS SAO UMA LISTA FECHADA, e nao um caminho que a pessoa digita.
+ *
+ * Duas razoes, e as duas doem.
+ *
+ * A primeira e que nao basta saber QUAL executavel: cada um quer ser avisado
+ * de um jeito diferente sobre onde comecar. `cmd` e `powershell` aceitam o
+ * diretorio corrente do CreateProcess; o Windows Terminal e um LANCADOR que
+ * repassa para outro processo, entao o diretorio corrente nao chega ao shell
+ * e ele precisa do `-d`. Um campo livre guardaria metade da informacao e
+ * quebraria em silencio justamente no terminal mais usado hoje.
+ *
+ * A segunda e que um campo livre transformaria o `config.json` em "rode este
+ * programa" -- e ele e um arquivo em disco que qualquer um edita. E a mesma
+ * regra que o projeto ja aplica ao `session.json`: o que vem de arquivo e
+ * DADO, nunca codigo. Com a lista fechada, o id que chega e so uma chave; se
+ * nao estiver aqui, cai no padrao.
+ */
+const TERMINAIS: &[(&str, &str, &[&str])] = &[
+    // id            executavel          argumentos antes da pasta
+    ("cmd", "cmd.exe", &[]),
+    ("powershell", "powershell.exe", &[]),
+    ("pwsh", "pwsh.exe", &[]),
+    // O `-d` recebe a pasta; ver `argumentos_do_terminal`.
+    ("wt", "wt.exe", &["-d"]),
+];
+
+/// Onde este executavel esta, ou `None`. Segue o mesmo caminho de busca que o
+/// `CreateProcess` usaria (`PATH` e as pastas do sistema), para nao oferecer
+/// na tela um terminal que a hora de abrir nao acha.
+fn acha_executavel(exe: &str) -> Option<PathBuf> {
+    if let Ok(caminho) = std::env::var("PATH") {
+        for dir in std::env::split_paths(&caminho) {
+            let p = dir.join(exe);
+            if p.is_file() {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
+
+/// Os ids de terminal que EXISTEM nesta maquina, na ordem da lista.
+///
+/// A UI so oferece o que voltar daqui -- mesmo principio do seletor de
+/// codepage, que sai da DLL filtrado pelo que foi linkado. Oferecer o que nao
+/// existe e o app prometendo o que nao faz.
+#[tauri::command]
+fn terminais() -> Vec<String> {
+    TERMINAIS
+        .iter()
+        .filter(|(_, exe, _)| acha_executavel(exe).is_some())
+        .map(|(id, _, _)| (*id).to_string())
+        .collect()
+}
+
+/// Abre um terminal COM A PASTA COMO DIRETORIO CORRENTE.
+///
+/// O caminho vai por `current_dir()`, e nunca concatenado numa linha de
+/// comando. E a mesma razao do `abrir_pasta`, e aqui pesa mais: o processo
+/// filho E um interpretador de comandos, entao qualquer pedaco de caminho que
+/// virasse texto de linha de comando -- um `&`, um `|`, aspas -- seria
+/// executado por ele. Como parametro do CreateProcess nao ha o que interpretar.
+///
+/// `CREATE_NEW_CONSOLE` (0x10) e obrigatorio: este binario e
+/// `windows_subsystem = "windows"` e nao tem console para o filho herdar. Sem a
+/// flag o cmd nasce sem janela, vivo e invisivel.
+///
+/// **UNC nao e tratado, por decisao do autor (08/09/2026).** O `cmd.exe` recusa
+/// `\\servidor\share` como diretorio corrente: ele abre em `C:\Windows` e
+/// imprime o proprio aviso. A UI avisa antes; o resto e com quem opera.
+/// Contornar por `pushd` criaria uma unidade mapeada que ninguem removeria.
+#[tauri::command]
+fn abrir_terminal(caminho: String, perfil: Option<String>) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
+
+    let p = PathBuf::from(&caminho);
+
+    // Mesma conferencia do `abrir_pasta`, e pelo mesmo motivo: o que chega aqui
+    // pode ter vindo do session.json, que e um arquivo em disco que qualquer um
+    // edita.
+    if !p.is_dir() {
+        return Err(format!("nao e uma pasta: {caminho}"));
+    }
+
+    /*
+     * O `perfil` e uma CHAVE, nunca um executavel.
+     *
+     * Ele vem do config.json, que e um arquivo em disco. Um id desconhecido --
+     * digitado a mao, sobrado de uma versao futura, ou plantado -- cai no
+     * padrao em vez de virar programa a executar. E a razao de `TERMINAIS` ser
+     * uma lista fechada e nao um caminho configuravel.
+     */
+    let id = perfil.unwrap_or_default();
+    let (_, exe, antes) = TERMINAIS
+        .iter()
+        .copied()
+        .find(|(k, e, _)| id == *k && acha_executavel(e).is_some())
+        .unwrap_or(TERMINAIS[0]);
+
+    let mut cmd = std::process::Command::new(exe);
+    /*
+     * O Windows Terminal e um LANCADOR: ele repassa o pedido para um processo
+     * que ja esta rodando, e o diretorio corrente do CreateProcess nao chega
+     * ao shell que nasce. Por isso a pasta vai TAMBEM em `-d`.
+     *
+     * Continua sem shell no meio: `-d` e a pasta sao dois argumentos
+     * separados do processo, nunca uma linha de comando montada com aspas.
+     */
+    for a in antes {
+        cmd.arg(a);
+    }
+    if !antes.is_empty() {
+        cmd.arg(&p);
+    }
+
+    cmd.current_dir(&p)
+        .creation_flags(CREATE_NEW_CONSOLE)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| format!("nao foi possivel abrir o terminal: {e}"))
+}
+
+
 // ---------------------------------------------------------------- IA
 
 fn base_config() -> PathBuf {
@@ -1938,7 +2063,127 @@ fn selftest() -> i32 {
                     &format!("readOnly {ro} / zap {}", &zap[..zap.len().min(90)]),
                 );
                 let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&hro)));
+
+                /*
+                 * PASTA AVULSA -- as tres garantias de que ela nao precisa de
+                 * codigo novo na DLL.
+                 *
+                 * A assercao CONN: acima abre COM o nome da conexao. A avulsa
+                 * nao tem nome para dar: ela manda `connection` vazio, e quem
+                 * decide o modo passa a ser ModoDaPasta(), pela PASTA. Se essa
+                 * porta afrouxar, uma pasta de producao marcada somente-leitura
+                 * volta gravavel so por ter sido aberta por fora do cadastro --
+                 * e nada na tela diria isso.
+                 */
+                let hav = abre(&format!(r#"{{"path":"{ed2_s}","connection":""}}"#));
+                let ro_av = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{}"}}"#, hde(&hav)))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/readOnly").and_then(|b| b.as_bool()))
+                    .unwrap_or(false);
+                let zap_av = rpc_bruto(&hb, "bulk.zap", &format!(r#"{{"h":"{}"}}"#, hde(&hav))).unwrap_or_default();
+                t.ok(
+                    "LOOSE: pasta avulsa NAO afrouxa -- sem connection, o modo vem de ModoDaPasta e o ZAP e recusado",
+                    ro_av && zap_av.contains("ERROR_FILE_READ_ONLY"),
+                    &format!("readOnly {ro_av} / zap {}", &zap_av[..zap_av.len().min(90)]),
+                );
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{}"}}"#, hde(&hav)));
+
                 let _ = rpc_bruto(&hb, "workspace.remove", r#"{"name":"cfgconn"}"#);
+
+                // Sem cadastro nenhum apontando para ela, a pasta continua
+                // listavel por `dir` cru -- e o que a pasta avulsa faz o tempo
+                // todo. O `dir` volta NORMALIZADO pela DLL, e e essa forma que
+                // a UI guarda para comparar com o `dir` das conexoes.
+                let lst_av = rpc_bruto(&hb, "workspace.files",
+                    &format!(r#"{{"dir":"{}"}}"#, dir_run().to_string_lossy().replace('\\', "/")))
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let dir_volta = lst_av.as_ref()
+                    .and_then(|v| v.pointer("/result/dir").and_then(|d| d.as_str()))
+                    .unwrap_or("").to_string();
+                let tem_arq = lst_av.as_ref()
+                    .and_then(|v| v.pointer("/result/files").and_then(|a| a.as_array()).map(|a| !a.is_empty()))
+                    .unwrap_or(false);
+                t.ok(
+                    "LOOSE: workspace.files lista por `dir` CRU, sem conexao cadastrada, e devolve o dir normalizado",
+                    tem_arq && !dir_volta.is_empty(),
+                    &format!("dir {dir_volta:?} / tem arquivos {tem_arq}"),
+                );
+
+                // Pasta que nao existe e RECUSA DE NEGOCIO, nunca "ERR:".
+                // Arrastar para a janela um caminho sem extensao que nao e
+                // pasta cai aqui, e a UI precisa da recusa para dizer a frase
+                // certa em vez de anunciar um bug.
+                let nao_ha = rpc_bruto(&hb, "workspace.files", r#"{"dir":"Z:/nao/existe"}"#).unwrap_or_default();
+                t.ok(
+                    "LOOSE: `dir` inexistente devolve ERROR_DIR_NOT_FOUND, e nao ERR:",
+                    nao_ha.contains("ERROR_DIR_NOT_FOUND") && !nao_ha.starts_with("ERR:"),
+                    &nao_ha[..nao_ha.len().min(110)],
+                );
+
+                /*
+                 * A pasta avulsa VOLTA no proximo arranque, entao o caminho
+                 * dela viaja na sessao. Sem esta assercao, um `looseFolder`
+                 * que a DLL deixasse cair sairia como "a pasta nao voltou" --
+                 * indistinguivel de a UI ter esquecido de grava-la.
+                 *
+                 * A SESSAO E DO USUARIO: a original e lida antes e regravada
+                 * depois. O --selftest roda na arvore de trabalho de quem
+                 * desenvolve, e perder as abas abertas por causa de um teste
+                 * seria o teste estragando o que veio verificar.
+                 */
+                let ses0 = rpc_bruto(&hb, "session.load", "{}")
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result").cloned());
+                let dir_ses = dir_run().to_string_lossy().replace('\\', "/");
+                let _ = rpc_bruto(&hb, "session.save",
+                    &format!(r#"{{"panelWidth":320,"looseFolder":"{dir_ses}"}}"#));
+                let volta = rpc_bruto(&hb, "session.load", "{}")
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/looseFolder").and_then(|c| c.as_str()).map(String::from))
+                    .unwrap_or_default();
+                // E o VAZIO tambem tem de voltar vazio: sem pasta avulsa, o
+                // campo nao pode ressuscitar a da sessao anterior.
+                let _ = rpc_bruto(&hb, "session.save", r#"{"panelWidth":320}"#);
+                let vazio = rpc_bruto(&hb, "session.load", "{}")
+                    .ok()
+                    .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/looseFolder").and_then(|c| c.as_str()).map(String::from))
+                    .unwrap_or("AUSENTE".into());
+                /*
+                 * O terminal preferido e um ID guardado como texto, no molde
+                 * do `toolbarLabels`. Quem sabe o que cada id significa e o
+                 * Rust; a DLL so guarda. O que precisa ser afirmado e o que a
+                 * DLL promete: vai, volta, e some quando se manda vazio --
+                 * senao o arquivo guardaria "" como se fosse uma escolha.
+                 */
+                let cfg_term = |v: &str| -> String {
+                    let _ = rpc_bruto(&hb, "config.set", &format!(r#"{{"terminal":"{v}"}}"#));
+                    rpc_bruto(&hb, "config.get", "{}")
+                        .ok()
+                        .and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                        .and_then(|x| x.pointer("/result/terminal").and_then(|c| c.as_str()).map(String::from))
+                        .unwrap_or("AUSENTE".into())
+                };
+                let t_wt = cfg_term("wt");
+                let t_vazio = cfg_term("");
+                t.ok(
+                    "TERM: `terminal` vai e volta no config global, e vazio APAGA a escolha",
+                    t_wt == "wt" && t_vazio.is_empty(),
+                    &format!("gravado wt -> {t_wt:?} / gravado vazio -> {t_vazio:?}"),
+                );
+
+                t.ok(
+                    "LOOSE: `looseFolder` vai e volta na sessao, e volta VAZIO quando nao ha pasta avulsa",
+                    volta == dir_ses && vazio.is_empty(),
+                    &format!("gravado {dir_ses:?} / voltou {volta:?} / sem avulsa {vazio:?}"),
+                );
+                if let Some(o) = ses0 {
+                    let _ = rpc_bruto(&hb, "session.save", &o.to_string());
+                }
 
                 // 5. persist:file fixa no .qdbu/ e vence a conexao ao reabrir (origem=file)
                 let hf = abre(&format!(r#"{{"path":"{ed2_s}"}}"#));
@@ -3094,7 +3339,7 @@ fn main() {
             _ => {}
         })
         .invoke_handler(tauri::generate_handler![
-            status, executar, rpc, andamento, cancelar, abrir_pasta, confirmar_saida,
+            status, executar, rpc, andamento, cancelar, abrir_pasta, abrir_terminal, terminais, confirmar_saida,
             ia_status, ia_configurar, ia_sugerir, ia_historico, ia_prompt, saida_perguntada
         ])
         .run(tauri::generate_context!())

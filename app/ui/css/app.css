@@ -276,7 +276,16 @@ dialog .idioma-lista { left: 0; right: auto; }
 body.arrastando { cursor: col-resize; user-select: none; }
 body.arrastando .divisoria { background: var(--amber); }
 
-.busca { flex: none; padding: 8px; border-bottom: 1px solid var(--line); }
+.busca { flex: none; padding: 8px; border-bottom: 1px solid var(--line); gap: 4px; }
+
+/* OS BOTOES DA BUSCA SAO MAIS ESTREITOS QUE OS DA BARRA DE TITULO.
+   Sao dois agora, e o painel e redimensionavel: com a largura que o autor
+   guardou (189px) os 8px de padding de cada lado do `.icone` comiam o campo
+   ate 93px, e "Buscar conexao ou arquivo..." virava "Buscar cor" na tela --
+   um placeholder que nao diz o que se busca. O DOM mostrava o texto inteiro:
+   so o screenshot mostrou o corte. */
+.busca .icone { flex: none; padding: 4px 5px; }
+.busca .icone .ico { width: 15px; height: 15px; }
 .busca input {
   width: 100%; padding: 6px 9px;
   background: var(--bg); color: var(--fg);
@@ -285,16 +294,65 @@ body.arrastando .divisoria { background: var(--amber); }
 .busca input:focus { outline: none; border-color: var(--amber); }
 
 .arvore { flex: 1; overflow: auto; padding: 6px 0; min-height: 0; }
+
+/* O caminho do no SELECIONADO. `flex: none` e `min-height` fixos: sem eles a
+   linha some quando esta vazia e o painel "pula" a cada selecao. */
+.painel-caminho {
+  flex: none; min-height: 24px; padding: 5px 10px;
+  border-top: 1px solid var(--line);
+  color: var(--dim); font-size: 11px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* SO O CAMINHO corta pelo comeco -- num caminho longo o fim (a pasta, o
+   arquivo) e que identifica, e o comeco e a unidade, que se adivinha. A frase
+   de instrucao NAO pode receber isso: ela saía como "...ecione uma pasta ou um
+   arquivo", ilegivel logo na primeira palavra. O DOM tinha o texto inteiro nos
+   dois casos; a diferenca so aparece na tela. */
+.painel-caminho.caminho { direction: rtl; text-align: left; }
 .arvore ul { list-style: none; margin: 0; padding: 0; }
 .arvore-vazia { color: var(--dim2); font-size: 12px; padding: 14px 16px; margin: 0; }
 
+/* SECAO -- so existe quando ha pasta avulsa (ver `desenhar()`).
+   Rotulo e consequencia: aparece quando duas naturezas dividem o painel, e
+   some quando volta a haver uma so. */
+.arvore .secao {
+  margin: 4px 0 2px; padding: 4px 10px 3px;
+  color: var(--dim); font-size: 10px; font-weight: 700;
+  letter-spacing: .09em; text-transform: uppercase;
+}
+.arvore .secao:first-child { margin-top: 0; }
+
 /* conexao */
 .conexao { margin-bottom: 2px; }
+
+/* A PASTA AVULSA SE DISTINGUE POR TRACEJADO, nao por cor.
+   Cor com significado nao entra aqui: neste app o ambar e o ACENTO (foco,
+   link, aba ativa, selecao) e o `--aviso` e aviso -- e uma pasta aberta sem
+   cadastro nao e nem uma coisa nem outra. Tracejado e o sinal universal de
+   "nao fixado", e nao disputa significado com nada. */
+.conexao.avulsa > .cab { border-left: 2px dashed var(--line2); }
+
+/* O complemento acompanha o LAYOUT do aviso (ver abaixo: `order` + `calc`,
+   que resolveram o estouro da linha), e nao a cor dele: aqui nao ha nada de
+   errado a anunciar, so a origem do no a esclarecer. */
+.conexao .compl {
+  order: 9; flex: 0 0 calc(100% - 16px); margin-left: 16px;
+  font-size: 10.5px; color: var(--dim2);
+  /* Caminho longo num painel de 189px: corta pelo COMECO, porque o fim -- a
+     pasta -- e o que identifica. Mesma escolha do rodape do painel. */
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  direction: rtl; text-align: left;
+}
 .conexao .cab {
   display: flex; align-items: center; gap: 6px;
   padding: 5px 10px; cursor: pointer; user-select: none;
 }
 .conexao .cab:hover { background: var(--bg3); }
+/* A pasta selecionada e a que o rodape esta descrevendo. Discreta de
+   proposito: ela nao compete com a linha do cursor da grade, que e onde a
+   pessoa esta trabalhando. */
+.conexao .cab.sel { background: var(--bg4); }
 .conexao .cab:focus-visible { outline: 1px solid var(--amber); outline-offset: -1px; }
 .conexao .seta { flex: none; color: var(--dim); width: 10px; font-size: 10px; }
 

@@ -322,8 +322,28 @@
   UI_FOLDER_NOT_FOUND: "Pasta não encontrada.",
   UI_CONNECTION_ACTIONS: "Ações da conexão {name}",
   UI_MENU_OPEN_FOLDER: "Abrir no Explorer",
+  UI_MENU_OPEN_TERMINAL: "Abrir no Terminal",
+  UI_TERMINAL_APP: "Terminal",
+  UI_TERM_CMD: "Prompt de Comando",
+  UI_TERM_POWERSHELL: "Windows PowerShell",
+  UI_TERM_PWSH: "PowerShell 7",
+  UI_TERM_WT: "Windows Terminal",
+  WARN_TERMINAL_UNC:
+    "O cmd.exe não aceita '{dir}' como pasta corrente e vai abrir em C:\\Windows.",
+  ERROR_OPEN_TERMINAL_FAILED: "Não foi possível abrir o terminal[[: {detail}]].",
   UI_MENU_RELOAD: "Reler os arquivos",
   UI_MENU_REMOVE: "Remover a conexão",
+  // -------------------------------------------------------- pasta avulsa
+  UI_SECTION_LOOSE: "Pasta avulsa",
+  UI_OPEN_LOOSE_FOLDER: "Abrir pasta avulsa…",
+  UI_PICK_LOOSE_FOLDER_TITLE: "Escolher a pasta para abrir sem cadastrar",
+  UI_LOOSE_ACTIONS: "Ações da pasta avulsa {name}",
+  UI_MENU_LOOSE_REGISTER: "Cadastrar como conexão",
+  UI_MENU_LOOSE_CLOSE: "Fechar pasta",
+  INFO_LOOSE_IS_CONNECTION: "Esta pasta já é a conexão '{name}'.",
+  ERROR_DROP_LOOSE_TAKEN:
+    "Já há uma pasta avulsa aberta ('{name}'). Feche-a, ou troque pelo botão de pasta.",
+  UI_PATH_FOOTER_EMPTY: "Selecione uma pasta ou um arquivo.",
   ERROR_OPEN_FOLDER_FAILED: "Não foi possível abrir a pasta: {detail}.",
   UI_NOT_A_DBF_SHORT: "NÃO É UM DBF: {reason}.",
   UI_DOUBLE_CLICK_TO_OPEN: "duplo clique para abrir",
@@ -1068,10 +1088,8 @@
   ERROR_CLI_UNKNOWN_OPTION: "Opção não reconhecida na linha de comando: {option}.",
   // ---------------------------------------------------------- arrastar e soltar
   UI_DROP_HERE: "Solte para abrir",
-  UI_DROP_HINT: "Arquivos .DBF. Pasta se cadastra em + Conexão.",
+  UI_DROP_HINT: "Arquivos .DBF, ou uma pasta para abrir sem cadastrar.",
   ERROR_DROP_NOT_A_DBF: "'{file}' não é um .DBF.",
-  ERROR_DROP_NOT_A_FILE:
-    "'{file}' não é um arquivo .DBF. Se for uma pasta, cadastre-a em + Conexão.",
   // ------------------------------------------------------------ abrir arquivo
   UI_OPEN_FILE: "Abrir arquivo",
   UI_OPEN_FILE_TITLE: "Abrir arquivo",

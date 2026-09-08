@@ -47,6 +47,7 @@
     <symbol id="i-redo-2" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5" /> <path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13" /></symbol>
     <symbol id="i-square-function" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="M9 17c2 0 2.8-1 2.8-2.8V10c0-2 1-3.3 3.2-3" /> <path d="M9 11.2h5.7" /></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14" /> <path d="M12 5v14" /></symbol>
+    <symbol id="i-folder-open" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2" /></symbol>
     <symbol id="i-circle-minus" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /> <path d="M8 12h8" /></symbol>
     <symbol id="i-undo-2" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5" /> <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11" /></symbol>
     <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" /> <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" /> <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" /></symbol>
@@ -86,11 +87,24 @@
          que ele produz. -->
     <div class="busca">
       <input id="busca" type="search" data-i18n-ph="UI_SEARCH_PLACEHOLDER" autocomplete="off">
+      <!-- DOIS botoes, e nao um menu: sao os dois gestos de trazer uma pasta
+           para o painel, e sao diferentes um do outro. O da pasta abre AGORA e
+           nao guarda nada; o "+" cadastra, com nome, codepage e modo. Escondido
+           um deles atras do outro, o barato (abrir e olhar) pagaria o preco do
+           caro. A pasta vem primeiro porque e a acao sem consequencia. -->
+      <button type="button" id="btn-pasta-avulsa" class="icone" data-i18n-title="UI_OPEN_LOOSE_FOLDER">
+        <svg class="ico" aria-hidden="true"><use href="#i-folder-open" /></svg>
+      </button>
       <button type="button" id="btn-nova-conexao" class="icone" data-i18n-title="UI_NEW_CONNECTION">
         <svg class="ico" aria-hidden="true"><use href="#i-plus" /></svg>
       </button>
     </div>
     <div id="arvore" class="arvore" data-i18n-aria="UI_CONNECTIONS"></div>
+    <!-- "De onde vem isto que estou vendo" -- a arvore mostra NOME e nunca
+         onde o no aponta. Duas conexoes com o mesmo nome derivado, e duas
+         apontando para a MESMA pasta, foram dois defeitos do mesmo dia que so
+         apareceram porque ninguem via o caminho. -->
+    <div id="painel-caminho" class="painel-caminho"></div>
   </aside>
 
   <div id="divisoria" class="divisoria" role="separator" aria-orientation="vertical"
@@ -1218,6 +1232,14 @@
     <label class="linha-check">
       <input type="checkbox" id="cfg-rotulos">
       <span data-i18n="UI_TOOLBAR_LABELS"></span>
+    </label>
+    <!-- LISTA FECHADA, e so com o que existe nesta maquina. Nao e um caminho
+         que se digita: cada terminal quer ser avisado de um jeito diferente
+         sobre onde comecar (o Windows Terminal precisa de `-d`), e um campo
+         livre faria o config.json virar "rode este programa". -->
+    <label>
+      <span data-i18n="UI_TERMINAL_APP"></span>
+      <select id="cfg-terminal"></select>
     </label>
     <p class="explica" id="cfg-epoch"></p>
 

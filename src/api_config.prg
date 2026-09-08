@@ -24,6 +24,7 @@ FUNCTION Api_Config_Get( hP )
       "codepage"      => CodepageGlobal(), ;
       "showDeleted"   => ! Set( _SET_DELETED ), ;
       "toolbarLabels" => RotulosNaBarra(), ;
+      "terminal"      => TerminalPreferido(), ;
       "epoch"         => Set( _SET_EPOCH ), ;
       "codepages"     => CodepagesDisponiveis(), ;
       "default"       => CdpPadrao() } )
@@ -67,6 +68,21 @@ FUNCTION Api_Config_Set( hP )
       h[ "toolbarLabels" ] := hP[ "toolbarLabels" ]
    ENDIF
 
+   /* Preferencia de TELA tambem, e pelo mesmo molde do toolbarLabels: um id de
+      terminal, guardado como texto. Quem sabe o que cada id significa -- e
+      quais existem nesta maquina -- e o Rust, que e quem abre o processo.
+      Vazio APAGA a escolha em vez de gravar "", para o arquivo guardar so o
+      que foi decidido; ausencia ja e o padrao. */
+   IF hb_HHasKey( hP, "terminal" ) .AND. HB_ISSTRING( hP[ "terminal" ] )
+      IF Empty( hP[ "terminal" ] )
+         IF hb_HHasKey( h, "terminal" )
+            hb_HDel( h, "terminal" )
+         ENDIF
+      ELSE
+         h[ "terminal" ] := hP[ "terminal" ]
+      ENDIF
+   ENDIF
+
    lSalvou := SalvaConfigGlobal( h )
    SessBump()
 
@@ -75,4 +91,5 @@ FUNCTION Api_Config_Set( hP )
       "codepage"      => CodepageGlobal(), ;
       "showDeleted"   => ! Set( _SET_DELETED ), ;
       "toolbarLabels" => RotulosNaBarra(), ;
+      "terminal"      => TerminalPreferido(), ;
       "epoch"         => Set( _SET_EPOCH ) } )

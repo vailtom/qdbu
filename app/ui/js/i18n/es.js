@@ -306,8 +306,28 @@
   UI_FOLDER_NOT_FOUND: "Carpeta no encontrada.",
   UI_CONNECTION_ACTIONS: "Acciones de la conexión {name}",
   UI_MENU_OPEN_FOLDER: "Abrir en el Explorador",
+  UI_MENU_OPEN_TERMINAL: "Abrir en la Terminal",
+  UI_TERMINAL_APP: "Terminal",
+  UI_TERM_CMD: "Símbolo del sistema",
+  UI_TERM_POWERSHELL: "Windows PowerShell",
+  UI_TERM_PWSH: "PowerShell 7",
+  UI_TERM_WT: "Windows Terminal",
+  WARN_TERMINAL_UNC:
+    "cmd.exe no acepta '{dir}' como carpeta actual y se abrirá en C:\\Windows.",
+  ERROR_OPEN_TERMINAL_FAILED: "No se pudo abrir la terminal[[: {detail}]].",
   UI_MENU_RELOAD: "Releer los archivos",
   UI_MENU_REMOVE: "Eliminar la conexión",
+  // -------------------------------------------------------- carpeta suelta
+  UI_SECTION_LOOSE: "Carpeta suelta",
+  UI_OPEN_LOOSE_FOLDER: "Abrir carpeta suelta…",
+  UI_PICK_LOOSE_FOLDER_TITLE: "Elegir la carpeta para abrir sin registrar",
+  UI_LOOSE_ACTIONS: "Acciones de la carpeta suelta {name}",
+  UI_MENU_LOOSE_REGISTER: "Guardar como conexión",
+  UI_MENU_LOOSE_CLOSE: "Cerrar carpeta",
+  INFO_LOOSE_IS_CONNECTION: "Esta carpeta ya es la conexión '{name}'.",
+  ERROR_DROP_LOOSE_TAKEN:
+    "Ya hay una carpeta suelta abierta ('{name}'). Ciérrela, o cámbiela con el botón de carpeta.",
+  UI_PATH_FOOTER_EMPTY: "Seleccione una carpeta o un archivo.",
   ERROR_OPEN_FOLDER_FAILED: "No se pudo abrir la carpeta: {detail}.",
   UI_NOT_A_DBF_SHORT: "NO ES UN DBF: {reason}.",
   UI_DOUBLE_CLICK_TO_OPEN: "doble clic para abrir",
@@ -1031,10 +1051,8 @@
   ERROR_CLI_UNKNOWN_OPTION: "Opción no reconocida en la línea de comandos: {option}.",
   // ------------------------------------------------------------ arrastrar y soltar
   UI_DROP_HERE: "Suelte para abrir",
-  UI_DROP_HINT: "Archivos .DBF. Las carpetas se registran en + Conexión.",
+  UI_DROP_HINT: "Archivos .DBF, o una carpeta para abrir sin registrar.",
   ERROR_DROP_NOT_A_DBF: "'{file}' no es un .DBF.",
-  ERROR_DROP_NOT_A_FILE:
-    "'{file}' no es un archivo .DBF. Si es una carpeta, regístrela en + Conexión.",
   // ------------------------------------------------------------ abrir archivo
   UI_OPEN_FILE: "Abrir archivo",
   UI_OPEN_FILE_TITLE: "Abrir archivo",

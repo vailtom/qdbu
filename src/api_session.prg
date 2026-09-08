@@ -141,6 +141,16 @@ FUNCTION Api_Session_Save( hP )
    hState[ "activeTab" ]  := ParStr( hP, "activeTab" )
    hState[ "tabOrder" ]   := ParArr( hP, "tabOrder" )
    hState[ "pageSize" ]   := ParNum( hP, "pageSize", 200 )
+   /*
+    * A pasta avulsa e guardada pelo CAMINHO, e nao por nome: ela nao tem nome
+    * proprio -- o rotulo na arvore e derivado da ultima parte do caminho.
+    *
+    * Vazio quando nao ha nenhuma, que e o normal. Nao ha o que validar aqui:
+    * quem reabre e a UI, chamando `workspace.files`, que confere a existencia
+    * e recusa com ERROR_DIR_NOT_FOUND. Um caminho no arquivo de sessao e DADO
+    * -- vira argumento de Directory(), nunca expressao.
+    */
+   hState[ "looseFolder" ] := ParStr( hP, "looseFolder" )
 
    hb_MemoWrit( SessionFile(), hb_jsonEncode( hState, .T. ) )
 
@@ -172,7 +182,8 @@ FUNCTION Api_Session_Forget( hP )
 
 STATIC FUNCTION Defaults()
    RETURN { "panelWidth" => 320, "expanded" => {}, "openFiles" => {}, ;
-            "activeTab" => "", "tabOrder" => {}, "pageSize" => 200 }
+            "activeTab" => "", "tabOrder" => {}, "pageSize" => 200, ;
+            "looseFolder" => "" }
 
 /* Reads the saved arrangement. A corrupt file must never stop the app. */
 STATIC FUNCTION ReadUi()
@@ -200,7 +211,9 @@ STATIC FUNCTION ReadUi()
       "tabOrder"   => iif( hb_HHasKey( xRead, "tabOrder" ) .AND. HB_ISARRAY( xRead[ "tabOrder" ] ), ;
                            xRead[ "tabOrder" ], {} ), ;
       "pageSize"   => iif( hb_HHasKey( xRead, "pageSize" ) .AND. HB_ISNUMERIC( xRead[ "pageSize" ] ), ;
-                           xRead[ "pageSize" ], 200 ) }
+                           xRead[ "pageSize" ], 200 ), ;
+      "looseFolder" => iif( hb_HHasKey( xRead, "looseFolder" ) .AND. HB_ISSTRING( xRead[ "looseFolder" ] ), ;
+                           xRead[ "looseFolder" ], "" ) }
 
 STATIC FUNCTION ParStr( hP, cKey )
 

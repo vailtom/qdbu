@@ -68,14 +68,7 @@ function ehCaminho(txt) {
  * o proprio app acabou de gerar.
  */
 function conexaoDoCaminho(caminho) {
-  const norm = (p) => {
-    let x = String(p || "").split(SEP_BARRA).join("/").toLowerCase();
-    while (x.endsWith("/")) x = x.slice(0, -1);
-    return x;
-  };
-  const inteiro = norm(caminho);
-  const pasta = inteiro.slice(0, inteiro.lastIndexOf("/"));
-  return conexoes.find((c) => norm(c.dir) === pasta) || null;
+  return conexaoDaPasta(pastaDoArquivo(caminho));
 }
 
 /**
@@ -100,6 +93,112 @@ const expandidas = new Set();
 const arquivosDe = new Map();
 let conexoes = [];
 let filtro = "";
+
+/*
+ * PASTA AVULSA -- uma pasta aberta SEM cadastro, dentro da MESMA arvore.
+ *
+ * Com 278 pastas de homologacao ninguem cadastra 278 conexoes, e o `+` da
+ * faixa de abas e transitorio: escolhe um arquivo e fecha. A partir do
+ * segundo arquivo da mesma pasta ele custa uma navegacao inteira por arquivo.
+ *
+ * Ela vive FORA de `conexoes` de proposito: `repintarDoEstado()` faz
+ * `conexoes = st.connections` a cada repintura, e um no acrescentado ali
+ * sumiria no primeiro `file.open`. E fora de `arquivosDe`, que e indexado por
+ * NOME de conexao -- uma avulsa `lucrimax` ao lado de uma conexao `lucrimax`
+ * (a mesma pasta em duas unidades e o caso comum, nao a excecao) dividiria o
+ * cache e uma mostraria os arquivos da outra.
+ *
+ * E UMA so: escolher outra substitui. Duas fariam da secao uma segunda lista
+ * de conexoes, sem nome unico, sem codepage e sem modo -- quem precisa de duas
+ * precisa cadastrar.
+ *
+ * NAO e persistida, e isso e por omissao: `session.save` manda `expanded`
+ * (nomes de conexao) e `openFiles` (caminhos), e a avulsa nao esta em nenhum
+ * dos dois. As abas abertas por ela voltam; o no, nao.
+ */
+let avulsa = null;        // {name, dir, exists, avulsa:true} -- no maximo uma
+let avulsaAberta = true;  // expansao; NAO entra em `expandidas`, que vai ao disco
+let avulsaArquivos;       // undefined = lendo · null = ilegivel · [] = lida
+
+/* Os arquivos ja lidos deste no, venha ele de onde vier. Existe para que os
+   quatro leitores (desenho, busca, carga pendente, refresh pos-criacao) nao
+   precisem cada um lembrar de perguntar "e avulsa?". */
+function arquivosDa(con) {
+  return con.avulsa ? avulsaArquivos : arquivosDe.get(con.name);
+}
+
+/* Duas pastas sao a mesma pasta? Windows mistura "/" e barra invertida no
+   mesmo caminho e nao distingue maiuscula; comparar cru erra os dois. */
+function mesmaPasta(a, b) {
+  const norm = (p) => {
+    let x = String(p || "").split(SEP_BARRA).join("/").toLowerCase();
+    while (x.endsWith("/")) x = x.slice(0, -1);
+    return x;
+  };
+  return !!a && !!b && norm(a) === norm(b);
+}
+
+function pastaDoArquivo(caminho) {
+  const x = String(caminho || "").split(SEP_BARRA).join("/");
+  return x.slice(0, x.lastIndexOf("/"));
+}
+
+function conexaoDaPasta(dir) {
+  return conexoes.find((c) => mesmaPasta(c.dir, dir)) || null;
+}
+
+/*
+ * A SELECAO DA ARVORE MORA NO ESTADO, e nao na classe `.sel` do DOM.
+ *
+ * `desenhar()` recria os `<li>` a cada busca, expansao ou repintura -- e a
+ * classe ia junto. O realce sumia sozinho no meio do trabalho, sem nada ter
+ * sido desselecionado; era um defeito calado, porque uma tela sem realce nao
+ * parece errada, so parece que nada estava escolhido.
+ *
+ * O rodape segue a SELECAO, e nao o mouse. Sao perguntas diferentes: o hover
+ * responde "o que e este aqui" enquanto o dedo passa, e vive na barra de
+ * status; a selecao responde "de onde vem o que estou olhando", e essa
+ * resposta tem de continuar na tela depois que a mao sai do painel.
+ */
+let selecaoArvore = null;   // {tipo:"pasta"|"arquivo", caminho} ou null
+
+function pintarCaminhoPainel() {
+  const el = $("painel-caminho");
+  if (!el) return;
+  if (!selecaoArvore) {
+    el.classList.remove("caminho");
+    el.textContent = T("UI_PATH_FOOTER_EMPTY");
+    el.title = "";
+    return;
+  }
+  // A classe liga o corte pelo COMECO, que serve ao caminho e estraga a frase.
+  el.classList.add("caminho");
+  el.textContent = paraExibir(selecaoArvore.caminho);
+  el.title = paraExibir(selecaoArvore.caminho);
+}
+
+function selecionarNaArvore(tipo, caminho) {
+  selecaoArvore = caminho ? { tipo: tipo, caminho: caminho } : null;
+  pintarCaminhoPainel();
+  marcarSelecao();
+}
+
+/* Reaplica o realce depois de repintar. Casa pelo CAMINHO, que sobrevive a
+   repintura -- o elemento, nao. `mesmaPasta` serve aos dois tipos: ela
+   normaliza separador e caixa, e o que ela apara a mais (a barra final) um
+   caminho de arquivo nunca tem. */
+function marcarSelecao() {
+  document.querySelectorAll(".arvore .sel").forEach((e) => e.classList.remove("sel"));
+  if (!selecaoArvore) return;
+
+  const arquivo = selecaoArvore.tipo === "arquivo";
+  for (const el of document.querySelectorAll(arquivo ? ".arquivo" : ".cab")) {
+    if (mesmaPasta(arquivo ? el.dataset.caminho : el.dataset.dir, selecaoArvore.caminho)) {
+      el.classList.add("sel");
+      return;
+    }
+  }
+}
 
 // Abas: um arquivo aberto = um handle = uma aba.
 let abas = [];        // [{h, alias, caminho, conexao, info}]
@@ -134,7 +233,7 @@ function combina(texto) {
 
 // .T. quando algum arquivo JA LIDO da conexao casa com a busca.
 function casaAlgum(con) {
-  const arqs = arquivosDe.get(con.name);
+  const arqs = arquivosDa(con);
   return Array.isArray(arqs) && arqs.some((a) => combina(a.name));
 }
 
@@ -152,17 +251,43 @@ function linhaConexao(con) {
   // usuario digita "netcli", ve a conexao aparecer na lista e nao ve o arquivo
   // -- a busca acha e esconde ao mesmo tempo. `expandidas` nao e tocada: ela e
   // escolha do usuario e vai para o disco; isto aqui e so exibicao.
-  const aberta = expandidas.has(con.name) || (!!filtro && casaAlgum(con));
-  const li = elemento("li", "conexao" + (aberta ? " aberta" : ""));
+  const expandida = con.avulsa ? avulsaAberta : expandidas.has(con.name);
+  const aberta = expandida || (!!filtro && casaAlgum(con));
+  const li = elemento(
+    "li",
+    "conexao" + (con.avulsa ? " avulsa" : "") + (aberta ? " aberta" : "")
+  );
 
   const cab = elemento("div", "cab");
   cab.tabIndex = 0;
   cab.setAttribute("role", "button");
   cab.setAttribute("aria-expanded", String(aberta));
-  cab.dataset.conexao = con.name;
+  // A avulsa NAO ganha `dataset.conexao`: quem trata o clique tem de saber que
+  // ela nao esta em `conexoes`, e um nome ali faria os manipuladores a
+  // procurarem na lista errada -- calados, porque `find` devolve undefined.
+  if (con.avulsa) cab.dataset.avulsa = "1";
+  else cab.dataset.conexao = con.name;
 
   cab.appendChild(elemento("span", "seta", aberta ? "▾" : "▸"));
   cab.appendChild(elemento("span", "nome", con.name));
+
+  /*
+   * AQUI VAI O CAMINHO, e nao um rotulo de categoria.
+   *
+   * Estava escrito "Nao cadastrada", e o autor precisou perguntar o que
+   * aquilo significava -- que e a prova de que o rotulo falhou. Ele dizia
+   * duas vezes o que o cabecalho da secao ja dizia duas linhas acima, com
+   * outras palavras, e "cadastrada" e jargao do app: quer dizer "esta no
+   * connections.json", coisa que ninguem le na tela.
+   *
+   * O caminho e o oposto disso: e o unico dado que a linha nao tem: o nome do
+   * no vem da ULTIMA parte do caminho, e uma pasta chamada "790" nao diz nada
+   * sozinha. A conexao nao precisa dele aqui porque tem nome escolhido por
+   * gente; a avulsa nao tem.
+   */
+  if (con.avulsa) {
+    cab.appendChild(elemento("span", "compl", paraExibir(con.dir)));
+  }
 
   if (!con.exists) {
     const aviso = elemento("span", "aviso", T("UI_FOLDER_NOT_FOUND"));
@@ -187,10 +312,13 @@ function linhaConexao(con) {
   // 190px por cima. Dois elementos diferentes nao podem dividir o nome.
   const menu = elemento("button", "acoes-conexao", "⋯");
   menu.type = "button";
-  menu.title = T("UI_CONNECTION_ACTIONS", { name: con.name });
+  menu.title = con.avulsa
+    ? T("UI_LOOSE_ACTIONS", { name: con.name })
+    : T("UI_CONNECTION_ACTIONS", { name: con.name });
   menu.setAttribute("aria-haspopup", "menu");
   menu.setAttribute("aria-expanded", "false");
-  menu.dataset.menuConexao = con.name;
+  if (con.avulsa) menu.dataset.menuAvulsa = "1";
+  else menu.dataset.menuConexao = con.name;
   cab.appendChild(menu);
 
   // O caminho fica no tooltip, nao fixo na arvore: ocupa uma linha por conexao
@@ -208,7 +336,7 @@ function linhaConexao(con) {
 }
 
 function listaArquivos(con) {
-  const arquivos = arquivosDe.get(con.name);
+  const arquivos = arquivosDa(con);
 
   if (arquivos === undefined) {
     return elemento("div", "carregando", T("UI_READING_FOLDER"));
@@ -232,7 +360,10 @@ function listaArquivos(con) {
     const li = elemento("li", "arquivo");
     li.tabIndex = 0;
     li.dataset.caminho = arq.path;
-    li.dataset.conexao = con.name;
+    // VAZIO na avulsa, e nao o nome do no: e o que faz o `file.open` cair em
+    // ModoDaPasta() na DLL em vez de procurar uma conexao que nao existe -- e
+    // e o que deixa a aba sem o sufixo "@nome", que so a conexao carrega.
+    li.dataset.conexao = con.avulsa ? "" : con.name;
     li.textContent = arq.name;
 
     // Metadados saem da arvore -- ela e uma lista de nomes. O detalhe vive no
@@ -252,31 +383,169 @@ function listaArquivos(con) {
   return ul;
 }
 
+/* QUEM ESTA COM O FOCO NA ARVORE, por identidade e nao por elemento -- o
+   elemento nao sobrevive a repintura. */
+function focoDaArvore() {
+  const el = document.activeElement;
+  if (!el || !el.closest || !el.closest("#arvore")) return null;
+  const arq = el.closest(".arquivo");
+  if (arq) return { arquivo: true, avulsa: false, chave: arq.dataset.caminho };
+  const cab = el.closest(".cab");
+  if (cab) {
+    return { arquivo: false, avulsa: !!cab.dataset.avulsa, chave: cab.dataset.conexao || "" };
+  }
+  return null;
+}
+
+function devolverFocoDaArvore(f) {
+  if (!f) return;
+  for (const el of document.querySelectorAll("#arvore " + (f.arquivo ? ".arquivo" : ".cab"))) {
+    const igual = f.arquivo
+      ? el.dataset.caminho === f.chave
+      : (!!el.dataset.avulsa === f.avulsa && (el.dataset.conexao || "") === f.chave);
+    if (igual) {
+      el.focus();
+      return;
+    }
+  }
+}
+
 function desenhar() {
   const arvore = $("arvore");
+
+  /*
+   * O FOCO E GUARDADO ANTES DE RECRIAR OS <li>, e devolvido no fim.
+   *
+   * Sem isto a navegacao por teclado da arvore morre no PRIMEIRO Enter:
+   * expandir repinta, o elemento focado deixa de existir, o foco cai no
+   * <body> -- e o segundo Enter nao chega a lugar nenhum. Quem usa o mouse
+   * nunca ve; quem depende do teclado nao passa de um no.
+   *
+   * E a mesma guarda que `desenharAbas()` ja fazia pela mesma razao, e a
+   * mesma licao do realce `.sel`: IDENTIDADE sobrevive a repintura, elemento
+   * nao.
+   */
+  const foco = focoDaArvore();
   arvore.textContent = "";
+
+  // Com busca ativa, o no aparece se o nome dele casar OU se algum arquivo ja
+  // carregado casar.
+  const passa = (con) => !filtro || combina(con.name) || casaAlgum(con);
+  const visiveis = conexoes.filter(passa);
+  const mostraAvulsa = !!avulsa && passa(avulsa);
+
+  /*
+   * OS CABECALHOS SO EXISTEM QUANDO HA PASTA AVULSA.
+   *
+   * Rotulo e consequencia, nao decoracao: ele aparece no instante em que duas
+   * naturezas passam a dividir o painel, e some quando volta a haver uma so.
+   * Sem avulsa a arvore e exatamente a de sempre, sem um pixel a mais --
+   * escrever "CONEXOES" sobre a unica coisa que existe ali nao informa nada e
+   * gasta uma linha de um painel de 320px.
+   */
+  if (mostraAvulsa) {
+    arvore.appendChild(elemento("p", "secao", T("UI_SECTION_LOOSE")));
+    const ua = elemento("ul", "conexoes");
+    ua.appendChild(linhaConexao(avulsa));
+    arvore.appendChild(ua);
+    arvore.appendChild(elemento("p", "secao", T("UI_CONNECTIONS")));
+  }
 
   if (!conexoes.length) {
     arvore.appendChild(elemento("p", "arvore-vazia", T("UI_NO_CONNECTIONS")));
+    devolverFocoDaArvore(foco);
     return;
   }
 
-  // Com busca ativa, a conexao aparece se o nome dela casar OU se algum
-  // arquivo ja carregado casar.
-  const visiveis = conexoes.filter((con) => {
-    if (!filtro) return true;
-    if (combina(con.name)) return true;
-    return casaAlgum(con);
-  });
-
   if (!visiveis.length) {
+    // Sem nada em nenhuma das duas secoes a frase e a de sempre; com a avulsa
+    // casando, ela ja esta desenhada acima e so as conexoes ficaram de fora.
     arvore.appendChild(elemento("p", "arvore-vazia", T("UI_NOTHING_MATCHES")));
+    devolverFocoDaArvore(foco);
     return;
   }
 
   const ul = elemento("ul", "conexoes");
   for (const con of visiveis) ul.appendChild(linhaConexao(con));
   arvore.appendChild(ul);
+  marcarSelecao();
+  devolverFocoDaArvore(foco);
+}
+
+// ------------------------------------------------------------ pasta avulsa
+
+/* Abre uma pasta sem cadastrar. Substitui a que estiver aberta; as abas que
+   sairam dela ficam, porque a aba e do ARQUIVO e nao do no que a originou. */
+async function abrirAvulsa(dir) {
+  if (!dir) return;
+
+  /*
+   * PASTA QUE JA E CONEXAO NAO VIRA AVULSA.
+   *
+   * Listar a mesma pasta duas vezes no mesmo painel seria a segunda verdade
+   * que esta secao existe para evitar -- e as duas copias divergiriam no
+   * primeiro arquivo criado, porque so uma seria relida.
+   */
+  const ja = conexaoDaPasta(dir);
+  if (ja) {
+    if (!expandidas.has(ja.name)) await abrirConexao(ja.name);
+    else desenhar();
+    hint(T("INFO_LOOSE_IS_CONNECTION", { name: ja.name }));
+    return;
+  }
+
+  largarSelecaoDaAvulsa();
+  avulsa = { name: nomeDaPasta(dir), dir: dir, exists: true, avulsa: true };
+  avulsaAberta = true;
+  avulsaArquivos = undefined;   // "lendo"
+  desenhar();
+  pintarCaminhoPainel();
+
+  try {
+    const r = await QDBU.rpc("workspace.files", { dir: dir });
+    // O `dir` QUE A DLL DEVOLVEU, e nao o que foi escolhido: e a forma
+    // normalizada, a mesma que o connections.json guarda. E por ela que a
+    // promocao a conexao e o refresh pos-criacao comparam pastas; guardar o
+    // texto cru faria as duas errarem por um separador ou uma barra final.
+    avulsa.dir = r.dir || dir;
+    avulsaArquivos = r.files;
+    desenhar();
+    agendarSalvar();
+  } catch (e) {
+    // Pasta que sumiu ganha o MESMO aviso da conexao com pasta sumida, em vez
+    // de uma linha muda: e o caso comum ao restaurar a sessao com um pendrive
+    // fora ou a rede caida.
+    if (avulsa) avulsa.exists = false;
+    // RECOLHE: pasta que nao se consegue ler nao tem o que expandir, e aberta
+    // ela imprimia a mesma noticia duas vezes -- o aviso vermelho na linha e
+    // "Nao foi possivel ler a pasta" logo abaixo. Uma noticia, um lugar.
+    avulsaAberta = false;
+    avulsaArquivos = null;
+    desenhar();
+    hint(msgErro(e));
+    agendarSalvar();
+  }
+}
+
+function fecharAvulsa() {
+  // Nao pergunta: fechar nao apaga nada -- nem cadastro, que ela nao tem, nem
+  // as abas, que continuam abertas.
+  largarSelecaoDaAvulsa();
+  avulsa = null;
+  avulsaArquivos = undefined;
+  desenhar();
+  pintarCaminhoPainel();
+  agendarSalvar();
+}
+
+/* A selecao pode estar num no que vai deixar de existir: sem isto o rodape
+   ficaria anunciando o caminho de algo que nao esta mais na arvore. */
+function largarSelecaoDaAvulsa() {
+  if (!avulsa || !selecaoArvore) return;
+  const dentro = selecaoArvore.tipo === "pasta"
+    ? mesmaPasta(selecaoArvore.caminho, avulsa.dir)
+    : mesmaPasta(pastaDoArquivo(selecaoArvore.caminho), avulsa.dir);
+  if (dentro) selecaoArvore = null;
 }
 
 // -------------------------------------------------------------------- dados
@@ -2940,6 +3209,7 @@ async function abrirConfig() {
     $("cfg-codepage").value = c.codepage || "PT850";
     $("cfg-deleted").checked = !!c.showDeleted;
     $("cfg-rotulos").checked = c.toolbarLabels !== false;
+    await preencherSelectTerminal($("cfg-terminal"), c.terminal || "");
     $("cfg-epoch").textContent = T("UI_EPOCH_INFO", { year: String(c.epoch) });
     // Cada idioma escrito NO PROPRIO idioma ("Espanol", nao "Espanhol"): quem
     // procura a propria lingua reconhece a palavra dela mesmo sem entender a
@@ -2995,7 +3265,11 @@ async function gravarConfig() {
       codepage: $("cfg-codepage").value,
       showDeleted: $("cfg-deleted").checked,
       toolbarLabels: $("cfg-rotulos").checked,
+      terminal: $("cfg-terminal").value,
     });
+    // A resposta e a fonte, e nao o que estava no combo: se o disco recusar,
+    // o que vale nesta sessao e o que a DLL diz que ficou.
+    terminalPreferido = r.terminal || "";
     $("dlg-config").close();
     // Vale JA, e nao so no proximo arranque: a resposta e a fonte, e nao o
     // que estava marcado na caixa -- se o disco recusar, a tela mostra o que
@@ -4923,6 +5197,10 @@ async function gravarExport() {
     const con = conexaoDoCaminho(r.path);
     if (con && arquivosDe.has(con.name)) {
       await abrirConexao(con.name);
+    } else if (avulsa && mesmaPasta(pastaDoArquivo(r.path), avulsa.dir)) {
+      // A pasta avulsa e um destino de exportacao como qualquer outro, e sem
+      // isto o arquivo recem-criado so apareceria ao trocar de pasta.
+      await abrirAvulsa(avulsa.dir);
     }
   } catch (e) {
     msgExport(msgErro(e), sevErro(e));
@@ -5085,6 +5363,17 @@ async function salvarSessao() {
     await QDBU.rpc("session.save", {
       panelWidth: Math.round($("painel").getBoundingClientRect().width),
       expanded: [...expandidas],
+      /*
+       * A PASTA AVULSA VOLTA NO PROXIMO ARRANQUE (decisao do autor,
+       * 08/09/2026). A regra anterior era nao restaurar; a sessao ja traz de
+       * volta as ABAS, e deixar de fora justamente a pasta que a pessoa estava
+       * percorrendo era incoerente com isso.
+       *
+       * Vai o CAMINHO, porque a avulsa nao tem nome proprio. Quem grava sao
+       * `abrirAvulsa`, `fecharAvulsa` e a promocao -- os tres pontos que a
+       * mudam. Caminho novo que mexa em `avulsa` precisa de `agendarSalvar()`.
+       */
+      looseFolder: (avulsa && avulsa.dir) || "",
       // caminho, nao handle: handle so existe na sessao viva
       // A selecao de colunas vai junto do ARQUIVO, nao solta: e por arquivo que
       // ela faz sentido, e assim some sozinha quando o arquivo sai da sessao.
@@ -5181,6 +5470,23 @@ async function restaurarSessao() {
     if (conexoes.some((c) => c.name === nome)) {
       await abrirConexao(nome);
     }
+  }
+
+  /*
+   * A PASTA AVULSA VOLTA -- depois das conexoes, e nao antes.
+   *
+   * `abrirAvulsa` precisa de `conexoes` preenchida para recusar a pasta que
+   * virou conexao entre uma sessao e outra. Aqui a checagem e feita fora dela
+   * de proposito: dentro, o caso responde expandindo a conexao e escrevendo
+   * na barra, e no arranque isso seria uma conexao abrindo sozinha e uma
+   * frase que ninguem pediu.
+   *
+   * A pasta pode ter sumido (pendrive fora, rede caida). `abrirAvulsa` trata:
+   * o no aparece marcado, e o "Fechar pasta" resolve. Melhor que sumir calado,
+   * que faria parecer que a sessao anterior nao foi gravada.
+   */
+  if (est.looseFolder && !conexaoDaPasta(est.looseFolder)) {
+    await abrirAvulsa(est.looseFolder);
   }
 
   const SEP = String.fromCharCode(92);
@@ -5343,7 +5649,7 @@ function larguraPainel(px) {
 // ------------------------------------------------------------------ eventos
 
 $("arvore").addEventListener("click", async (ev) => {
-  const abre = ev.target.closest("[data-menu-conexao]");
+  const abre = ev.target.closest("[data-menu-conexao], [data-menu-avulsa]");
   if (abre) {
     // Sem stopPropagation o clique tambem chega ao cabecalho e colapsa a
     // conexao cujo menu a pessoa acabou de abrir.
@@ -5353,7 +5659,17 @@ $("arvore").addEventListener("click", async (ev) => {
   }
 
   const cab = ev.target.closest(".cab");
+  // A avulsa antes: ela nao tem `dataset.conexao`, e `expandidas` e o que vai
+  // para o disco -- por a avulsa la a faria "voltar" no proximo arranque como
+  // um nome de conexao que nao existe.
+  if (cab && cab.dataset.avulsa) {
+    selecionarNaArvore("pasta", cab.dataset.dir);
+    avulsaAberta = !avulsaAberta;
+    desenhar();
+    return;
+  }
   if (cab) {
+    selecionarNaArvore("pasta", cab.dataset.dir);
     const nome = cab.dataset.conexao;
     if (expandidas.has(nome)) {
       expandidas.delete(nome);
@@ -5370,8 +5686,7 @@ $("arvore").addEventListener("click", async (ev) => {
   // arquivo errado.
   const arq = ev.target.closest(".arquivo");
   if (arq) {
-    document.querySelectorAll(".arquivo.sel").forEach((e) => e.classList.remove("sel"));
-    arq.classList.add("sel");
+    selecionarNaArvore("arquivo", arq.dataset.caminho);
     hint(paraExibir(arq.dataset.caminho) + "  ·  " + T("UI_DOUBLE_CLICK_TO_OPEN"));
   }
 });
@@ -5701,6 +6016,25 @@ $("form-abrir").addEventListener("submit", async (ev) => {
   await abrirArquivo(caminho, null, exclusivo, soLeitura);
 });
 
+/* A porta deliberada da pasta avulsa. O diálogo nativo do sistema, pela mesma
+   via de `#con-procurar`: so ele conhece unidades de rede, favoritos e
+   historico -- uma arvore de pastas propria nunca teria isso.
+
+   Trocar a pasta aberta NAO pergunta: clicar neste botao ja e a intencao. O
+   que pergunta -- melhor, o que recusa -- e o arrastar, que pode ser gesto
+   perdido. */
+$("btn-pasta-avulsa").addEventListener("click", async () => {
+  try {
+    const escolhido = await escolherNoSistema({
+      title: T("UI_PICK_LOOSE_FOLDER_TITLE"), multiple: false, directory: true,
+    });
+    if (!escolhido) return;
+    await abrirAvulsa(escolhido);
+  } catch (e) {
+    hint(msgErro(e));
+  }
+});
+
 $("btn-nova-conexao").addEventListener("click", () => {
   conEditando = null;
   $("con-dir").value = "";
@@ -5718,6 +6052,37 @@ $("btn-nova-conexao").addEventListener("click", () => {
   dlg.showModal();
   $("con-dir").focus();
 });
+
+/* PROMOVER a pasta avulsa a conexao.
+
+   Reusa o diálogo de sempre em vez de cadastrar direto, e de proposito: uma
+   conexao decide codepage e modo de abertura, e cadastrar sem perguntar
+   entregaria uma com os padroes de quem nunca foi consultado. Aqui a pasta ja
+   vem preenchida e o nome ja nasce LIVRE -- so falta confirmar.
+
+   Quem promove de fato e o `submit`, comparando a PASTA. Um sinalizador
+   ("estou promovendo") teria de ser limpo em cada saida do diálogo -- Esc,
+   Cancelar, recusa da DLL --, e o primeiro esquecido promoveria a avulsa por
+   causa de um cadastro que nada tem a ver com ela. */
+function cadastrarAvulsa() {
+  if (!avulsa) return;
+  conEditando = null;
+  $("con-dir").value = paraExibir(avulsa.dir);
+  $("con-nome").value = nomeLivreConexao(avulsa.name);
+  $("con-dir").disabled = false;
+  $("con-nome").disabled = false;
+  $("con-procurar").disabled = false;
+  preencherSelectCodepage($("con-codepage"), true);
+  $("con-codepage").value = "";
+  $("con-somente-leitura").checked = false;
+  $("con-exclusivo").checked = false;
+  $("con-erro").hidden = true;
+  $("dlg-conexao").querySelector("h2").textContent = T("UI_NEW_CONNECTION_TITLE");
+  $("form-conexao").querySelector("button[type=submit]").textContent = T("UI_ADD");
+  dlg.showModal();
+  $("con-nome").focus();
+  $("con-nome").select();
+}
 
 /* Editar as propriedades de uma conexao existente -- codepage e modo de
    abertura. Reusa o diálogo, com pasta e nome travados: o que muda depois é o
@@ -5806,8 +6171,36 @@ $("form-conexao").addEventListener("submit", async (ev) => {
       exclusive: $("con-exclusivo").checked,
     });
     dlg.close();
+
+    /*
+     * A PASTA CADASTRADA E A DA AVULSA? Entao foi promocao, e o no MUDA DE
+     * SECAO em vez de nascer uma copia embaixo. A comparacao e pela pasta
+     * porque e a pasta que define "a mesma coisa" -- o nome pode ter sido
+     * trocado no campo, e um sinalizador esqueceria de se limpar.
+     *
+     * A lista ja lida vai junto: nada e relido, e a expansao sobrevive. Sem
+     * isso a promocao piscaria "Lendo a pasta..." sobre arquivos que estao na
+     * tela ha um minuto.
+     */
+    const promovida = !!avulsa && mesmaPasta(avulsa.dir, r.connection.dir);
+    if (promovida) {
+      if (avulsaAberta) expandidas.add(r.connection.name);
+      if (Array.isArray(avulsaArquivos)) {
+        arquivosDe.set(r.connection.name, avulsaArquivos);
+      }
+      avulsa = null;
+      avulsaArquivos = undefined;
+    }
+
     await carregarConexoes();
-    await abrirConexao(r.connection.name);
+    // Ja tem os arquivos em maos quando veio da avulsa -- reler seria pedir a
+    // mesma pasta duas vezes a uma VM de uma thread so.
+    if (!promovida || !arquivosDe.has(r.connection.name)) {
+      await abrirConexao(r.connection.name);
+    } else {
+      desenhar();
+      agendarSalvar();
+    }
     hint(T("INFO_CONNECTION_ADDED", { name: r.connection.name }));
   } catch (e) {
     // Recusa de negocio traz o campo culpado -- da para destacar.
@@ -5871,6 +6264,10 @@ let identidade = null;
   try {
     const cfg = await QDBU.rpc("config.get", {});
     aplicarRotulosBarra(cfg.toolbarLabels !== false);
+    // Lido no arranque e nao a cada abertura de terminal: e uma preferencia,
+    // nao um estado, e uma ida a DLL por clique de menu seria uma espera que a
+    // pessoa sente num gesto que deveria ser instantaneo.
+    terminalPreferido = cfg.terminal || "";
   } catch (e) {
     /* sem a preferencia o padrao vale: com os nomes */
   }
@@ -5879,6 +6276,8 @@ let identidade = null;
   // Depois disso, restaura o que a sessao anterior tinha e ainda nao esta aberto.
   await repintarDoEstado();
   await restaurarSessao();
+  // Sem isto a faixa nasce vazia e parece defeito ate o primeiro clique.
+  pintarCaminhoPainel();
 
   // A linha de comando por ultimo, e de proposito: o arquivo pedido nela tem de
   // terminar como a aba ATIVA, e restaurarSessao() ativa a aba que estava aberta
@@ -6035,6 +6434,7 @@ QDBU.aoEvento("tauri://drag-drop", (ev) => {
  */
 async function soltarArquivos(caminhos) {
   const dbf = [];
+  const pastas = [];
 
   for (const p of caminhos) {
     const nome = paraExibir(p);
@@ -6047,15 +6447,28 @@ async function soltarArquivos(caminhos) {
 
     if (ext === "dbf") dbf.push(p);
     else if (ext === "vew") hint(T("ERROR_CLI_VEW_UNSUPPORTED", { file: nome }));
-    // Sem extensao quase sempre e pasta -- e pasta neste app nao e arquivo a
-    // abrir, e conexao a cadastrar. Dizer ONDE se faz isso vale mais que
-    // recusar sem mais.
-    else if (ext === "") hint(T("ERROR_DROP_NOT_A_FILE", { file: nome }));
+    // Sem extensao quase sempre e PASTA, e pasta agora tem para onde ir: a
+    // secao avulsa. Mas so quando ela esta VAZIA -- substituir o que a pessoa
+    // abriu por um arrasto que pode ter sido gesto perdido e o tipo de coisa
+    // que ninguem consegue desfazer, porque nao ha o que desfazer.
+    else if (ext === "") pastas.push(p);
     else hint(T("ERROR_DROP_NOT_A_DBF", { file: nome }));
   }
 
   for (const p of dbf) {
     await abrirArquivo(p, null);
+  }
+
+  /* Uma pasta, e a primeira: as outras nao cabem, porque a secao e de UMA.
+     `abrirAvulsa` recusa sozinha o que nao e pasta (ERROR_DIR_NOT_FOUND vindo
+     da DLL), entao o caminho sem extensao que NAO era pasta continua levando
+     uma frase, e nao um no vazio. */
+  if (pastas.length) {
+    if (avulsa) {
+      hint(T("ERROR_DROP_LOOSE_TAKEN", { name: avulsa.name }));
+    } else {
+      await abrirAvulsa(pastas[0]);
+    }
   }
 }
 
@@ -6096,6 +6509,7 @@ window.addEventListener("idioma-mudou", () => {
   // mesmo rodape, a um centimetro um do outro.
   rotuloAjustes();
   pintar("arvore", desenhar);
+  pintar("caminho do painel", pintarCaminhoPainel);
   pintar("abas", desenharAbas);
   pintar("conteudo", desenharConteudo);
   pintar("combo de ordem", desenharComboOrdem);
@@ -6146,7 +6560,7 @@ window.addEventListener("idioma-mudou", () => {
  * para talvez nunca abrirem. Este e criado uma vez, movido para junto do botao
  * que o chamou e preenchido na hora.
  */
-let menuAberto = null; // {nome, botao} ou null
+let menuAberto = null; // {nome, avulsa, botao} ou null
 
 function fecharMenuConexao() {
   const cx = $("menu-conexao");
@@ -6156,6 +6570,67 @@ function fecharMenuConexao() {
     menuAberto.botao.setAttribute("aria-expanded", "false");
   }
   menuAberto = null;
+}
+
+/* O terminal, para os DOIS menus -- conexao e avulsa.
+
+   O AVISO DE UNC E DADO E A ABERTURA SEGUE (decisao do autor, 08/09/2026).
+   O `cmd.exe` recusa um caminho `\servidor\share` como diretorio corrente e
+   abre em `C:\Windows` avisando por conta propria. Contornar isso exigiria
+   mapear uma unidade, que ninguem depois removeria; recusar seria pior ainda,
+   porque em unidade mapeada -- que e o caso comum aqui -- funciona. Entao a UI
+   diz o que vai acontecer e deixa a decisao com quem opera. */
+let terminalPreferido = "";   // id; vazio = o padrao do Rust (cmd)
+
+/*
+ * O combo de terminal: so o que EXISTE nesta maquina.
+ *
+ * Mesmo principio do seletor de codepage, que sai da DLL filtrado pelo que foi
+ * linkado -- oferecer o que nao existe e o app prometendo o que nao faz. Aqui
+ * a lista vem do Rust, que e quem abre o processo e portanto o unico que sabe
+ * se o executavel esta la.
+ *
+ * O rotulo e do dicionario (`UI_TERM_<ID>`), chave montada em runtime e
+ * declarada em IMPLICITAS do auditor. Um id que a UI ainda nao traduza aparece
+ * com o proprio id em vez de sumir -- some seria pior, porque a pessoa perderia
+ * um terminal que a maquina tem.
+ */
+async function preencherSelectTerminal(sel, escolhido) {
+  sel.textContent = "";
+  let ids = [];
+  try {
+    ids = await QDBU.terminais();
+  } catch (e) {
+    ids = [];
+  }
+  // Sem nenhum (nem o cmd?), o combo some em vez de ficar vazio prometendo.
+  sel.parentElement.hidden = !ids.length;
+  for (const id of ids) {
+    // O `en` e o dicionario sem buracos (ver o guia), entao ele e o teste de
+    // "a UI conhece esta chave" -- nao o idioma ativo, que pode estar atrasado.
+    const chave = "UI_TERM_" + id.toUpperCase();
+    const conhecida = !!(window.I18N && window.I18N.en && window.I18N.en[chave]);
+    const rotulo = conhecida ? T(chave) : id;
+    sel.appendChild(new Option(rotulo, id));
+  }
+  // Escolha que nao esta mais na maquina (desinstalaram o pwsh) volta ao
+  // primeiro, que e o cmd -- e o mesmo que o Rust faria na hora de abrir.
+  sel.value = ids.indexOf(escolhido) >= 0 ? escolhido : (ids[0] || "");
+}
+
+function abrirTerminalNaPasta(dir) {
+  /* O AVISO DE UNC E SO DO `cmd`. O PowerShell tem provider de rede e abre num
+     caminho UNC sem reclamar; avisar ali seria o app anunciando um problema
+     que ele nao tem. O `wt` recebe a pasta em `-d` e repassa ao shell
+     escolhido, entao quem decide e aquele -- e sobre esse nao ha o que
+     prometer. */
+  const unc = String(dir || "").startsWith(String.fromCharCode(92, 92));
+  if (unc && (terminalPreferido === "" || terminalPreferido === "cmd")) {
+    hint(T("WARN_TERMINAL_UNC", { dir: paraExibir(dir) }));
+  }
+  QDBU.abrirTerminal(dir, terminalPreferido).catch((e) =>
+    hint(T("ERROR_OPEN_TERMINAL_FAILED", { detail: msgErro(e) }))
+  );
 }
 
 function itemMenu(cx, icone, chave, acao, classe) {
@@ -6175,14 +6650,54 @@ function itemMenu(cx, icone, chave, acao, classe) {
 }
 
 function menuConexao(botao) {
-  const nome = botao.dataset.menuConexao;
+  // A avulsa usa a MESMA maquina de menu -- posicionamento, fechar ao clicar
+  // fora, foco. Ter um segundo menu flutuante para tres itens seria a segunda
+  // copia que envelhece separado.
+  const ehAvulsa = !!botao.dataset.menuAvulsa;
+  // A avulsa nao tem nome de conexao. Um nome magico com NUL a
+  // identificaria, mas esconderia num literal o que um campo diz em voz alta
+  // -- e um dia alguem compararia so o nome e o menu da avulsa fecharia o de
+  // uma conexao.
+  const nome = ehAvulsa ? "" : botao.dataset.menuConexao;
 
   // Clicar de novo no mesmo botao fecha -- e o que se espera de um menu.
-  if (menuAberto && menuAberto.nome === nome) {
+  if (menuAberto && menuAberto.avulsa === ehAvulsa && menuAberto.nome === nome) {
     fecharMenuConexao();
     return;
   }
   fecharMenuConexao();
+
+  if (ehAvulsa) {
+    if (!avulsa) return;
+    const cx = $("menu-conexao");
+    cx.textContent = "";
+
+    const cab = elemento("div", "mc-cab", avulsa.name);
+    cab.title = paraExibir(avulsa.dir);
+    cx.appendChild(cab);
+
+    /* CADASTRAR e o primeiro: e o gesto de quem descobriu que vai voltar ali,
+       e o unico dos tres que muda alguma coisa de forma duradoura. */
+    itemMenu(cx, "⚑", "UI_MENU_LOOSE_REGISTER", () => cadastrarAvulsa());
+
+    itemMenu(cx, "🗀", "UI_MENU_OPEN_FOLDER", () => {
+      QDBU.abrirPasta(avulsa.dir).catch((e) =>
+        hint(T("ERROR_OPEN_FOLDER_FAILED", { detail: msgErro(e) }))
+      );
+    });
+    itemMenu(cx, ">_", "UI_MENU_OPEN_TERMINAL", () => abrirTerminalNaPasta(avulsa.dir));
+
+    cx.appendChild(elemento("div", "mc-linha"));
+
+    /* Fechar NAO leva a classe `risco`, que e do que apaga cadastro. Aqui nao
+       ha cadastro para apagar e as abas ficam abertas: pintar de vermelho o
+       gesto mais inocente do menu ensinaria a temer o botao errado. */
+    itemMenu(cx, "×", "UI_MENU_LOOSE_CLOSE", () => fecharAvulsa());
+
+    posicionarMenu(cx, botao);
+    menuAberto = { nome: nome, avulsa: true, botao: botao };
+    return;
+  }
 
   const con = conexoes.find((c) => c.name === nome);
   if (!con) return;
@@ -6198,12 +6713,16 @@ function menuConexao(botao) {
 
   // Abrir no Explorer some quando a pasta nao existe: abrir um caminho morto
   // leva o Explorer para a pasta do usuario, que engana mais que nao abrir.
+  // Os dois somem quando a pasta nao existe, pelo mesmo motivo: mandar o
+  // Explorer -- ou o cmd -- para um caminho morto leva a pessoa para a pasta
+  // do usuario, o que engana mais que nao abrir.
   if (con.exists) {
     itemMenu(cx, "🗀", "UI_MENU_OPEN_FOLDER", () => {
       QDBU.abrirPasta(con.dir).catch((e) =>
         hint(T("ERROR_OPEN_FOLDER_FAILED", { detail: msgErro(e) }))
       );
     });
+    itemMenu(cx, ">_", "UI_MENU_OPEN_TERMINAL", () => abrirTerminalNaPasta(con.dir));
   }
 
   itemMenu(cx, "⟳", "UI_MENU_RELOAD", async () => {
@@ -6235,6 +6754,11 @@ function menuConexao(botao) {
   itemMenu(cx, "\u2691", "UI_MENU_CONNECTION_EDIT", () => editarConexao(nome));
   itemMenu(cx, "×", "UI_MENU_REMOVE", () => removerConexao(nome), "risco");
 
+  posicionarMenu(cx, botao);
+  menuAberto = { nome: nome, avulsa: false, botao: botao };
+}
+
+function posicionarMenu(cx, botao) {
   // Posiciona so depois de preenchido -- antes disso a altura nao existe.
   cx.hidden = false;
   const r = botao.getBoundingClientRect();
@@ -6256,7 +6780,6 @@ function menuConexao(botao) {
     (r.bottom + alt + 6 > window.innerHeight ? r.top - alt - 4 : r.bottom + 4) + "px";
 
   botao.setAttribute("aria-expanded", "true");
-  menuAberto = { nome: nome, botao: botao };
 }
 
 // Fechar: clique fora, Esc, e rolagem da arvore -- o menu e posicionado em

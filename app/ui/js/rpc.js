@@ -58,6 +58,18 @@ async function abrirPasta(caminho) {
   return invoke("abrir_pasta", { caminho: caminho });
 }
 
+/** Abre um cmd.exe com a pasta como diretorio corrente. Mesma razao do
+    `abrirPasta`: e o sistema operacional, nao o Harbour. */
+async function abrirTerminal(caminho, perfil) {
+  return invoke("abrir_terminal", { caminho: caminho, perfil: perfil || null });
+}
+
+/** Os ids de terminal que EXISTEM nesta maquina. A lista de verdade e do Rust
+    (`TERMINAIS`), que e quem abre o processo; a UI so oferece o que voltar. */
+async function terminais() {
+  return invoke("terminais", {});
+}
+
 /** Chamada crua `funcao(argumento) -> string`. Sem envelope. */
 async function chamar(func, arg) {
   const r = await invoke("executar", { func: func, arg: arg || "" });
@@ -174,6 +186,6 @@ async function iaPrompt() {
 let ultimaRev = 0;
 const rev = () => ultimaRev;
 
-window.QDBU = { status, chamar, rpc, rev, abrirPasta, aoEvento, confirmarSaida, saidaPerguntada,
+window.QDBU = { status, chamar, rpc, rev, abrirPasta, abrirTerminal, terminais, aoEvento, confirmarSaida, saidaPerguntada,
                 iaStatus, iaConfigurar, iaSugerir, iaHistorico, iaPrompt, ErroQDbu };
 })();

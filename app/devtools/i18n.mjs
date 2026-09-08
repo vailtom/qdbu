@@ -45,6 +45,9 @@ const chaves = new Set(Object.keys(DIC[REF]));
 
 /** Chaves montadas em tempo de execucao; procurar pelo nome inteiro nao acha. */
 const IMPLICITAS = [
+  // Terminal: o rotulo e montado como `"UI_TERM_" + id.toUpperCase()`, e os
+  // ids vem do Rust (`TERMINAIS` em main.rs), nao do JS.
+  /^UI_TERM_[A-Z0-9]+$/,
   // Pré-voo: o app monta `"UI_" + c.id`, `"UI_" + c.id + "_MSG"` e
   // `"UI_ROLE_" + role` a partir do que a DLL devolve em backup.check.
   /^UI_CHECK_[A-Z_]+$/,

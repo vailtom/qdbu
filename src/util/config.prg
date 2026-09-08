@@ -126,6 +126,28 @@ FUNCTION RotulosNaBarra()
 
    RETURN .T.
 
+/*
+ * O terminal preferido -- um ID, nunca um caminho de executavel.
+ *
+ * Quem conhece a lista e o Rust (`TERMINAIS` em main.rs), que e quem abre o
+ * processo; aqui isto e so um texto guardado, como `toolbarLabels`. Vazio
+ * quando nada foi escolhido, e o Rust cai no padrao dele.
+ *
+ * NAO se valida a lista aqui de proposito: a DLL nao sabe quais terminais
+ * existem na maquina, e um `IF` com os nomes copiados viveria desatualizado em
+ * relacao ao unico lugar que os usa. Id desconhecido cai no padrao la, que e
+ * onde a decisao pode ser tomada com informacao.
+ */
+FUNCTION TerminalPreferido()
+
+   LOCAL h := ConfigGlobal()
+
+   IF hb_HHasKey( h, "terminal" ) .AND. HB_ISSTRING( h[ "terminal" ] )
+      RETURN h[ "terminal" ]
+   ENDIF
+
+   RETURN ""
+
 /* ========================================================== nivel CONEXAO */
 
 /* Codepage cadastrado na conexao `cConn`, ou "" se nao ha (ou nome nao existe).
