@@ -1997,11 +1997,57 @@ body.arrastando-aba .aba { cursor: grabbing; }
 }
 #dlg-estrutura .estrutura td.nome-com-aviso input { width: calc(100% - 22px); }
 
-/* SweetAlert ancorado num <dialog> (ver `swalAlvo()`): o container vira
-   `position:absolute` dentro do alvo, então precisa cobrir o diálogo inteiro
-   para o fundo escurecido não sair pela metade. */
+/*
+ * SweetAlert ancorado num <dialog> (ver `swalAlvo()`): cobre a TELA, não o
+ * diálogo.
+ *
+ * Ele PRECISA viver dentro do alvo — a top layer deixa tudo fora dela inerte,
+ * e um container no `<body>` teria os cliques interceptados pelo diálogo. Mas
+ * com um alvo que não é o `<body>` o SweetAlert posiciona o container em
+ * `absolute`, e aí ele adota o retângulo do diálogo: o escurecimento cobre só
+ * aquele pedaço e a pergunta nasce centralizada NELE, por cima dos campos, com
+ * o resto da tela intacto ao redor. Metade escurecida, metade não.
+ *
+ * Não aparecia enquanto os diálogos eram grandes (estrutura, em massa) e o
+ * popup sobrava pouco espaço para flutuar. Com Preferências limitado a 680 px
+ * ficou evidente, e foi assim que o autor o viu.
+ *
+ * `fixed` resolve as duas coisas de uma vez: o elemento continua DENTRO do
+ * diálogo, e portanto clicável na top layer, mas se posiciona pelo viewport —
+ * escurecimento de tela cheia e pergunta no centro da JANELA, que é como todo
+ * o resto do app já se comporta.
+ *
+ * Cuidado ao mexer: `fixed` passa a ser relativo a um ancestral que tenha
+ * `transform`, `filter` ou `perspective`. Nenhum `<dialog>` daqui tem; se um
+ * ganhar, esta regra volta a medir o diálogo sem avisar.
+ */
 dialog > .swal2-container {
-  position: absolute; inset: 0; width: auto; height: auto;
+  position: fixed; inset: 0; width: auto; height: auto;
+}
+
+/*
+ * E as regras de CAMPO do diálogo não valem para os controles do SweetAlert.
+ *
+ * Vivendo dentro do `<dialog>`, o `<select>` do SweetAlert era alcançado por
+ * `dialog select { width: 100% }` — escrita para os campos do formulário de
+ * conexão. O SweetAlert já dá margem lateral própria aos seus controles, e
+ * `100%` não desconta margem: o select ficava 414 px dentro de um popup de
+ * 416 e, somada a margem de 29 px, VAZAVA 28 px para fora da caixa. Medido no
+ * seletor de modelo, com o DOM inteiramente correto.
+ *
+ * É a mesma família do `dialog input { display:block; width:100% }` que
+ * quebrava checkbox: regra de campo escapando para o que não é campo daquele
+ * formulário.
+ *
+ * `align-self: stretch` num contêiner flex preenche a largura disponível JÁ
+ * descontando as margens — que é o que `width: 100%` não faz e nenhum `calc`
+ * com a margem do SweetAlert dentro sobreviveria a uma atualização dele.
+ */
+dialog .swal2-popup select,
+dialog .swal2-popup input,
+dialog .swal2-popup textarea {
+  width: auto;
+  align-self: stretch;
 }
 
 /* ------------------------------------------------ T13: operações em massa */
