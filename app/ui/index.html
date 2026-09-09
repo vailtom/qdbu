@@ -1252,24 +1252,47 @@
     </label>
     <p class="explica" id="cfg-epoch"></p>
 
-    <!-- IA do construtor de expressao. Endpoint editavel porque o formato de
-         chat completions e o que praticamente todo servico aceita -- OpenAI,
-         Ollama local, um proxy da empresa. Chave em campo de senha, nunca
-         reexibida: vazio e "nao mexi", "-" apaga. Sem chave, o botao da IA
-         nao existe no construtor -- nao aparece desabilitado, nao promete. -->
+    <!-- IA do construtor de expressao.
+
+         A ORDEM E A DA CONFIGURACAO, e nao a da estrutura de dados: chave,
+         modelo, endereco. Quem chega tem uma chave na mao; o modelo ja vem
+         preenchido e so se troca por escolha; o endereco quase ninguem toca --
+         ele existe para quem aponta para um Ollama local ou um proxy da
+         empresa, que e minoria. Comecar pelo endereco fazia a tela abrir com o
+         campo mais tecnico e menos usado no topo.
+
+         A CHAVE NUNCA VOLTA A PAGINA. O campo e de senha e nasce VAZIO: vazio
+         significa "nao mexi", "-" apaga. Mascarar um valor presente no DOM
+         seria teatro -- o inspetor troca `password` por `text` e le. O que a
+         tela mostra e a marca (`sk-...abcd`) que o RUST monta; a chave em si
+         nao atravessa o IPC na volta.
+
+         Sem chave, o botao da IA nao existe no construtor -- nao aparece
+         desabilitado, nao promete. -->
     <fieldset class="cfg-ia">
       <legend data-i18n="UI_IA_SECTION"></legend>
       <label>
-        <span data-i18n="UI_IA_ENDPOINT"></span>
-        <input id="cfg-ia-endpoint" spellcheck="false" autocomplete="off">
+        <!-- A marca vai na PONTA DIREITA da linha do rotulo, e nao colada
+             nele: encostada, "Chave da API sk-...s-MA" le como uma frase so.
+             Na ponta ela se anuncia como o que e -- um dado sobre o campo,
+             alinhado com a borda do proprio campo, logo abaixo. -->
+        <span class="cfg-rotulo">
+          <span data-i18n="UI_IA_KEY"></span>
+          <span class="opcional" id="cfg-ia-chave-estado"></span>
+        </span>
+        <input id="cfg-ia-chave" type="password" autocomplete="off" data-i18n-ph="UI_IA_KEY_PH">
       </label>
       <label>
         <span data-i18n="UI_IA_MODEL"></span>
-        <input id="cfg-ia-modelo" spellcheck="false" autocomplete="off">
+        <span class="cfg-linha">
+          <input id="cfg-ia-modelo" spellcheck="false" autocomplete="off">
+          <button type="button" id="cfg-ia-listar" class="ghost" data-i18n="UI_IA_LIST"
+                  data-i18n-title="UI_IA_LIST_TITLE"></button>
+        </span>
       </label>
       <label>
-        <span data-i18n="UI_IA_KEY"></span> <span class="opcional" id="cfg-ia-chave-estado"></span>
-        <input id="cfg-ia-chave" type="password" autocomplete="off" data-i18n-ph="UI_IA_KEY_PH">
+        <span data-i18n="UI_IA_ENDPOINT"></span>
+        <input id="cfg-ia-endpoint" spellcheck="false" autocomplete="off">
       </label>
       <p class="explica" data-i18n="UI_IA_EXPLAIN"></p>
     </fieldset>

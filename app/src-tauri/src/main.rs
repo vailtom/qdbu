@@ -649,6 +649,33 @@ async fn ia_configurar(endpoint: String, modelo: String, chave: String, aviso_li
     Ok(ia::StatusIa::from(&cfg))
 }
 
+/// Os modelos que o servico oferece, para a pessoa escolher em vez de digitar.
+///
+/// `chave` e a que esta na TELA, ainda nao gravada -- sem isso, configurar do
+/// zero seria: digitar a chave, gravar, reabrir Preferencias, listar. A tela
+/// tem o dado mais novo; o disco so responde quando ela nao tem (campo vazio
+/// significa "nao mexi", a mesma convencao do `ia_configurar`).
+///
+/// O endpoint tambem vem da tela pela mesma razao: quem esta apontando para um
+/// Ollama acabou de digitar o endereco dele.
+#[tauri::command]
+async fn ia_modelos(endpoint: String, chave: String) -> Result<Vec<String>, String> {
+    let mut cfg = ia::tentar_ler(base_config())?.unwrap_or_default();
+    if !endpoint.trim().is_empty() {
+        cfg.endpoint = endpoint.trim().to_string();
+    }
+    if !chave.trim().is_empty() && chave.trim() != "-" {
+        cfg.chave = chave.trim().to_string();
+    }
+    let r = ia::modelos(&cfg).await;
+    // A CONTAGEM entra no log, os NOMES nao precisam e a chave nunca.
+    match &r {
+        Ok(v) => log(&format!("[ia] {} modelo(s) listado(s)", v.len())),
+        Err(e) => log(&format!("[ia] listar modelos falhou: {e}")),
+    }
+    r
+}
+
 /// Pede uma expressao. `sistema` e o prompt (o .md com os dados ja
 /// preenchidos pela UI); `pedido` e o que a pessoa escreveu. Devolve a
 /// expressao extraida, ou o motivo -- e a UI decide o que fazer com ela.
@@ -3127,6 +3154,54 @@ fn selftest() -> i32 {
         &titulo_janela(),
     );
 
+    /*
+     * A MARCA DA CHAVE -- o que a tela pode mostrar sem entregar a chave.
+     *
+     * Duas propriedades, e as duas sao de seguranca: a marca nunca pode CONTER
+     * a chave, e uma chave curta nao pode ter as pontas expostas, porque nela
+     * as pontas sao quase tudo. A terceira e de utilidade: chaves diferentes
+     * tem de produzir marcas diferentes, senao ela nao serve para reconhecer
+     * qual esta gravada, que e a unica razao de existir.
+     */
+    let longa = "sk-proj-AbCdEfGhIjKlMnOpQrStUvWx";
+    let marca = ia::marca_da_chave(longa);
+    t.ok(
+        "IA: a marca mostra 3+4 caracteres, nunca a chave, e some com a chave vazia",
+        marca == "sk-\u{2026}UvWx"
+            && !longa.contains(&marca)
+            && ia::marca_da_chave("").is_empty()
+            && ia::marca_da_chave("   ").is_empty()
+            // Curta: nenhuma ponta a mostrar -- so o comprimento fixo de
+            // bolinhas, que nao diz nem o tamanho da chave.
+            && ia::marca_da_chave("sk-123") == "\u{2022}".repeat(8)
+            && ia::marca_da_chave("abcdefghijkl") == "abc\u{2026}ijkl"
+            // Duas chaves do mesmo servico continuam distinguiveis.
+            && ia::marca_da_chave("sk-proj-AAAAAAAAAAAAAAAA")
+                != ia::marca_da_chave("sk-proj-BBBBBBBBBBBBBBBB"),
+        &format!("marca={marca:?}"),
+    );
+
+    /*
+     * A URL DE LISTAGEM sai da de conversa, e nao de um segundo campo.
+     *
+     * Quem serve `.../v1/chat/completions` serve `.../v1/models` ao lado. Um
+     * campo proprio seria mais um endereco para a pessoa manter em dia -- e
+     * mais uma chance de os dois discordarem em silencio.
+     */
+    t.ok(
+        "IA: a URL dos modelos e derivada da de conversa, e o padrao vale para o endpoint vazio",
+        ia::url_dos_modelos("https://api.openai.com/v1/chat/completions")
+            == "https://api.openai.com/v1/models"
+            && ia::url_dos_modelos("") == "https://api.openai.com/v1/models"
+            && ia::url_dos_modelos("   ") == "https://api.openai.com/v1/models"
+            && ia::url_dos_modelos("http://localhost:11434/v1/chat/completions")
+                == "http://localhost:11434/v1/models"
+            // Fora do sufixo conhecido, troca o ultimo segmento.
+            && ia::url_dos_modelos("https://proxy.local/api/completions")
+                == "https://proxy.local/api/models",
+        &ia::url_dos_modelos("https://api.openai.com/v1/chat/completions"),
+    );
+
     t.resumo()
 }
 
@@ -3899,7 +3974,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             status, executar, rpc, andamento, cancelar, abrir_pasta, abrir_terminal, terminais, confirmar_saida,
-            ia_status, ia_configurar, ia_sugerir, ia_historico, ia_prompt, saida_perguntada
+            ia_status, ia_configurar, ia_modelos, ia_sugerir, ia_historico, ia_prompt,
+            saida_perguntada
         ])
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o app Tauri");

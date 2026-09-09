@@ -2455,6 +2455,28 @@ dialog select:focus { outline: none; border-color: var(--amber); }
 .cfg-ia { margin: 14px 0 0; padding: 10px 12px 4px; border: 1px solid var(--line); border-radius: 6px; }
 .cfg-ia legend { padding: 0 6px; color: var(--dim); font-size: 12px; }
 .cfg-ia label { margin-bottom: 8px; }
+
+/* A MARCA DA CHAVE em mono: ela e um pedaco de identificador, e o rotulo ao
+   lado ("Chave da API") e prosa. Na fonte do texto, `sk-...dXyZ` parece uma
+   palavra mal escrita; em mono parece o que e. */
+dialog .opcional.marca {
+  font-family: var(--mono);
+  color: var(--dim);
+  /* Nao selecionavel: nao ha o que copiar daqui -- sao sete caracteres --, e
+     tentar copiar e sair com um pedaco da chave e pior que nao poder. */
+  user-select: none;
+}
+
+/* Campo + botao na mesma linha. A regra `dialog input { display:block;
+   width:100% }` vale para os campos de texto do diálogo; aqui o input divide a
+   linha com o botao, entao o flex e quem manda -- e `min-width: 0` e
+   obrigatorio, senao o input adota a largura do conteudo como minimo e empurra
+   o botao para fora, a mesma armadilha da faixa de abas. */
+.cfg-rotulo { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+
+.cfg-linha { display: flex; gap: 6px; align-items: stretch; }
+.cfg-linha input { min-width: 0; flex: 1; }
+.cfg-linha button { flex: none; padding: 4px 10px; white-space: nowrap; }
 #dlg-ia-aviso { width: min(560px, 92vw); }
 #dlg-ia-aviso p { font-size: 13px; line-height: 1.5; }
 /* "Não mostrar mais" à esquerda, na linha dos botões. As duas regras de

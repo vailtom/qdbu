@@ -104,12 +104,70 @@ pub fn prompt_do_cliente(base: PathBuf) -> String {
     std::fs::read_to_string(arq).unwrap_or_default()
 }
 
-/// O que o webview pode saber: tudo MENOS a chave. `chave_ok` diz se ha uma.
+/// A chave como ela pode ser MOSTRADA: as tres primeiras e as quatro ultimas.
+///
+/// A pessoa precisa reconhecer QUAL chave esta gravada -- ela pode ter duas
+/// contas, ou ter trocado a chave e nao lembrar se chegou a gravar. Um
+/// "(definida)" responde se existe e nao responde qual, e "qual" e exatamente
+/// a pergunta que se faz quando o servico comeca a recusar.
+///
+/// Sete caracteres nao reconstroem uma chave, e os tres primeiros costumam ser
+/// o prefixo do servico (`sk-`), que nao e segredo de ninguem. Mas a conta so
+/// fecha em chave LONGA: numa curta as pontas seriam quase a chave inteira,
+/// entao abaixo de doze caracteres nao se mostra ponta nenhuma.
+///
+/// Conta em CARACTERES e nao em bytes. Chave de API e ASCII na pratica, mas
+/// isto recebe o que a pessoa colou -- e cortar por byte no meio de um
+/// caractere, em Rust, nao produz texto torto: produz panic.
+pub fn marca_da_chave(chave: &str) -> String {
+    let c = chave.trim();
+    if c.is_empty() {
+        return String::new();
+    }
+    let n = c.chars().count();
+    if n < 12 {
+        return "\u{2022}".repeat(8);
+    }
+    let ini: String = c.chars().take(3).collect();
+    let fim: String = c.chars().skip(n - 4).collect();
+    format!("{ini}\u{2026}{fim}")
+}
+
+/// Tira a chave de um texto que vai para a TELA ou para o LOG.
+///
+/// A mensagem de erro do servico e a unica pista util quando algo falha, e por
+/// isso ela e repassada inteira -- mas ela e escrita POR ELE, com o que ele
+/// quiser dentro. A OpenAI devolve `Incorrect API key provided: sk-chave****`,
+/// ja mascarada; nada obriga um Ollama, um proxy da empresa ou um servico novo
+/// a fazer o mesmo, e o texto seguiria para a barra de status e para
+/// `.run/qdbu.log`, que fica no disco.
+///
+/// Escrever a chave num arquivo de log e pior que mostra-la na tela: a tela
+/// alguem fecha. Entao toda saida de erro daqui passa por isto, e nao so a que
+/// hoje parece perigosa -- e o mesmo raciocinio do funil do dispatcher, onde a
+/// regra vale por passar todo mundo pelo mesmo ponto.
+///
+/// Troca pela marca, e nao por `***`: quem le o erro continua sabendo QUAL
+/// chave o servico recusou.
+pub fn sem_chave(texto: &str, chave: &str) -> String {
+    let c = chave.trim();
+    // Curta demais para ser chave de verdade: trocar pedacos de oito
+    // caracteres em qualquer texto acertaria palavra comum.
+    if c.chars().count() < 12 {
+        return texto.to_string();
+    }
+    texto.replace(c, &marca_da_chave(c))
+}
+
+/// O que o webview pode saber: tudo MENOS a chave. `chave_ok` diz se ha uma,
+/// `chave_marca` diz QUAL -- sem entregar a chave.
 #[derive(Serialize)]
 pub struct StatusIa {
     pub endpoint: String,
     pub modelo: String,
     pub chave_ok: bool,
+    /// Vazia quando nao ha chave. Ver `marca_da_chave`.
+    pub chave_marca: String,
     pub aviso_lido: bool,
     /// Vazio quando esta tudo bem. Preenchido quando o `ia.json` existe e nao
     /// da para ler -- a UI precisa dizer isso, senao "(nao configurada)" e uma
@@ -123,6 +181,7 @@ impl From<&ConfigIa> for StatusIa {
             endpoint: if c.endpoint.is_empty() { ENDPOINT_PADRAO.into() } else { c.endpoint.clone() },
             modelo: if c.modelo.is_empty() { MODELO_PADRAO.into() } else { c.modelo.clone() },
             chave_ok: !c.chave.trim().is_empty(),
+            chave_marca: marca_da_chave(&c.chave),
             aviso_lido: c.aviso_lido,
             problema: String::new(),
         }
@@ -184,6 +243,11 @@ struct Conteudo {
 /// Manda `sistema` + `usuario` ao endpoint e devolve o texto da resposta.
 /// Nao interpreta: quem extrai a expressao do JSON e o chamador.
 pub async fn perguntar(cfg: &ConfigIa, sistema: &str, usuario: &str) -> Result<RespostaIa, String> {
+    // Ver `modelos`: a chave nao sai daqui dentro de uma mensagem de erro.
+    perguntar_(cfg, sistema, usuario).await.map_err(|e| sem_chave(&e, &cfg.chave))
+}
+
+async fn perguntar_(cfg: &ConfigIa, sistema: &str, usuario: &str) -> Result<RespostaIa, String> {
     if cfg.chave.trim().is_empty() {
         return Err("sem chave".into());
     }
@@ -238,6 +302,100 @@ pub async fn perguntar(cfg: &ConfigIa, sistema: &str, usuario: &str) -> Result<R
         .map(|c| c.message.content)
         .ok_or_else(|| "resposta sem conteudo".to_string())?;
     Ok(RespostaIa { texto: conteudo, tok_in: u.prompt_tokens, tok_out: u.completion_tokens })
+}
+
+/// A URL de listagem, derivada da de conversa.
+///
+/// O contrato de `chat completions` e um par: quem serve
+/// `.../v1/chat/completions` serve `.../v1/models` ao lado -- OpenAI, Ollama,
+/// e os proxies que imitam os dois. Por isso a UI nao tem um segundo campo:
+/// mais um endereco para a pessoa manter em dia seria mais uma chance de os
+/// dois discordarem, e ela ja tem de acertar o primeiro.
+///
+/// Fora do sufixo conhecido, troca o ultimo segmento -- que cobre variantes
+/// como `/completions` sem o `/chat`. Errando, o erro e da chamada e aparece
+/// na tela; o campo Modelo continua livre, porque a lista e ajuda e nao
+/// obrigacao.
+pub fn url_dos_modelos(endpoint: &str) -> String {
+    let e = endpoint.trim();
+    let e = if e.is_empty() { ENDPOINT_PADRAO } else { e };
+    if let Some(base) = e.strip_suffix("/chat/completions") {
+        return format!("{base}/models");
+    }
+    match e.rfind('/') {
+        Some(i) if i > 0 => format!("{}/models", &e[..i]),
+        _ => format!("{e}/models"),
+    }
+}
+
+#[derive(Deserialize)]
+struct ListaModelos {
+    #[serde(default)]
+    data: Vec<ItemModelo>,
+}
+
+#[derive(Deserialize)]
+struct ItemModelo {
+    #[serde(default)]
+    id: String,
+}
+
+/// Os modelos que o endpoint oferece, em ordem alfabetica.
+///
+/// SEM FILTRO, de proposito. A tentacao e esconder o que "nao serve" para uma
+/// expressao -- transcricao, imagem, embeddings --, e nao ha como saber isso
+/// pelo id com seguranca: um filtro por palavra esconderia o modelo novo que a
+/// pessoa acabou de contratar, e um modelo que nao aparece na lista e
+/// indistinguivel de um modelo que nao existe. A lista mostra o que o servico
+/// respondeu; escolher e de quem esta na frente.
+pub async fn modelos(cfg: &ConfigIa) -> Result<Vec<String>, String> {
+    // A higiene fica no INVOLUCRO e nao espalhada nos `return Err`: assim
+    // nenhum caminho de erro novo nasce vazando.
+    modelos_(cfg).await.map_err(|e| sem_chave(&e, &cfg.chave))
+}
+
+async fn modelos_(cfg: &ConfigIa) -> Result<Vec<String>, String> {
+    if cfg.chave.trim().is_empty() {
+        return Err("sem chave".into());
+    }
+    let url = url_dos_modelos(&cfg.endpoint);
+
+    let cliente = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("cliente http: {e}"))?;
+
+    let r = cliente
+        .get(&url)
+        .bearer_auth(cfg.chave.trim())
+        .send()
+        .await
+        .map_err(|e| format!("nao foi possivel falar com {url}: {e}"))?;
+
+    let status = r.status();
+    let texto = r.text().await.map_err(|e| format!("lendo a resposta: {e}"))?;
+    if !status.is_success() {
+        // Mesma extracao do `perguntar`: a frase do servico e a unica pista
+        // util ("invalid api key"), e o corpo cru so quando nao ha frase.
+        let frase = serde_json::from_str::<serde_json::Value>(&texto)
+            .ok()
+            .and_then(|v| v.get("error").cloned())
+            .and_then(|e| e.get("message").and_then(|m| m.as_str()).map(|m| m.to_string()))
+            .unwrap_or_else(|| texto.chars().take(400).collect());
+        return Err(format!("HTTP {status}: {frase}"));
+    }
+
+    let lista: ListaModelos = serde_json::from_str(&texto)
+        .map_err(|e| format!("resposta fora do formato esperado: {e}"))?;
+    let mut nomes: Vec<String> = lista
+        .data
+        .into_iter()
+        .map(|m| m.id)
+        .filter(|n| !n.trim().is_empty())
+        .collect();
+    nomes.sort();
+    nomes.dedup();
+    Ok(nomes)
 }
 
 /// O JSON da resposta. Tolera o modelo ter posto cercas de codigo em volta,

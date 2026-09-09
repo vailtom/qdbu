@@ -153,7 +153,8 @@ async function confirmarSaida() {
 /**
  * A IA do construtor de expressao -- tres comandos Tauri, nenhum pela DLL.
  *
- * A chave NUNCA chega aqui: `iaStatus()` diz se ha uma (`chave_ok`), e so.
+ * A chave NUNCA chega aqui: `iaStatus()` diz se ha uma (`chave_ok`) e como
+ * reconhece-la (`chave_marca`, `sk-...abcd`, montada no Rust), e so.
  * `iaConfigurar()` manda a chave uma vez, para o Rust gravar em
  * <raiz>/.qdbu/ia.json; um campo vazio significa "nao mexi", e "-" apaga.
  * `iaSugerir()` leva o prompt ja montado e o pedido, e volta com a
@@ -165,6 +166,17 @@ async function iaStatus() {
 }
 async function iaConfigurar(endpoint, modelo, chave, avisoLido) {
   return invoke("ia_configurar", { endpoint, modelo, chave, avisoLido: avisoLido == null ? null : !!avisoLido });
+}
+/**
+ * Os modelos que o servico oferece.
+ *
+ * Leva endpoint e chave DA TELA porque quem esta configurando do zero ainda
+ * nao gravou nada -- sem isso, listar exigiria gravar, fechar e reabrir. Campo
+ * vazio faz o Rust usar o que esta no disco, a mesma convencao de
+ * `iaConfigurar`.
+ */
+async function iaModelos(endpoint, chave) {
+  return invoke("ia_modelos", { endpoint: endpoint || "", chave: chave || "" });
 }
 async function iaSugerir(sistema, pedido, arquivo, uso) {
   return invoke("ia_sugerir", { sistema, pedido, arquivo: arquivo || "", uso: uso || "" });
@@ -187,5 +199,5 @@ let ultimaRev = 0;
 const rev = () => ultimaRev;
 
 window.QDBU = { status, chamar, rpc, rev, abrirPasta, abrirTerminal, terminais, aoEvento, confirmarSaida, saidaPerguntada,
-                iaStatus, iaConfigurar, iaSugerir, iaHistorico, iaPrompt, ErroQDbu };
+                iaStatus, iaConfigurar, iaModelos, iaSugerir, iaHistorico, iaPrompt, ErroQDbu };
 })();

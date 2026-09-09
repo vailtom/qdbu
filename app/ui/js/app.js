@@ -3421,9 +3421,23 @@ async function abrirConfig() {
       // que custa caro: a pessoa clicaria Gravar sem redigitar e o campo vazio
       // ("nao mexi") gravaria vazio por cima da chave que esta la. O terceiro
       // estado diz o que aconteceu e o que fazer.
+      /*
+       * A MARCA DA CHAVE (`sk-...abcd`) vem PRONTA do Rust.
+       *
+       * "Definida" responde se existe e nao responde QUAL -- e "qual" e a
+       * pergunta que se faz quando o servico comeca a recusar, ou quando a
+       * pessoa tem duas contas e nao lembra qual gravou.
+       *
+       * Mascarar no JS exigiria a chave estar aqui, e ai a mascara seria
+       * teatro: o inspetor troca `type=password` por `text` e le o valor, ou
+       * um `$("cfg-ia-chave").value` no console o entrega inteiro. Cortar no
+       * Rust e o que faz a marca ser marca -- os sete caracteres sao tudo o
+       * que existe deste lado.
+       */
       $("cfg-ia-chave-estado").textContent = ia.problema
         ? T("UI_IA_KEY_BROKEN")
-        : ia.chave_ok ? T("UI_IA_KEY_SET") : T("UI_IA_KEY_UNSET");
+        : ia.chave_marca || T("UI_IA_KEY_UNSET");
+      $("cfg-ia-chave-estado").classList.toggle("marca", !ia.problema && !!ia.chave_marca);
       $("cfg-ia-chave-estado").title = ia.problema || "";
     } catch (e) {
       $("cfg-ia-chave-estado").textContent = "";
@@ -3484,6 +3498,130 @@ async function gravarConfig() {
 
 $("btn-config").addEventListener("click", abrirConfig);
 $("cfg-cancelar").addEventListener("click", () => $("dlg-config").close());
+
+/*
+ * Listar os modelos que o servico oferece, em vez de digitar o nome de cor.
+ *
+ * O nome do modelo e um identificador exato que muda com o tempo
+ * (`gpt-4o-mini`, `gpt-4.1-mini`, `llama3.2:3b`): errar uma letra produz um
+ * `model not found` no meio de uma sugestao, longe do lugar onde se digitou.
+ *
+ * A LISTA NAO SUBSTITUI O CAMPO. Ele continua livre porque o endpoint pode ser
+ * um proxy que nao publica `/models`, ou publicar uma lista incompleta -- e um
+ * modelo que nao aparece na lista seria indistinguivel de um que nao existe.
+ * A lista e ajuda; a escolha continua sendo texto.
+ *
+ * Leva a chave DA TELA: quem esta configurando do zero digitou a chave e ainda
+ * nao gravou, e exigir gravar-fechar-reabrir para poder listar seria pedir a
+ * ela que fizesse o trabalho na ordem inversa.
+ */
+/*
+ * Separa os nomes em "indicados" e "o resto".
+ *
+ * A HEURISTICA E DECLARADA E CONSERVADORA, e a lista de recusa vem antes da de
+ * aceite: um `gpt-4o-audio-preview` comeca com `gpt-` e nao escreve expressao
+ * nenhuma. Ela nao tem como estar certa para sempre -- nomes novos aparecem o
+ * tempo todo, e um endpoint proprio usa a convencao que quiser --, e e por
+ * isso que ela apenas ORDENA: o que ela nao reconhece continua na lista.
+ *
+ * O modelo ATUAL e sempre indicado, seja qual for o nome: ele e a escolha que
+ * ja esta valendo, e joga-lo no segundo grupo faria a tela discordar de si
+ * mesma.
+ */
+const IA_NAO_TEXTO = /(audio|realtime|tts|whisper|transcribe|dall-e|image|vision-preview|embedding|moderation|search|babbage|davinci|codex)/i;
+const IA_TEXTO = /^(gpt-|o[1-9]($|[-.])|chatgpt|llama|qwen|mistral|mixtral|phi|gemma|deepseek|claude|command|sonar)/i;
+
+function separarModelos(nomes, atual) {
+  const indicados = [];
+  const outros = [];
+  for (const n of nomes) {
+    if (n === atual || (!IA_NAO_TEXTO.test(n) && IA_TEXTO.test(n))) indicados.push(n);
+    else outros.push(n);
+  }
+  return { indicados, outros };
+}
+
+$("cfg-ia-listar").addEventListener("click", async () => {
+  const botao = $("cfg-ia-listar");
+  if (botao.disabled) return;
+  const antes = botao.textContent;
+  botao.disabled = true;
+  botao.textContent = T("UI_IA_LISTING");
+  // Idempotente: chamada no fim da espera E no `finally`, que continua sendo a
+  // rede de seguranca para os caminhos que saem antes (erro, lista vazia).
+  const restaurar = () => {
+    botao.disabled = false;
+    botao.textContent = antes;
+  };
+  try {
+    const nomes = await QDBU.iaModelos($("cfg-ia-endpoint").value, $("cfg-ia-chave").value);
+    if (!nomes.length) {
+      hint(T("WARN_IA_NO_MODELS"));
+      return;
+    }
+    // O atual entra na lista mesmo se o servico nao o devolveu: sem isso,
+    // abrir a lista e cancelar poderia parecer que o que esta configurado
+    // deixou de existir.
+    const atual = $("cfg-ia-modelo").value.trim();
+    const { indicados, outros } = separarModelos(nomes, atual);
+
+    /*
+     * DOIS GRUPOS, e nao um filtro. A OpenAI devolveu 127 nomes na medicao, e
+     * a maioria nao serve para escrever uma expressao -- transcricao, imagem,
+     * embeddings, modelos antigos. Para quem conhece, e ruido; para quem nao
+     * conhece, `babbage-002` ao lado de `gpt-4o-mini` e uma escolha impossivel.
+     *
+     * Esconder seria pior: um modelo que a heuristica nao reconhece ficaria
+     * indistinguivel de um que nao existe, e ela ERRA por construcao -- nomes
+     * novos aparecem toda semana. Entao nada some: o que ela nao reconhece cai
+     * no segundo grupo, a um rolar de distancia.
+     */
+    const opcoes = {};
+    if (indicados.length) opcoes[T("UI_IA_MODELS_SUGGESTED")] = Object.fromEntries(indicados.map((n) => [n, n]));
+    if (outros.length) opcoes[T("UI_IA_MODELS_OTHERS")] = Object.fromEntries(outros.map((n) => [n, n]));
+
+    /*
+     * O BOTAO VOLTA AO NORMAL ANTES DO DIALOGO, e nao no `finally`.
+     *
+     * O `finally` so corre depois do `await Swal.fire`, entao o botao ficava
+     * "buscando..." e cinza atras do dialogo — durante todo o tempo em que a
+     * pessoa escolhe. A busca ja acabou; dizer que ela continua e descrever
+     * outra coisa. Visto no screenshot, com o DOM inteiramente correto.
+     */
+    restaurar();
+
+    const r = await Swal.fire(
+      swalBase({
+        title: T("UI_IA_PICK_MODEL"),
+        // Quem nao conhece os nomes precisa saber de onde veio a lista e por
+        // que ela esta em duas partes -- senao o segundo grupo parece um
+        // porao onde nao se deve mexer.
+        text: T("UI_IA_PICK_EXPLAIN", { n: nomes.length }),
+        input: "select",
+        inputOptions: opcoes,
+        inputValue: atual,
+        showCancelButton: true,
+        confirmButtonText: T("UI_USE"),
+        cancelButtonText: T("UI_CANCEL"),
+      })
+    );
+    if (!r.isConfirmed || !r.value) return;
+    // Pelo mesmo caminho da digitacao -- ha um listener de `change` no form.
+    $("cfg-ia-modelo").value = r.value;
+    $("cfg-ia-modelo").dispatchEvent(new Event("input", { bubbles: true }));
+    $("cfg-ia-modelo").dispatchEvent(new Event("change", { bubbles: true }));
+    hint(T("INFO_IA_MODEL_PICKED", { model: r.value, n: nomes.length }));
+  } catch (e) {
+    /* "sem chave" nao e um erro do servico: e um passo que falta. Para quem
+       nunca configurou isto, `Nao foi possivel listar os modelos: sem chave`
+       descreve o sintoma e esconde a acao. */
+    hint(/sem chave/i.test(String(e))
+      ? T("UI_IA_NEED_KEY_FIRST")
+      : T("ERROR_IA_MODELS", { detail: String(e) }));
+  } finally {
+    restaurar();
+  }
+});
 $("form-config").addEventListener("submit", (ev) => {
   ev.preventDefault();
   gravarConfig();
