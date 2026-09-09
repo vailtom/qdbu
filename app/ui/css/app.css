@@ -2474,6 +2474,36 @@ dialog .opcional.marca {
    o botao para fora, a mesma armadilha da faixa de abas. */
 .cfg-rotulo { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
 
+/* A resposta do "Escolher..." -- dentro do dialogo, nao na barra atras dele.
+   `:empty` some por completo: uma linha reservada e vazia deixaria um buraco
+   permanente entre o ultimo campo e a explicacao. */
+/*
+ * PROSA, e nao dado: sai do mono do `.ff-msg`.
+ *
+ * Aquela classe foi feita para o rodape do filtro, onde o conteudo e uma
+ * EXPRESSAO -- ali o mono ajuda a ler `Left(X,3) == 'ABC'`. Aqui o conteudo e
+ * uma frase dirigida a quem talvez nunca tenha visto uma chave de API, e mono
+ * a 11 px e o pior veiculo possivel para isso.
+ *
+ * `overflow-wrap: anywhere` porque a resposta do servico costuma trazer uma
+ * URL sem espacos: sem isso ela vira uma palavra unica de 300 px, e como o
+ * `dialog` so tem `min-width`, era a MENSAGEM que decidia a largura da janela
+ * -- a modal esticava e os campos iam junto. Visto no screenshot.
+ */
+#cfg-ia-msg {
+  margin: 8px 0 10px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+#cfg-ia-msg:empty { display: none; }
+
+/* Teto de largura: sem ele, texto longo dentro do dialogo o estica sem limite.
+   `min()` para nao estourar em janela estreita -- e a maquina do cliente que
+   motivou o painel recolhivel tem 1435 px. */
+#dlg-config { max-width: min(680px, 92vw); }
+
 .cfg-linha { display: flex; gap: 6px; align-items: stretch; }
 .cfg-linha input { min-width: 0; flex: 1; }
 .cfg-linha button { flex: none; padding: 4px 10px; white-space: nowrap; }

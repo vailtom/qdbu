@@ -1674,6 +1674,7 @@
   UI_IA_NEED_KEY_FIRST: "Enter the API key in the field above and click Choose again — it is what lets us ask the service which models exist.",
   WARN_IA_NO_MODELS: "The service answered but listed no models. Type the model name in the field.",
   INFO_IA_MODEL_PICKED: { one: "Model chosen: {model}. The service offered {n} model.", other: "Model chosen: {model}. The service offered {n} models." },
+  ERROR_IA_KEY_REFUSED: "The service did not accept this key. Check that it was copied whole, with no stray spaces. ({detail})",
   ERROR_IA_MODELS: "Could not list the models: {detail}",
   UI_IA_KEY_UNSET: "(not configured)",
   UI_IA_KEY_BROKEN: "(configuration file unreadable — enter the key to recreate it)",

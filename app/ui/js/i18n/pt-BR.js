@@ -1710,6 +1710,7 @@
   UI_IA_NEED_KEY_FIRST: "Informe a chave da API no campo acima e clique em Escolher de novo — é ela que permite perguntar ao serviço quais modelos existem.",
   WARN_IA_NO_MODELS: "O serviço respondeu, mas não listou nenhum modelo. Digite o nome do modelo no campo.",
   INFO_IA_MODEL_PICKED: { one: "Modelo escolhido: {model}. O serviço ofereceu {n} modelo.", other: "Modelo escolhido: {model}. O serviço ofereceu {n} modelos." },
+  ERROR_IA_KEY_REFUSED: "O serviço não aceitou esta chave. Confira se ela foi copiada inteira, sem espaços sobrando. ({detail})",
   ERROR_IA_MODELS: "Não foi possível listar os modelos: {detail}",
   UI_IA_KEY_UNSET: "(não configurada)",
   UI_IA_KEY_BROKEN: "(arquivo de configuração ilegível — informe a chave para recriá-lo)",

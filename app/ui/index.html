@@ -1294,6 +1294,18 @@
         <span data-i18n="UI_IA_ENDPOINT"></span>
         <input id="cfg-ia-endpoint" spellcheck="false" autocomplete="off">
       </label>
+      <!-- A RESPOSTA DO BOTAO MORA AQUI, e nao na barra de status.
+
+           `showModal()` poe o dialogo na top layer: tudo atras dele continua
+           pintado e fica INERTE. Quem clicou em Escolher esta olhando para
+           dentro desta janela; mandar a resposta para o rodape do app, atras
+           do escurecimento e em letra miuda, e o mesmo que nao responder --
+           a tela simplesmente nao reage, e nao ha como saber que a chave foi
+           recusada. Medido em 09/09/2026, com o autor conduzindo o teste.
+
+           `aria-live` porque a mensagem aparece sem que nada tenha mudado de
+           foco: um leitor de tela precisa ser avisado. -->
+      <p class="ff-msg" id="cfg-ia-msg" role="status" aria-live="polite"></p>
       <p class="explica" data-i18n="UI_IA_EXPLAIN"></p>
     </fieldset>
 

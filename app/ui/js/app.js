@@ -3417,6 +3417,8 @@ async function abrirConfig() {
       $("cfg-ia-endpoint").value = ia.endpoint || "";
       $("cfg-ia-modelo").value = ia.modelo || "";
       $("cfg-ia-chave").value = "";
+      // Recado da abertura anterior nao vale para esta: o dialogo e reusado.
+      msgIa("");
       // "(nao configurada)" sobre um arquivo ILEGIVEL e mentira, e mentira
       // que custa caro: a pessoa clicaria Gravar sem redigitar e o campo vazio
       // ("nao mexi") gravaria vazio por cima da chave que esta la. O terceiro
@@ -3528,6 +3530,23 @@ $("cfg-cancelar").addEventListener("click", () => $("dlg-config").close());
  * ja esta valendo, e joga-lo no segundo grupo faria a tela discordar de si
  * mesma.
  */
+/*
+ * A RESPOSTA DO ASSISTENTE APARECE NA PROPRIA MODAL.
+ *
+ * `hint()` escreve na barra de status do app, que fica ATRAS de um
+ * `showModal()` -- pintada, inerte e em letra miuda. Quem clicou em "Escolher"
+ * esta olhando para dentro do dialogo: a resposta mandada para la e uma
+ * resposta que nao chega, e a tela fica indistinguivel de uma tela travada.
+ *
+ * Molde do `msgFiltro`: mesmo elemento, mesmas classes de severidade.
+ */
+function msgIa(txt, classe) {
+  const el = $("cfg-ia-msg");
+  if (!el) return;
+  el.textContent = txt || "";
+  el.className = "ff-msg" + (classe ? " " + classe : "");
+}
+
 const IA_NAO_TEXTO = /(audio|realtime|tts|whisper|transcribe|dall-e|image|vision-preview|embedding|moderation|search|babbage|davinci|codex)/i;
 const IA_TEXTO = /^(gpt-|o[1-9]($|[-.])|chatgpt|llama|qwen|mistral|mixtral|phi|gemma|deepseek|claude|command|sonar)/i;
 
@@ -3539,6 +3558,13 @@ function separarModelos(nomes, atual) {
     else outros.push(n);
   }
   return { indicados, outros };
+}
+
+/* Mexeu na chave ou no endereco: a recusa anterior falava do que estava ali
+   antes, e deixa-la na tela e deixar uma afirmacao falsa por cima do campo que
+   a pessoa acabou de corrigir. */
+for (const id of ["cfg-ia-chave", "cfg-ia-endpoint"]) {
+  $(id).addEventListener("input", () => msgIa(""));
 }
 
 $("cfg-ia-listar").addEventListener("click", async () => {
@@ -3554,9 +3580,10 @@ $("cfg-ia-listar").addEventListener("click", async () => {
     botao.textContent = antes;
   };
   try {
+    msgIa("");
     const nomes = await QDBU.iaModelos($("cfg-ia-endpoint").value, $("cfg-ia-chave").value);
     if (!nomes.length) {
-      hint(T("WARN_IA_NO_MODELS"));
+      msgIa(T("WARN_IA_NO_MODELS"), "aviso");
       return;
     }
     // O atual entra na lista mesmo se o servico nao o devolveu: sem isso,
@@ -3610,14 +3637,27 @@ $("cfg-ia-listar").addEventListener("click", async () => {
     $("cfg-ia-modelo").value = r.value;
     $("cfg-ia-modelo").dispatchEvent(new Event("input", { bubbles: true }));
     $("cfg-ia-modelo").dispatchEvent(new Event("change", { bubbles: true }));
-    hint(T("INFO_IA_MODEL_PICKED", { model: r.value, n: nomes.length }));
+    msgIa(T("INFO_IA_MODEL_PICKED", { model: r.value, n: nomes.length }), "ok");
   } catch (e) {
-    /* "sem chave" nao e um erro do servico: e um passo que falta. Para quem
-       nunca configurou isto, `Nao foi possivel listar os modelos: sem chave`
-       descreve o sintoma e esconde a acao. */
-    hint(/sem chave/i.test(String(e))
-      ? T("UI_IA_NEED_KEY_FIRST")
-      : T("ERROR_IA_MODELS", { detail: String(e) }));
+    /*
+     * TRES DESFECHOS, e nao um erro so.
+     *
+     * "sem chave" nao e erro do servico: e um passo que falta, e a frase tem
+     * de dizer o passo. A chave RECUSADA e o caso mais provavel de todos --
+     * copiar a chave pela metade acontece o tempo todo --, e a resposta crua
+     * do servico ("HTTP 401 Unauthorized: Incorrect API key provided...")
+     * descreve o protocolo em vez do que fazer. A frase propria vem primeiro
+     * e o texto do servico vai junto, entre parenteses: e a regra da mensagem
+     * COMPLETA, sem obrigar ninguem a decifrar o protocolo para agir.
+     */
+    const txt = String(e);
+    if (/sem chave/i.test(txt)) {
+      msgIa(T("UI_IA_NEED_KEY_FIRST"), "aviso");
+    } else if (/(401|403)|unauthorized|forbidden|api key|invalid_api_key/i.test(txt)) {
+      msgIa(T("ERROR_IA_KEY_REFUSED", { detail: txt }), "erro");
+    } else {
+      msgIa(T("ERROR_IA_MODELS", { detail: txt }), "erro");
+    }
   } finally {
     restaurar();
   }
