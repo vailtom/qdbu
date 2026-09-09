@@ -3567,6 +3567,133 @@ for (const id of ["cfg-ia-chave", "cfg-ia-endpoint"]) {
   $(id).addEventListener("input", () => msgIa(""));
 }
 
+/*
+ * O SELETOR DE MODELO E UMA LISTA DO APP, e nao um <select> nativo.
+ *
+ * Comecou como `input: "select"` do SweetAlert, e duas coisas o condenaram:
+ *
+ * 1. A LISTA SUSPENSA NAO E ESTILIZAVEL. O `.swal2-select` vem com
+ *    `background: transparent`, e o Chromium desenha o popup nativo com o
+ *    fundo que o elemento tem -- transparente virou branco do sistema, com o
+ *    texto claro do tema por cima. Branco sobre branco: ilegivel. Dava para
+ *    forcar a cor, mas o desenho do popup continua sendo do SISTEMA, e no dia
+ *    em que o Windows mudar o tema ele muda de novo.
+ * 2. NAO SAI EM SCREENSHOT. O popup nativo e desenhado FORA da pagina, entao
+ *    `cdp.bat shot` fotografa a lista fechada. Um componente que a ferramenta
+ *    de teste nao alcanca e um componente aprovado sem ninguem olhar -- que e
+ *    exatamente como este defeito chegou a tela do autor.
+ *
+ * A lista propria resolve os dois e ganha o que faltava: BUSCA. Sao 127 nomes
+ * na medicao, e rolar 127 itens de `gpt-4o-realtime-preview-2024-12-17` para
+ * achar um nao e escolher, e procurar.
+ *
+ * Os nomes vem do SERVICO, entao passam por `escapaHtml` -- e a mesma regra do
+ * `session.json`: o que chega de fora e DADO, nunca marcacao.
+ */
+function escolherModelo(grupos, atual, total) {
+  const linhas = grupos
+    .map(
+      (g) =>
+        '<li class="mdl-grupo">' + escapaHtml(g.titulo) + "</li>" +
+        g.nomes
+          .map(
+            (n) =>
+              '<li class="mdl-item' + (n === atual ? " sel" : "") + '" data-v="' +
+              escapaHtml(n) + '">' + escapaHtml(n) + "</li>"
+          )
+          .join("")
+    )
+    .join("");
+
+  let escolhido = atual;
+
+  return Swal.fire(
+    swalBase({
+      title: T("UI_IA_PICK_MODEL"),
+      // Quem nao conhece os nomes precisa saber de onde veio a lista e por que
+      // ela esta em duas partes -- senao o segundo grupo parece um porao onde
+      // nao se deve mexer.
+      html:
+        '<p class="mdl-explica">' + escapaHtml(T("UI_IA_PICK_EXPLAIN", { n: total })) + "</p>" +
+        '<input id="mdl-busca" class="mdl-busca" type="search" autocomplete="off" placeholder="' +
+        escapaHtml(T("UI_IA_SEARCH_PH")) + '">' +
+        '<ul id="mdl-itens" class="mdl-itens">' + linhas + "</ul>",
+      showCancelButton: true,
+      confirmButtonText: T("UI_USE"),
+      cancelButtonText: T("UI_CANCEL"),
+      focusCancel: false,
+      didOpen: () => {
+        const busca = document.getElementById("mdl-busca");
+        const lista = document.getElementById("mdl-itens");
+        // A frase do "nada encontrado" vive num atributo porque quem a desenha
+        // e o `::after` do CSS -- e ela precisa vir do dicionario como
+        // qualquer outra.
+        lista.dataset.vazio = T("UI_IA_NO_MATCH");
+
+        const marcar = (li) => {
+          if (!li) return;
+          lista.querySelectorAll(".mdl-item.sel").forEach((x) => x.classList.remove("sel"));
+          li.classList.add("sel");
+          escolhido = li.dataset.v;
+          // `nearest` e nao `center`: rolar o que ja esta a vista desorienta.
+          li.scrollIntoView({ block: "nearest" });
+        };
+
+        /* Um ouvinte na LISTA, e nao um por item. Sao 127 itens e a busca os
+           esconde por CSS -- assim nada precisa ser religado ao filtrar. */
+        lista.addEventListener("click", (ev) => {
+          const li = ev.target.closest(".mdl-item");
+          if (li) marcar(li);
+        });
+        lista.addEventListener("dblclick", (ev) => {
+          if (ev.target.closest(".mdl-item")) Swal.clickConfirm();
+        });
+
+        busca.addEventListener("input", () => {
+          const q = busca.value.trim().toLowerCase();
+          let visiveis = 0;
+          for (const li of lista.querySelectorAll(".mdl-item")) {
+            const bate = !q || li.dataset.v.toLowerCase().includes(q);
+            li.hidden = !bate;
+            if (bate) visiveis++;
+          }
+          /* O cabecalho do grupo some quando nada dele passou: um titulo
+             sozinho sobre o vazio parece um grupo que perdeu os itens. */
+          for (const g of lista.querySelectorAll(".mdl-grupo")) {
+            let tem = false;
+            for (let e = g.nextElementSibling; e && e.classList.contains("mdl-item"); e = e.nextElementSibling) {
+              if (!e.hidden) { tem = true; break; }
+            }
+            g.hidden = !tem;
+          }
+          lista.classList.toggle("vazia", visiveis === 0);
+        });
+
+        /* Setas e Enter no campo de busca: quem digita para filtrar nao deveria
+           precisar tirar a mao do teclado para escolher. */
+        busca.addEventListener("keydown", (ev) => {
+          if (ev.key !== "ArrowDown" && ev.key !== "ArrowUp" && ev.key !== "Enter") return;
+          const itens = [...lista.querySelectorAll(".mdl-item")].filter((x) => !x.hidden);
+          if (!itens.length) return;
+          if (ev.key === "Enter") {
+            ev.preventDefault();
+            Swal.clickConfirm();
+            return;
+          }
+          ev.preventDefault();
+          const i = itens.findIndex((x) => x.classList.contains("sel"));
+          marcar(itens[Math.max(0, Math.min(itens.length - 1, i + (ev.key === "ArrowDown" ? 1 : -1)))]);
+        });
+
+        const sel = lista.querySelector(".mdl-item.sel");
+        if (sel) sel.scrollIntoView({ block: "center" });
+        busca.focus();
+      },
+      preConfirm: () => escolhido,
+    })
+  ).then((r) => (r.isConfirmed && escolhido ? escolhido : null));
+}
+
 $("cfg-ia-listar").addEventListener("click", async () => {
   const botao = $("cfg-ia-listar");
   if (botao.disabled) return;
@@ -3603,9 +3730,10 @@ $("cfg-ia-listar").addEventListener("click", async () => {
      * novos aparecem toda semana. Entao nada some: o que ela nao reconhece cai
      * no segundo grupo, a um rolar de distancia.
      */
-    const opcoes = {};
-    if (indicados.length) opcoes[T("UI_IA_MODELS_SUGGESTED")] = Object.fromEntries(indicados.map((n) => [n, n]));
-    if (outros.length) opcoes[T("UI_IA_MODELS_OTHERS")] = Object.fromEntries(outros.map((n) => [n, n]));
+    const grupos = [
+      { titulo: T("UI_IA_MODELS_SUGGESTED"), nomes: indicados },
+      { titulo: T("UI_IA_MODELS_OTHERS"), nomes: outros },
+    ].filter((g) => g.nomes.length);
 
     /*
      * O BOTAO VOLTA AO NORMAL ANTES DO DIALOGO, e nao no `finally`.
@@ -3617,27 +3745,13 @@ $("cfg-ia-listar").addEventListener("click", async () => {
      */
     restaurar();
 
-    const r = await Swal.fire(
-      swalBase({
-        title: T("UI_IA_PICK_MODEL"),
-        // Quem nao conhece os nomes precisa saber de onde veio a lista e por
-        // que ela esta em duas partes -- senao o segundo grupo parece um
-        // porao onde nao se deve mexer.
-        text: T("UI_IA_PICK_EXPLAIN", { n: nomes.length }),
-        input: "select",
-        inputOptions: opcoes,
-        inputValue: atual,
-        showCancelButton: true,
-        confirmButtonText: T("UI_USE"),
-        cancelButtonText: T("UI_CANCEL"),
-      })
-    );
-    if (!r.isConfirmed || !r.value) return;
+    const r = await escolherModelo(grupos, atual, nomes.length);
+    if (!r) return;
     // Pelo mesmo caminho da digitacao -- ha um listener de `change` no form.
-    $("cfg-ia-modelo").value = r.value;
+    $("cfg-ia-modelo").value = r;
     $("cfg-ia-modelo").dispatchEvent(new Event("input", { bubbles: true }));
     $("cfg-ia-modelo").dispatchEvent(new Event("change", { bubbles: true }));
-    msgIa(T("INFO_IA_MODEL_PICKED", { model: r.value, n: nomes.length }), "ok");
+    msgIa(T("INFO_IA_MODEL_PICKED", { model: r, n: nomes.length }), "ok");
   } catch (e) {
     /*
      * TRES DESFECHOS, e nao um erro so.

@@ -1704,6 +1704,8 @@
   UI_IA_LIST_TITLE: "Perguntar ao serviço quais modelos ele oferece e escolher um da lista",
   UI_IA_LISTING: "buscando…",
   UI_IA_PICK_MODEL: "Escolha o modelo",
+  UI_IA_SEARCH_PH: "procurar pelo nome…",
+  UI_IA_NO_MATCH: "Nenhum modelo com esse nome.",
   UI_IA_PICK_EXPLAIN: { one: "O serviço ofereceu {n} modelo. Os mais indicados para escrever expressões estão no topo; os demais continuam na lista.", other: "O serviço ofereceu {n} modelos. Os mais indicados para escrever expressões estão no topo; os demais continuam na lista." },
   UI_IA_MODELS_SUGGESTED: "Mais indicados",
   UI_IA_MODELS_OTHERS: "Os demais que o serviço oferece",

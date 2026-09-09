@@ -1668,6 +1668,8 @@
   UI_IA_LIST_TITLE: "Ask the service which models it offers and pick one from the list",
   UI_IA_LISTING: "fetching…",
   UI_IA_PICK_MODEL: "Choose the model",
+  UI_IA_SEARCH_PH: "search by name…",
+  UI_IA_NO_MATCH: "No model with that name.",
   UI_IA_PICK_EXPLAIN: { one: "The service offered {n} model. The ones best suited to writing expressions come first; the rest are still on the list.", other: "The service offered {n} models. The ones best suited to writing expressions come first; the rest are still on the list." },
   UI_IA_MODELS_SUGGESTED: "Best suited",
   UI_IA_MODELS_OTHERS: "Everything else the service offers",

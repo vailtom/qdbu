@@ -2050,6 +2050,49 @@ dialog .swal2-popup textarea {
   align-self: stretch;
 }
 
+/* --------------------------------------------- o seletor de modelo da IA */
+/*
+ * Uma lista DO APP, e nao a suspensa de um <select> nativo -- que o Chromium
+ * desenha fora da pagina, com o tema do sistema, e que nenhum screenshot
+ * alcanca. Ver `escolherModelo()`.
+ */
+.swal2-popup.qdbu-swal .mdl-explica {
+  margin: 0 0 10px; color: var(--dim); font-size: 12.5px; line-height: 1.5; text-align: left;
+}
+.mdl-busca {
+  align-self: stretch; margin: 0 0 8px; padding: 7px 9px;
+  background: var(--bg3); color: var(--fg);
+  border: 1px solid var(--line); border-radius: 5px;
+  font-family: inherit; font-size: 12.5px;
+}
+.mdl-itens {
+  align-self: stretch;
+  margin: 0; padding: 4px; list-style: none;
+  /* Altura FIXA, e nao `max-height`: com a busca filtrando, uma caixa que
+     encolhe a cada tecla faz os botoes Cancelar/Usar dancarem embaixo dela. */
+  height: 260px; overflow-y: auto;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 5px;
+  text-align: left;
+}
+.mdl-grupo {
+  padding: 8px 8px 4px; color: var(--dim2);
+  font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase;
+}
+.mdl-grupo:first-child { padding-top: 4px; }
+.mdl-item {
+  padding: 5px 8px; border-radius: 4px; cursor: pointer;
+  font-family: var(--mono); font-size: 12.5px; color: var(--fg);
+  /* Nome longo (`gpt-4o-realtime-preview-2024-12-17`) rola na horizontal com a
+     caixa, em vez de quebrar em duas linhas e desalinhar a lista inteira. */
+  white-space: nowrap;
+}
+.mdl-item:hover { background: var(--bg3); }
+.mdl-item.sel { background: var(--amber); color: var(--acento-texto); }
+.mdl-itens.vazia::after {
+  content: attr(data-vazio); display: block;
+  padding: 12px 8px; color: var(--dim); font-size: 12px;
+}
+
 /* ------------------------------------------------ T13: operações em massa */
 
 #dlg-massa { width: min(680px, 94vw); max-width: none; }
