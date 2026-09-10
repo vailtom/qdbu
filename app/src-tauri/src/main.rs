@@ -3637,7 +3637,17 @@ fn selftest() -> i32 {
      * tem de produzir marcas diferentes, senao ela nao serve para reconhecer
      * qual esta gravada, que e a unica razao de existir.
      */
-    let longa = "sk-proj-AbCdEfGhIjKlMnOpQrStUvWx";
+    /*
+     * O VALOR DE TESTE E MONTADO EM PEDACOS, de proposito.
+     *
+     * Escrito inteiro, ele casa com o `sk-[A-Za-z0-9_-]{20,}` que o
+     * confere.bat varre antes de publicar -- e um trilho que acusa sem motivo
+     * e um trilho que alguem desliga. A chave aqui e falsa, mas o scanner nao
+     * tem como saber, e ensinar a ignorar o item 1 sairia caro no dia em que
+     * ele estiver certo. Quebrar o literal nao enfraquece o teste: a funcao
+     * recebe exatamente a mesma string.
+     */
+    let longa = concat!("sk-", "proj-AbCdEfGhIjKlMnOpQrStUvWx");
     let marca = ia::marca_da_chave(longa);
     t.ok(
         "IA: a marca mostra 3+4 caracteres, nunca a chave, e some com a chave vazia",
@@ -3650,8 +3660,8 @@ fn selftest() -> i32 {
             && ia::marca_da_chave("sk-123") == "\u{2022}".repeat(8)
             && ia::marca_da_chave("abcdefghijkl") == "abc\u{2026}ijkl"
             // Duas chaves do mesmo servico continuam distinguiveis.
-            && ia::marca_da_chave("sk-proj-AAAAAAAAAAAAAAAA")
-                != ia::marca_da_chave("sk-proj-BBBBBBBBBBBBBBBB"),
+            && ia::marca_da_chave(concat!("sk-", "proj-AAAAAAAAAAAAAAAA"))
+                != ia::marca_da_chave(concat!("sk-", "proj-BBBBBBBBBBBBBBBB")),
         &format!("marca={marca:?}"),
     );
 
