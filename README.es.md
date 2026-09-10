@@ -123,7 +123,7 @@ archivo.
 
 ## Descarga
 
-**QDbu 0.76** es una versión preliminar para Windows de 32 bits. Se distribuye
+**QDbu 0.77** es una versión preliminar para Windows de 32 bits. Se distribuye
 como un paquete portátil: basta con descomprimirlo y ejecutar `qdbu.exe`.
 No requiere instalador.
 

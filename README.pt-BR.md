@@ -122,7 +122,7 @@ arquivo.
 
 ## Download
 
-O **QDbu 0.76** é uma versão de pré-lançamento para Windows 32-bit. Ele é
+O **QDbu 0.77** é uma versão de pré-lançamento para Windows 32-bit. Ele é
 distribuído como um pacote portátil: basta descompactar e executar o
 `qdbu.exe`. Não há instalador.
 
