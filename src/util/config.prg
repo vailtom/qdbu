@@ -138,6 +138,25 @@ FUNCTION RotulosNaBarra()
  * relacao ao unico lugar que os usa. Id desconhecido cai no padrao la, que e
  * onde a decisao pode ser tomada com informacao.
  */
+/*
+ * O sincronizar estrutura considera a ORDEM dos campos? (docs/20)
+ *
+ * Nao ha padrao certo: o ERP do autor le campo por posicao e precisa da
+ * ordem; outro sistema casa por nome e a ordem e ruido. Decisao do autor
+ * (09/09/2026): cada usuario escolhe, e a escolha fica. Desligado por
+ * omissao porque e o que NAO produz diagnostico a mais -- quem precisa da
+ * ordem liga uma vez.
+ */
+FUNCTION SyncByPosition()
+
+   LOCAL h := ConfigGlobal()
+
+   IF hb_HHasKey( h, "syncByPosition" ) .AND. HB_ISLOGICAL( h[ "syncByPosition" ] )
+      RETURN h[ "syncByPosition" ]
+   ENDIF
+
+   RETURN .F.
+
 FUNCTION TerminalPreferido()
 
    LOCAL h := ConfigGlobal()

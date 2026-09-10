@@ -77,8 +77,11 @@
  *
  *   files
  *     ERROR_FILE_NOT_FOUND          file
- *     ERROR_FILE_EXISTS             file
+ *     ERROR_FILE_EXISTS             file    (destino que ja existe: struct.create,
+ *                                   meta.copyfile -- nenhum dos dois sobrescreve
+ *                                   sem `replace`)
  *     ERROR_FILE_ALREADY_OPEN       file
+ *     ERROR_FILE_IS_OPEN            file, alias   (o destino esta aberto numa aba)
  *     ERROR_NOT_A_DBF               file, reason
  *     ERROR_MEMO_FILE_MISSING       file, memo
  *     ERROR_OPEN_FAILED             file, reason
@@ -90,6 +93,11 @@
  *     ERROR_STALE_VALUE             field, expected, actual, raw   (R8: o campo mudou
  *                                   no disco entre a leitura e a gravacao)
  *     ERROR_NO_COLUMNS
+ *
+ *   structure sync (docs/20) -- struct.diff / struct.compose
+ *     ERROR_SYNC_SAME_DIR           dir
+ *     ERROR_SYNC_CHOICE_MISSING     field           (divergent field with no keep/adopt/drop)
+ *     ERROR_SYNC_CHOICE_INVALID     field, choice
  *
  *   expressions
  *     ERROR_EXPR_INVALID            detail   (Harbour's own text; not translated)

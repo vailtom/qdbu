@@ -74,6 +74,9 @@
          ganha lugar permanente no cabecalho. -->
     <div class="tema" id="tema"></div>
     <button type="button" id="btn-sobre" class="icone" data-i18n-title="UI_ABOUT"><svg class="ico" aria-hidden="true"><use href="#i-info" /></svg></button>
+    <!-- Sincronizar estrutura pelo botao: escolhe os DOIS lados. Pelo menu ⋯ da
+         conexao o alvo ja vem preenchido. As duas portas (decisao do autor). -->
+    <button type="button" id="btn-sync" class="icone" data-i18n-title="UI_SYNC_TITLE">⇄</button>
     <button type="button" id="btn-config" class="icone" data-i18n-title="UI_PREFERENCES">⚙</button>
   </div>
 </header>
@@ -669,6 +672,112 @@
      WHILE tem precedencia sobre FOR, "tudo" comeca do topo, e "proximos"/"resto"
      comecam no registro corrente. Sao regras do xBase que ninguem adivinha, e
      errar qualquer uma delas altera os registros errados. -->
+<!-- SINCRONIZAR ESTRUTURA (docs/20): pasta de referencia contra pasta alvo.
+
+     Tres zonas, como a tela do ERP do autor: o cabecalho escolhe os lados e
+     compara; a esquerda lista os arquivos com um selo de status; a direita
+     mostra os campos do arquivo escolhido, com a ESCOLHA por campo quando ela
+     e devida. Nada vem pre-escolhido no que perde dado: quem opera e DBA e
+     decide caso a caso. Aplicar so libera sem pendencia. -->
+<dialog id="dlg-sync">
+  <!-- ENTER NA BUSCA NAO PODE FECHAR O DIALOGO. Um <form method="dialog"> com
+       UM UNICO campo de texto submete por Enter (submissao implicita), e
+       submeter aqui e fechar: a comparacao de 227 arquivos, as escolhas e as
+       marcas iam junto. O #form-export escapa disso por acidente -- ele tem
+       dois campos de texto. Aqui a submissao e barrada no JS, e nao por um
+       segundo campo de mentira. -->
+  <form method="dialog" id="form-sync">
+    <h2 data-i18n="UI_SYNC_TITLE"></h2>
+    <p class="explica" data-i18n="UI_SYNC_EXPLAIN"></p>
+
+    <div class="sy-cab">
+      <label class="sy-lado"><span data-i18n="UI_SYNC_SOURCE"></span>
+        <select id="sy-origem"></select>
+      </label>
+      <button type="button" id="sy-trocar" class="ghost sy-trocar" data-i18n-title="UI_SYNC_SWAP">⇄</button>
+      <label class="sy-lado"><span data-i18n="UI_SYNC_TARGET"></span>
+        <select id="sy-alvo"></select>
+      </label>
+    </div>
+    <div class="sy-opcoes">
+      <label class="ms-check"><input type="checkbox" id="sy-pos"> <span data-i18n="UI_SYNC_BY_POSITION"></span></label>
+      <button type="button" id="sy-comparar" class="primario" data-i18n="UI_SYNC_COMPARE"></button>
+      <p class="ff-msg sy-msg" id="sy-msg" role="status" aria-live="polite"></p>
+    </div>
+
+    <div class="sy-corpo">
+      <section class="sy-painel">
+        <div class="ex-cols-topo">
+          <strong data-i18n="UI_SYNC_FILES"></strong>
+          <input id="sy-busca" type="search" data-i18n-ph="UI_SYNC_SEARCH_PH" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="ex-cols-topo ex-cols-acoes">
+          <button type="button" id="sy-marcar-todos" data-i18n="UI_SYNC_MARK_ALL"></button>
+          <button type="button" id="sy-marcar-nenhum" data-i18n="UI_SYNC_MARK_NONE"></button>
+          <button type="button" id="sy-marcar-inverter" data-i18n="UI_INVERT"></button>
+          <label class="sy-so-dif"><input type="checkbox" id="sy-so-dif" checked> <span data-i18n="UI_SYNC_ONLY_DIFF"></span></label>
+        </div>
+        <ul id="sy-arquivos" class="sy-arquivos"></ul>
+        <p id="sy-arquivos-vazio" class="sy-nota"></p>
+      </section>
+
+      <section class="sy-painel">
+        <div class="ex-cols-topo">
+          <strong id="sy-campos-titulo"></strong>
+          <!-- VER OS CAMPOS QUE CONFEREM TAMBEM, e nao so os que diferem.
+               O DBU nao tinha; o Navicat tem, e o autor pediu: poder olhar a
+               estrutura inteira lado a lado e conferir, nao so a lista do que
+               esta errado. Tres visoes, um grupo de radio disfarcado de
+               tiras -- ver as tres ensina que existem. -->
+          <span class="sy-visao" id="sy-visao" role="tablist">
+            <button type="button" data-visao="dif" class="ativa" data-i18n="UI_SYNC_VIEW_DIFF"></button>
+            <button type="button" data-visao="todos" data-i18n="UI_SYNC_VIEW_ALL"></button>
+            <button type="button" data-visao="iguais" data-i18n="UI_SYNC_VIEW_SAME"></button>
+          </span>
+          <span class="ex-conta" id="sy-conta"></span>
+        </div>
+        <!-- DECIDIR EM MASSA: duas linhas, e cada uma DIZ ONDE AGE.
+             O autor perguntou o que "em tudo" queria dizer, e a pergunta e a
+             prova de que o rotulo falhou (a mesma licao do "Nao cadastrada" da
+             arvore). Os verbos sao os MESMOS dos radios de cada campo: quem
+             clica aqui esta respondendo aquelas perguntas de uma vez, e duas
+             palavras para a mesma acao fariam parecer duas acoes. -->
+        <div class="sy-lote" id="sy-lote" hidden>
+          <span class="sy-lote-onde" id="sy-lote-este"></span>
+          <button type="button" id="sy-lote-manter" data-i18n="UI_SYNC_KEEP"></button>
+          <button type="button" id="sy-lote-adotar" data-i18n="UI_SYNC_ADOPT"></button>
+          <!-- A RESPOSTA DO CLIQUE MORA AO LADO DO BOTAO, e nao no alto do
+               dialogo: quem clicou esta olhando para o botao. Mesma razao que
+               levou a resposta do seletor de modelo para dentro da modal. -->
+          <span class="sy-lote-eco" id="sy-lote-eco" role="status" aria-live="polite"></span>
+          <!-- FORA DA TELA POR DECISAO DO AUTOR (09/09/2026): "achei perigoso".
+               Este par decide por arquivos que ninguem olhou -- e `Atualizar`
+               num campo extra REMOVE a coluna. O par de cima fica, porque ali
+               a pessoa esta olhando os campos daquele arquivo enquanto decide.
+
+               Esta COMENTADO, e nao apagado, porque a decisao e "depois eu
+               vejo": descomentar as tres linhas devolve o recurso inteiro --
+               o `bulkChoice(modo, true)` e os ouvintes continuam de pe, e o
+               JS ja tolera a ausencia dos ids.
+          <span class="sy-lote-onde" id="sy-lote-todos" data-i18n="UI_SYNC_ALL_FILES"></span>
+          <button type="button" id="sy-lote-manter-todos" data-i18n="UI_SYNC_KEEP"></button>
+          <button type="button" id="sy-lote-adotar-todos" data-i18n="UI_SYNC_ADOPT"></button>
+          -->
+        </div>
+        <div id="sy-campos" class="sy-campos"></div>
+      </section>
+    </div>
+
+    <div class="sy-rodape">
+      <span id="sy-resumo" class="sy-resumo"></span>
+      <button type="button" id="sy-parar" class="ghost" data-i18n="UI_STOP" hidden></button>
+      <button type="button" id="sy-aplicar-um" data-i18n="UI_SYNC_APPLY_ONE" disabled></button>
+      <button type="button" id="sy-aplicar-todos" class="primario" disabled></button>
+      <button type="button" id="sy-fechar" class="ghost" data-i18n="UI_CLOSE"></button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="dlg-massa">
   <form method="dialog" id="form-massa">
     <h2 id="ms-titulo"></h2>
@@ -1443,5 +1552,6 @@
 <script src="js/construtor-cursor.js"></script>
 <script src="js/construtor-ia.js"></script>
 <script src="js/app.js"></script>
+<script src="js/sync.js"></script>
 </body>
 </html>

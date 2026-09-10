@@ -1,4 +1,4 @@
-/*
+﻿/*
  * api_struct.prg - criar e alterar a estrutura de um DBF.
  *
  * A VALIDACAO MORA AQUI, E NAO SO NA TELA.
@@ -29,6 +29,7 @@
 #include "dbstruct.ch"
 #include "dbinfo.ch"
 #include "fileio.ch"
+#include "directry.ch"
 
 
 STATIC FUNCTION ParStr( hP, cChave )
@@ -102,7 +103,7 @@ FUNCTION Api_Struct_Create( hP )
     * A recusa e NOSSA e cita a aba, porque a saida e fechar a aba -- e so quem
     * sabe que ela existe pode dizer isso.
     */
-   IF ( xErro := DestinoAberto( cArq ) ) != NIL
+   IF ( xErro := SessFileOpenErr( cArq ) ) != NIL
       RETURN xErro
    ENDIF
 
@@ -314,20 +315,6 @@ STATIC FUNCTION ValidaEstrutura( aCampos, aEstru )
  * distingue caixa, entao "clientes.dbf" e "CLIENTES.DBF" sao o mesmo arquivo e
  * comparar sensivel deixaria passar.
  */
-STATIC FUNCTION DestinoAberto( cArq )
-
-   LOCAL cAlvo := Upper( AllTrim( cArq ) )
-   LOCAL hInfo
-
-   FOR EACH hInfo IN SessOpenFiles()
-      IF Upper( AllTrim( hInfo[ "path" ] ) ) == cAlvo
-         RETURN Err( "ERROR_FILE_IS_OPEN", "target is open in a tab", "path", ;
-                     { "file"  => hb_FNameNameExt( cArq ), ;
-                       "alias" => hInfo[ "alias" ] } )
-      ENDIF
-   NEXT
-
-   RETURN NIL
 
 
 /*
@@ -404,7 +391,7 @@ FUNCTION Api_Struct_Modify( hP )
     * A lista de indices e fotografada AGORA, porque depois da operacao ela
     * estara vazia de proposito -- ver `lSemIndices` em Religar(). O nome de
     * cada um viaja para a tela: dizer "os indices cairam" sem dizer QUAIS
-    * obriga a pessoa a caçar na pasta o que precisa reconstruir.
+    * obriga a pessoa a caÃ§ar na pasta o que precisa reconstruir.
     */
    aIndices := {}
    AEval( hInfo[ "indexes" ], {| c | AAdd( aIndices, hb_FNameNameExt( c ) ) } )
@@ -821,3 +808,522 @@ STATIC FUNCTION AoLado( cArq, cSufixo )
    RETURN hb_FNameMerge( hb_FNameDir( cArq ), ;
                          hb_FNameName( cArq ) + cSufixo, ;
                          hb_FNameExt( cArq ) )
+
+
+/* ======================================================================
+ * SINCRONIZAR ESTRUTURA -- pasta contra pasta (docs/20).
+ *
+ * O ERP do autor confronta cada DBF da pasta com um dicionario interno e
+ * lista, tabela a tabela, o que esta fora; o Navicat faz o mesmo entre dois
+ * bancos. Aqui a referencia e OUTRA PASTA de DBFs (decisao do autor,
+ * 09/09/2026): a base de homologacao contra a do cliente.
+ *
+ * Tres metodos, e NENHUM escreve. `struct.scan` le estruturas, `struct.diff`
+ * compara, `struct.compose` monta a estrutura de destino a partir das
+ * escolhas da pessoa. Quem escreve continua sendo `struct.modify` (T10) e
+ * `struct.create`, um arquivo por vez, cada um com o proprio backup -- e por
+ * isso nada novo entra em `MetodosRegistrados()`: o log ganha uma linha por
+ * arquivo aplicado, ja com o nome da copia.
+ * ====================================================================== */
+
+/*
+ * struct.scan {"dir":"..."} ou {"name":"conexao"}
+ *   -> { dir, files:[ {name, path, valid, inUse, reason, records,
+ *                      fields:[ {n,name,type,len,dec} ... ]} ... ] }
+ *
+ * LE O CABECALHO, NAO ABRE WORK AREA. Sao 227 arquivos na base mais rica;
+ * abrir cada um custaria lock, memo e indice para responder uma pergunta que
+ * os 32 bytes por campo ja respondem. Arquivo em uso ou invalido entra na
+ * lista com `inUse`/`reason`, como na arvore -- sumir da lista pareceria
+ * "esta igual".
+ *
+ * Os campos saem no MESMO formato do `file.info fields:true`, e ha asercao
+ * que compara os dois sobre o mesmo arquivo: e o que garante que ler o
+ * cabecalho por conta propria diz o mesmo que o RDD.
+ */
+FUNCTION Api_Struct_Scan( hP )
+
+   LOCAL cDir := ResolveFolder( hP )
+   LOCAL aRet
+
+   IF ! HB_ISSTRING( cDir )
+      RETURN cDir            /* ja e uma recusa */
+   ENDIF
+
+   /* O MESMO `ScanDir` DO DIFF, e nao uma copia dele. As duas leituras eram
+      identicas caractere a caractere, e a assercao do --selftest que compara
+      o scan com o `file.info` media so uma das duas -- a outra podia divergir
+      calada. Apontado em revisao, 09/09/2026. */
+   aRet := ScanDir( cDir )
+
+   ASort( aRet,,, {| x, y | Upper( x[ "name" ] ) < Upper( y[ "name" ] ) } )
+
+   RETURN Ok( { "dir" => cDir, "files" => aRet } )
+
+
+/*
+ * struct.diff {"source":{dir|name}, "target":{dir|name}, "byPosition":false}
+ *   -> { source, target, byPosition,
+ *        files:[ { name, status, side, records:{source,target},
+ *                  source:[campos], target:[campos],
+ *                  diagnostics:[ {field, kind, kinds:[...], source:{...}, target:{...}} ] } ] }
+ *
+ *   status  same | differs | missingInTarget | onlyInTarget | inUse | invalid
+ *   side    de qual lado veio o inUse/invalid ("source" | "target")
+ *   kind    missing | extra | type | len | dec | position   (o primeiro)
+ *   kinds   todas as diferencas daquele campo, na ordem acima
+ *
+ * CASA CAMPOS POR NOME. O ERP do autor casa por posicao (DIC_StruCompare) e
+ * paga por isso: um campo inserido no meio faz TODOS os seguintes parecerem
+ * errados, e o dicionario dele carrega campos "INUTIL/DESATIVADO" que nao
+ * podem sair so para as posicoes nao andarem. Aqui o nome e a identidade --
+ * a mesma regra do `from` do struct.modify (docs/12) --, e a POSICAO vira um
+ * diagnostico proprio, ligado por opcao (`byPosition`), porque cada usuario
+ * decide se a ordem importa para o sistema dele (decisao do autor,
+ * 09/09/2026).
+ *
+ * "Fora de posicao" e medido pela ORDEM RELATIVA entre os campos comuns, e
+ * nao pelo indice absoluto: inserir um campo novo antes dos outros nao pode
+ * marcar todos os outros como movidos. Uma troca de dois vizinhos marca os
+ * dois -- e honesto, os dois mudaram de lugar.
+ *
+ * "So no alvo" (onlyInTarget) e um arquivo que existe no cliente e nao na
+ * referencia. E INFORMACAO, nunca acao: o Navicat oferece apagar; o QDbu nao
+ * apaga arquivo de cliente.
+ */
+FUNCTION Api_Struct_Diff( hP )
+
+   LOCAL cSrc, cTgt, lPos
+   LOCAL hSrc, hTgt, aNomes := {}, cNome, aRet := {}
+   LOCAL hA, hB, hArq
+
+   cSrc := ResolveFolder( SubHash( hP, "source" ) )
+   IF ! HB_ISSTRING( cSrc )
+      RETURN cSrc
+   ENDIF
+   cTgt := ResolveFolder( SubHash( hP, "target" ) )
+   IF ! HB_ISSTRING( cTgt )
+      RETURN cTgt
+   ENDIF
+   lPos := ParLog( hP, "byPosition", .F. )
+
+   /* A mesma pasta dos dois lados compararia um arquivo consigo mesmo e
+      responderia "esta tudo igual" -- verdade inutil, e quase sempre um clique
+      errado no seletor. */
+   IF Upper( hb_DirSepDel( cSrc ) ) == Upper( hb_DirSepDel( cTgt ) )
+      RETURN Err( "ERROR_SYNC_SAME_DIR", "source and target are the same folder", "target", ;
+                  { "dir" => cTgt } )
+   ENDIF
+
+   hSrc := ByName( ScanDir( cSrc ) )
+   hTgt := ByName( ScanDir( cTgt ) )
+
+   FOR EACH cNome IN hb_HKeys( hSrc )
+      AAdd( aNomes, cNome )
+   NEXT
+   FOR EACH cNome IN hb_HKeys( hTgt )
+      IF ! hb_HHasKey( hSrc, cNome )
+         AAdd( aNomes, cNome )
+      ENDIF
+   NEXT
+   ASort( aNomes )
+
+   FOR EACH cNome IN aNomes
+      hA := iif( hb_HHasKey( hSrc, cNome ), hSrc[ cNome ], NIL )
+      hB := iif( hb_HHasKey( hTgt, cNome ), hTgt[ cNome ], NIL )
+      hArq := { "name"        => iif( hB != NIL, hB[ "name" ], hA[ "name" ] ), ;
+                "status"      => "", ;
+                "side"        => "", ;
+                "reason"      => "", ;
+                "records"     => { "source" => iif( hA == NIL, 0, hA[ "records" ] ), ;
+                                   "target" => iif( hB == NIL, 0, hB[ "records" ] ) }, ;
+                "source"      => iif( hA == NIL, {}, hA[ "fields" ] ), ;
+                "target"      => iif( hB == NIL, {}, hB[ "fields" ] ), ;
+                "diagnostics" => {} }
+
+      DO CASE
+      CASE hA == NIL
+         hArq[ "status" ] := "onlyInTarget"
+      CASE hB == NIL
+         /* A referencia invalida ou em uso nao pode servir de molde: nem
+            criar o arquivo que falta a partir dela. */
+         IF ! hA[ "valid" ]
+            hArq[ "status" ] := iif( hA[ "inUse" ], "inUse", "invalid" )
+            hArq[ "side" ]   := "source"
+            hArq[ "reason" ] := hA[ "reason" ]
+         ELSE
+            hArq[ "status" ] := "missingInTarget"
+         ENDIF
+      CASE ! hB[ "valid" ]
+         hArq[ "status" ] := iif( hB[ "inUse" ], "inUse", "invalid" )
+         hArq[ "side" ]   := "target"
+         hArq[ "reason" ] := hB[ "reason" ]
+      CASE ! hA[ "valid" ]
+         hArq[ "status" ] := iif( hA[ "inUse" ], "inUse", "invalid" )
+         hArq[ "side" ]   := "source"
+         hArq[ "reason" ] := hA[ "reason" ]
+      OTHERWISE
+         hArq[ "diagnostics" ] := CompareFields( hA[ "fields" ], hB[ "fields" ], lPos )
+         hArq[ "status" ] := iif( Empty( hArq[ "diagnostics" ] ), "same", "differs" )
+      ENDCASE
+
+      AAdd( aRet, hArq )
+   NEXT
+
+   RETURN Ok( { "source" => cSrc, "target" => cTgt, "byPosition" => lPos, "files" => aRet } )
+
+
+/*
+ * struct.compose {"source":[campos], "target":[campos],
+ *                 "choices":{"CAMPO":"keep"|"adopt"|"drop"}, "byPosition":false}
+ *   -> { fields:[ {name,type,len,dec,from} ], losses:[ {field, kind} ], changed }
+ *
+ * PURA: nao le disco, nao abre area. E o que a torna barata no trilho C e no
+ * --selftest, e o que permite a UI montar a estrutura de destino sem ter de
+ * saber as regras -- elas moram aqui, num lugar so, e sao afirmadas.
+ *
+ * A DLL NAO ESCOLHE POR NINGUEM. Quando o cliente tem o campo maior, ou tem
+ * um campo que a referencia nao tem, nao existe padrao certo: o ERP do autor
+ * mantem (nunca encolhe, preserva o NP_SYNC), o Navicat iguala. Decisao do
+ * autor (09/09/2026): quem opera e DBA e decide caso a caso. Campo divergente
+ * sem escolha e recusa com o nome dele -- nao um chute silencioso.
+ *
+ * O que NAO pergunta: campo que so existe na referencia (`missing`) sempre
+ * nasce, em branco; campo fora de posicao so muda de lugar. Nenhum dos dois
+ * perde dado.
+ *
+ * `from` E SEMPRE O NOME NO ALVO -- e o `struct.modify` copia por ele, nunca
+ * por posicao. Reordenar aqui e seguro por causa disso.
+ *
+ * ORDEM: com `byPosition` a da referencia (e o que um ERP que le por posicao
+ * precisa); sem, a do alvo. Nos dois casos o que so existe de um lado vai
+ * para o FIM: o campo novo no fim e como o ERP do autor faz, e o extra
+ * mantido no fim e onde o NP_SYNC dele fica.
+ *
+ * `losses` marca o que a escolha custa: encolher, mudar tipo, cortar decimal
+ * e remover. A UI mostra com a mesma frase do T10 (UI_MODIFY_LOST).
+ */
+FUNCTION Api_Struct_Compose( hP )
+
+   LOCAL aSrc := ListOf( hP, "source" )
+   LOCAL aTgt := ListOf( hP, "target" )
+   LOCAL hEsc := iif( HB_ISHASH( hP ) .AND. hb_HHasKey( hP, "choices" ) .AND. HB_ISHASH( hP[ "choices" ] ), ;
+                      hP[ "choices" ], { => } )
+   LOCAL lPos := ParLog( hP, "byPosition", .F. )
+   LOCAL hS := { => }, hT := { => }, hE := { => }
+   LOCAL aOrdem := {}, aFim := {}, aFields := {}, aLosses := {}
+   LOCAL h, cNome, cEsc, hA, hB, hDef, xErro, lMudou := .F.
+
+   IF Empty( aSrc ) .AND. Empty( aTgt )
+      RETURN Err( "ERROR_NO_FIELDS", "source and target are both empty", "source" )
+   ENDIF
+
+   /*
+    * A FORMA DAS DUAS LISTAS E CONFERIDA ANTES DE QUALQUER LEITURA.
+    *
+    * Sem isto, `{"source":[1,2]}` chegava em `h[ "name" ]` sobre um numero: o
+    * erro de runtime subia pelo RECOVER do dispatcher e virava `"ERR:"` -- que
+    * neste projeto significa BUG A CORRIGIR. Parametro malformado e recusa de
+    * negocio, e a fronteira entre as duas coisas so continua valendo se toda
+    * porta de entrada a defender. `Api_Struct_Create` e `Api_Struct_Modify` ja
+    * o faziam com `ValidaEstrutura`; esta nao. Apontado em revisao, 09/09/2026.
+    *
+    * A conferencia aqui e de FORMA, e nao das regras do DBF: as duas listas
+    * vem de `struct.scan`, que le cabecalhos de verdade, e um tipo exotico de
+    * um arquivo antigo tem de conseguir ser COMPARADO. Quem cobra as regras e
+    * o `struct.modify`, na hora de escrever.
+    */
+   IF ( xErro := CheckFieldShape( aSrc, "source" ) ) != NIL
+      RETURN xErro
+   ENDIF
+   IF ( xErro := CheckFieldShape( aTgt, "target" ) ) != NIL
+      RETURN xErro
+   ENDIF
+
+   FOR EACH h IN aSrc
+      hS[ Upper( AllTrim( h[ "name" ] ) ) ] := h
+   NEXT
+   FOR EACH h IN aTgt
+      hT[ Upper( AllTrim( h[ "name" ] ) ) ] := h
+   NEXT
+   /*
+    * A ESCOLHA E CONFERIDA CONTRA UMA LISTA, e nao com `$` numa string.
+    *
+    * `cEsc $ "keep,adopt,drop"` e SUBSTRING: `""`, `"ee"`, `"p,a"` e `","`
+    * passavam por escolha valida, e la adiante nenhum `== "keep"` casava --
+    * entao o campo era recusado como ERROR_SYNC_CHOICE_MISSING, dizendo
+    * "decida" a quem tinha decidido. Recusa que aponta o lugar errado custa
+    * mais que recusa nenhuma. Apontado em revisao, 09/09/2026.
+    */
+   FOR EACH cNome IN hb_HKeys( hEsc )
+      cEsc := Lower( AllTrim( hb_CStr( hEsc[ cNome ] ) ) )
+      IF AScan( { "keep", "adopt", "drop" }, {| c | c == cEsc } ) == 0
+         RETURN Err( "ERROR_SYNC_CHOICE_INVALID", "unknown choice", "choices", ;
+                     { "field" => Upper( cNome ), "choice" => cEsc } )
+      ENDIF
+      hE[ Upper( AllTrim( cNome ) ) ] := cEsc
+   NEXT
+
+   /* A ordem base e de um lado; o que so existe no outro vai para o fim. */
+   IF lPos
+      FOR EACH h IN aSrc ; AAdd( aOrdem, Upper( AllTrim( h[ "name" ] ) ) ) ; NEXT
+      FOR EACH h IN aTgt
+         IF ! hb_HHasKey( hS, Upper( AllTrim( h[ "name" ] ) ) )
+            AAdd( aFim, Upper( AllTrim( h[ "name" ] ) ) )
+         ENDIF
+      NEXT
+   ELSE
+      FOR EACH h IN aTgt ; AAdd( aOrdem, Upper( AllTrim( h[ "name" ] ) ) ) ; NEXT
+      FOR EACH h IN aSrc
+         IF ! hb_HHasKey( hT, Upper( AllTrim( h[ "name" ] ) ) )
+            AAdd( aFim, Upper( AllTrim( h[ "name" ] ) ) )
+         ENDIF
+      NEXT
+   ENDIF
+   AEval( aFim, {| c | AAdd( aOrdem, c ) } )
+
+   FOR EACH cNome IN aOrdem
+      hA := iif( hb_HHasKey( hS, cNome ), hS[ cNome ], NIL )
+      hB := iif( hb_HHasKey( hT, cNome ), hT[ cNome ], NIL )
+      cEsc := iif( hb_HHasKey( hE, cNome ), hE[ cNome ], "" )
+
+      DO CASE
+      CASE hB == NIL                       /* so na referencia: nasce em branco */
+         hDef := hA
+         AAdd( aFields, NewField( hDef, "" ) )
+         lMudou := .T.
+
+      CASE hA == NIL                       /* so no alvo: manter ou remover */
+         /* "ADOTAR A REFERENCIA" NUM CAMPO QUE A REFERENCIA NAO TEM E REMOVER.
+            E o que a palavra quer dizer, e e o que o botao "adotar em tudo" da
+            tela ja traduz para `drop` -- mas um pedido montado a mao, ou uma
+            tela futura que mande `adopt` direto, caia em CHOICE_MISSING e
+            mandava decidir de novo o que ja tinha sido decidido. */
+         IF cEsc == "keep"
+            AAdd( aFields, NewField( hB, cNome ) )
+         ELSEIF cEsc == "drop" .OR. cEsc == "adopt"
+            AAdd( aLosses, { "field" => cNome, "kind" => "drop" } )
+            lMudou := .T.
+         ELSE
+            RETURN Err( "ERROR_SYNC_CHOICE_MISSING", "field needs a decision", "choices", ;
+                        { "field" => cNome } )
+         ENDIF
+
+      CASE SameDef( hA, hB )              /* igual: nada a decidir */
+         AAdd( aFields, NewField( hB, cNome ) )
+
+      OTHERWISE                            /* divergente: manter ou adotar */
+         IF cEsc == "keep"
+            AAdd( aFields, NewField( hB, cNome ) )
+         ELSEIF cEsc == "adopt"
+            AAdd( aFields, NewField( hA, cNome ) )
+            lMudou := .T.
+            IF hA[ "type" ] != hB[ "type" ]
+               AAdd( aLosses, { "field" => cNome, "kind" => "type" } )
+            ELSE
+               IF hA[ "len" ] < hB[ "len" ]
+                  AAdd( aLosses, { "field" => cNome, "kind" => "shrink" } )
+               ENDIF
+               IF hA[ "dec" ] < hB[ "dec" ]
+                  AAdd( aLosses, { "field" => cNome, "kind" => "dec" } )
+               ENDIF
+            ENDIF
+         ELSEIF cEsc == "drop"
+            RETURN Err( "ERROR_SYNC_CHOICE_INVALID", "cannot drop a field the reference has", "choices", ;
+                        { "field" => cNome, "choice" => cEsc } )
+         ELSE
+            RETURN Err( "ERROR_SYNC_CHOICE_MISSING", "field needs a decision", "choices", ;
+                        { "field" => cNome } )
+         ENDIF
+      ENDCASE
+   NEXT
+
+   /*
+    * Reordenar tambem e mudanca -- e a unica que o laco acima nao ve.
+    *
+    * A comparacao e `==`, EXATA. Com `!=` (que obedece ao SET EXACT, nunca
+    * ligado aqui) a troca de `CLI_NOME` com `CLI_NOME2` nao era vista: um dos
+    * nomes e prefixo do outro, `!=` respondia .F., e o laco concluia que nada
+    * tinha se movido. `changed` voltava .F., a UI pulava o arquivo, e o que
+    * ficava de fora era justamente a reordenacao que a pessoa ligou o
+    * `byPosition` para corrigir. Apontado em revisao, 09/09/2026.
+    */
+   IF ! lMudou
+      lMudou := Len( aFields ) != Len( aTgt )
+      IF ! lMudou
+         FOR EACH h IN aFields
+            IF ! ( Upper( AllTrim( aTgt[ h:__enumIndex() ][ "name" ] ) ) == h[ "name" ] )
+               lMudou := .T.
+               EXIT
+            ENDIF
+         NEXT
+      ENDIF
+   ENDIF
+
+   RETURN Ok( { "fields" => aFields, "losses" => aLosses, "changed" => lMudou } )
+
+
+/* ------------------------------------------------------ auxiliares do sync */
+
+/* Um sub-hash do pedido, ou o proprio pedido quando a chave nao veio -- para
+   `struct.diff` aceitar {"source":{"dir":...}} e o ResolveFolder ler dali. */
+STATIC FUNCTION SubHash( hP, cChave )
+
+   IF HB_ISHASH( hP ) .AND. hb_HHasKey( hP, cChave ) .AND. HB_ISHASH( hP[ cChave ] )
+      RETURN hP[ cChave ]
+   ENDIF
+
+   RETURN { => }
+
+STATIC FUNCTION ListOf( hP, cChave )
+
+   IF HB_ISHASH( hP ) .AND. hb_HHasKey( hP, cChave ) .AND. HB_ISARRAY( hP[ cChave ] )
+      RETURN hP[ cChave ]
+   ENDIF
+
+   RETURN {}
+
+/* Os arquivos de uma pasta com a estrutura de cada um -- o miolo do
+   struct.scan, reusado pelo diff nos dois lados. */
+STATIC FUNCTION ScanDir( cDir )
+
+   LOCAL aItem, aRet := {}, hHdr, cPath
+
+   FOR EACH aItem IN Directory( hb_DirSepAdd( cDir ) + "*.dbf" )
+      cPath := hb_DirSepAdd( cDir ) + aItem[ F_NAME ]
+      hHdr  := ReadDbfHeader( cPath, .T. )
+      AAdd( aRet, { ;
+         "name"    => aItem[ F_NAME ], ;
+         "path"    => cPath, ;
+         "valid"   => hHdr[ "valid" ], ;
+         "inUse"   => hHdr[ "inUse" ], ;
+         "reason"  => hHdr[ "reason" ], ;
+         "records" => hHdr[ "records" ], ;
+         "fields"  => hHdr[ "fieldList" ] } )
+   NEXT
+
+   RETURN aRet
+
+STATIC FUNCTION ByName( aArqs )
+
+   LOCAL hRet := { => }, h
+
+   FOR EACH h IN aArqs
+      hRet[ Upper( h[ "name" ] ) ] := h
+   NEXT
+
+   RETURN hRet
+
+STATIC FUNCTION SameDef( hA, hB )
+   RETURN hA[ "type" ] == hB[ "type" ] .AND. hA[ "len" ] == hB[ "len" ] .AND. hA[ "dec" ] == hB[ "dec" ]
+
+/*
+ * A posicao de um NOME numa lista de nomes -- comparando EXATO.
+ *
+ * `AScan( a, cNome )` compara com `=`, e `=` obedece ao SET EXACT, que este
+ * projeto nunca liga: `AScan( {"NP_SYNCX","NP_SYNC"}, "NP_SYNC" )` devolve 1,
+ * a posicao do OUTRO campo. Com `COD`/`CODIGO`, `CLI_NOME`/`CLI_NOME2` -- que
+ * e a cara de um DBF de verdade -- o diagnostico `position` passava a comparar
+ * duas posicoes de campos diferentes: campo parado saia como movido e campo
+ * movido saia como igual. O bloco de codigo usa `==`, que ignora o SET EXACT.
+ * Apontado em revisao, 09/09/2026; e a mesma razao do `hb_AScan(..., .T.)` do
+ * dispatch.prg.
+ */
+STATIC FUNCTION RankOf( aNomes, cNome )
+   RETURN AScan( aNomes, {| c | c == cNome } )
+
+STATIC FUNCTION NewField( hDef, cFrom )
+   RETURN { "name" => Upper( AllTrim( hDef[ "name" ] ) ), "type" => hDef[ "type" ], ;
+            "len" => hDef[ "len" ], "dec" => hDef[ "dec" ], "from" => cFrom }
+
+/*
+ * A FORMA de uma lista de campos vinda do pedido: hash com `name` de texto e
+ * nao vazio, `type` de texto, `len` e `dec` numericos. Devolve a recusa ou NIL.
+ *
+ * Nao cobra as regras do DBF -- nome de ate 10, tipo em CNDLM, tamanho que
+ * cabe. Quem cobra e o `ValidaEstrutura`, na hora de ESCREVER. Aqui as listas
+ * vem de `struct.scan`, que le cabecalhos reais: recusar comparar um arquivo
+ * antigo por causa de um tipo que o Harbour nao cria hoje seria esconder da
+ * tela justamente o arquivo que precisa ser olhado.
+ */
+STATIC FUNCTION CheckFieldShape( aLista, cLado )
+
+   LOCAL i, h
+
+   FOR i := 1 TO Len( aLista )
+      h := aLista[ i ]
+      IF ! HB_ISHASH( h )
+         RETURN Err( "ERROR_FIELD_BAD", "field is not an object", cLado, { "n" => i } )
+      ENDIF
+      IF ! ( hb_HHasKey( h, "name" ) .AND. HB_ISSTRING( h[ "name" ] ) ) .OR. ;
+         Empty( AllTrim( h[ "name" ] ) )
+         RETURN Err( "ERROR_FIELD_NAME_EMPTY", "field without a name", cLado, { "n" => i } )
+      ENDIF
+      IF ! ( hb_HHasKey( h, "type" ) .AND. HB_ISSTRING( h[ "type" ] ) ) .OR. ;
+         ! ( hb_HHasKey( h, "len" ) .AND. HB_ISNUMERIC( h[ "len" ] ) ) .OR. ;
+         ! ( hb_HHasKey( h, "dec" ) .AND. HB_ISNUMERIC( h[ "dec" ] ) )
+         RETURN Err( "ERROR_FIELD_BAD", "field needs type, len and dec", cLado, ;
+                     { "n" => i, "field" => Upper( AllTrim( h[ "name" ] ) ) } )
+      ENDIF
+   NEXT
+
+   RETURN NIL
+
+/*
+ * As diferencas entre duas estruturas, por nome.
+ *
+ * Uma entrada por campo, com TODAS as diferencas dele em `kinds` -- a escolha
+ * (manter/adotar) e por campo, entao a tela precisa ve-las juntas. `kind` e a
+ * primeira, para quem so quer um selo.
+ */
+STATIC FUNCTION CompareFields( aSrc, aTgt, lPos )
+
+   LOCAL hT := { => }, hS := { => }, h, cNome, hA, hB, aKinds, aRet := {}
+   LOCAL aComumS := {}, aComumT := {}, nRankS, nRankT
+
+   FOR EACH h IN aSrc ; hS[ Upper( AllTrim( h[ "name" ] ) ) ] := h ; NEXT
+   FOR EACH h IN aTgt ; hT[ Upper( AllTrim( h[ "name" ] ) ) ] := h ; NEXT
+
+   /* A ordem relativa dos campos comuns, de cada lado. */
+   FOR EACH h IN aSrc
+      cNome := Upper( AllTrim( h[ "name" ] ) )
+      IF hb_HHasKey( hT, cNome ) ; AAdd( aComumS, cNome ) ; ENDIF
+   NEXT
+   FOR EACH h IN aTgt
+      cNome := Upper( AllTrim( h[ "name" ] ) )
+      IF hb_HHasKey( hS, cNome ) ; AAdd( aComumT, cNome ) ; ENDIF
+   NEXT
+
+   FOR EACH h IN aSrc
+      cNome := Upper( AllTrim( h[ "name" ] ) )
+      hA := h
+      IF ! hb_HHasKey( hT, cNome )
+         AAdd( aRet, { "field" => cNome, "kind" => "missing", "kinds" => { "missing" }, ;
+                       "source" => hA, "target" => NIL } )
+         LOOP
+      ENDIF
+      hB := hT[ cNome ]
+      aKinds := {}
+      IF ! ( hA[ "type" ] == hB[ "type" ] ) ; AAdd( aKinds, "type" ) ; ENDIF
+      IF hA[ "len" ]  != hB[ "len" ]  ; AAdd( aKinds, "len" )  ; ENDIF
+      IF hA[ "dec" ]  != hB[ "dec" ]  ; AAdd( aKinds, "dec" )  ; ENDIF
+      IF lPos
+         nRankS := RankOf( aComumS, cNome )
+         nRankT := RankOf( aComumT, cNome )
+         IF nRankS != nRankT ; AAdd( aKinds, "position" ) ; ENDIF
+      ENDIF
+      IF ! Empty( aKinds )
+         AAdd( aRet, { "field" => cNome, "kind" => aKinds[ 1 ], "kinds" => aKinds, ;
+                       "source" => hA, "target" => hB } )
+      ENDIF
+   NEXT
+
+   FOR EACH h IN aTgt
+      cNome := Upper( AllTrim( h[ "name" ] ) )
+      IF ! hb_HHasKey( hS, cNome )
+         AAdd( aRet, { "field" => cNome, "kind" => "extra", "kinds" => { "extra" }, ;
+                       "source" => NIL, "target" => h } )
+      ENDIF
+   NEXT
+
+   RETURN aRet

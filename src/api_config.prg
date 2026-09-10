@@ -25,6 +25,7 @@ FUNCTION Api_Config_Get( hP )
       "showDeleted"   => ! Set( _SET_DELETED ), ;
       "toolbarLabels" => RotulosNaBarra(), ;
       "terminal"      => TerminalPreferido(), ;
+      "syncByPosition" => SyncByPosition(), ;
       "epoch"         => Set( _SET_EPOCH ), ;
       "codepages"     => CodepagesDisponiveis(), ;
       "default"       => CdpPadrao() } )
@@ -83,6 +84,12 @@ FUNCTION Api_Config_Set( hP )
       ENDIF
    ENDIF
 
+   /* Preferencia do sincronizar estrutura (docs/20): a ordem dos campos conta
+      como diferenca? Mesmo molde do showDeleted -- logico, guardado como veio. */
+   IF hb_HHasKey( hP, "syncByPosition" ) .AND. HB_ISLOGICAL( hP[ "syncByPosition" ] )
+      h[ "syncByPosition" ] := hP[ "syncByPosition" ]
+   ENDIF
+
    lSalvou := SalvaConfigGlobal( h )
    SessBump()
 
@@ -92,4 +99,5 @@ FUNCTION Api_Config_Set( hP )
       "showDeleted"   => ! Set( _SET_DELETED ), ;
       "toolbarLabels" => RotulosNaBarra(), ;
       "terminal"      => TerminalPreferido(), ;
+      "syncByPosition" => SyncByPosition(), ;
       "epoch"         => Set( _SET_EPOCH ) } )

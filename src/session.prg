@@ -154,6 +154,34 @@ FUNCTION SessOpenFiles()
 
    RETURN aRet
 
+/*
+ * O arquivo esta aberto NESTA sessao? Devolve a recusa pronta, ou NIL.
+ *
+ * Existe porque toda operacao que CRIA ou SOBRESCREVE um arquivo precisa fazer
+ * a mesma pergunta antes de tocar no disco: sem ela o RDD segura o arquivo e o
+ * unico sinal e um "Create error" cru, que nao diz o que houve nem o que
+ * fazer. A recusa e nossa e cita a aba, porque a saida e fechar a aba -- e so
+ * quem sabe que ela existe pode dizer isso.
+ *
+ * Nasceu STATIC dentro do `Api_Struct_Create` e virou publica quando o
+ * `meta.copyfile` passou a criar arquivo no alvo (docs/20): a segunda copia
+ * seria a que um dia esqueceria a conferencia.
+ */
+FUNCTION SessFileOpenErr( cArq )
+
+   LOCAL cAlvo := Upper( AllTrim( cArq ) )
+   LOCAL hInfo
+
+   FOR EACH hInfo IN SessOpenFiles()
+      IF Upper( AllTrim( hInfo[ "path" ] ) ) == cAlvo
+         RETURN Err( "ERROR_FILE_IS_OPEN", "target is open in a tab", "path", ;
+                     { "file"  => hb_FNameNameExt( cArq ), ;
+                       "alias" => hInfo[ "alias" ] } )
+      ENDIF
+   NEXT
+
+   RETURN NIL
+
 /* Closed handles, for diagnostics (session.state). */
 FUNCTION SessClosedFiles()
 

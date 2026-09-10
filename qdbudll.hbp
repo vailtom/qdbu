@@ -44,6 +44,7 @@ src/util/scope.prg
 src/util/csv.prg
 src/util/zip.prg
 src/util/rebind.prg
+src/util/dbfhdr.prg
 
 # api, um arquivo por dominio
 src/api_meta.prg

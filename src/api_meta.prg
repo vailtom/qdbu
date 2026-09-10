@@ -307,8 +307,16 @@ FUNCTION Api_Meta_Detach( hP )
 
 
 /*
- * meta.copyfile {"source":"...","dest":"...","block":1048576} -- exercita a
- * copia de bytes direto, sem passar pelo backup.
+ * meta.copyfile {"source":"...","dest":"...","block":1048576,"replace":false}
+ * -- copia de bytes direto, sem passar pelo backup. Recusa destino que ja
+ * existe (a menos de `replace`) e destino aberto numa aba.
+ *
+ * DEIXOU DE SER SO UM GANCHO em 09/09/2026: o sincronizar estrutura (docs/20)
+ * o usa para criar no alvo uma tabela que nao existia, JA COM OS DADOS da
+ * pasta de referencia -- uma copia fiel leva estrutura, registros, marcas de
+ * exclusao e o byte de codepage de uma vez, o que criar-e-importar faria mais
+ * devagar e com tres perguntas a mais. Por isso ele entrou em
+ * `MetodosRegistrados()`: passou a escrever bytes na pasta de quem opera.
  *
  * POR QUE PRECISA EXISTIR
  *
@@ -328,6 +336,7 @@ FUNCTION Api_Meta_Copyfile( hP )
    LOCAL cDest  := iif( HB_ISHASH( hP ) .AND. hb_HHasKey( hP, "dest" ), hP[ "dest" ], "" )
    LOCAL nBloco := ParNum( hP, "block", 0 )
    LOCAL lExcl  := ! ( HB_ISHASH( hP ) .AND. hb_HHasKey( hP, "shared" ) .AND. hP[ "shared" ] == .T. )
+   LOCAL lSubst := HB_ISHASH( hP ) .AND. hb_HHasKey( hP, "replace" ) .AND. hP[ "replace" ] == .T.
    LOCAL nCopiados := 0
    LOCAL nInicio, xErro
 
@@ -342,6 +351,33 @@ FUNCTION Api_Meta_Copyfile( hP )
    IF ! hb_FileExists( cOrig )
       RETURN Err( "ERROR_FILE_NOT_FOUND", "source not found", "source", ;
                   { "file" => hb_FNameNameExt( cOrig ) } )
+   ENDIF
+
+   /*
+    * O DESTINO NAO E SOBRESCRITO POR OMISSAO -- e as duas conferencias sao as
+    * mesmas do `struct.create`, porque as duas operacoes fazem a mesma coisa:
+    * CRIAR um arquivo no alvo.
+    *
+    * Enquanto isto foi so um gancho de diagnostico, `FCreate` truncando o que
+    * estivesse la era aceitavel. Deixou de ser no dia em que o sincronizar
+    * estrutura passou a criar a tabela do cliente por aqui: entre o Comparar e
+    * o Aplicar cabe o ERP criando o arquivo que faltava, e a copia passaria
+    * por cima dos dados dele sem backup, sem recusa e com uma linha no log
+    * dizendo que deu certo. O `struct.create`, que e o outro ramo do MESMO
+    * `aplicarUm`, ja recusava os dois casos; este herdou nenhum dos dois.
+    * Apontado em revisao, 09/09/2026.
+    *
+    * `replace` existe para quem sobrescreve de proposito -- o --selftest
+    * refaz as copias de trabalho a cada rodada -- e e explicito, como o
+    * `replace` do `struct.create`.
+    */
+   IF hb_FileExists( cDest ) .AND. ! lSubst
+      RETURN Err( "ERROR_FILE_EXISTS", "destination already exists", "dest", ;
+                  { "file" => hb_FNameNameExt( cDest ) } )
+   ENDIF
+
+   IF ( xErro := SessFileOpenErr( cDest ) ) != NIL
+      RETURN xErro
    ENDIF
 
    /* O bloco EFETIVO, e nao o pedido: CopiaArquivo() aplica piso e teto, e

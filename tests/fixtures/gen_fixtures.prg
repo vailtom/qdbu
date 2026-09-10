@@ -25,6 +25,7 @@ PROCEDURE Main( cQtdGrande )
    GeraTipos()
    GeraVazio()
    GeraRelacionadas()
+   GeraReferencia()
 
    IF nGrande > 0
       GeraGrande( nGrande )
@@ -161,6 +162,21 @@ STATIC PROCEDURE GeraRelacionadas()
    dbCloseArea()
 
    dbCreate( "filho.dbf", { { "COD", "C", 5, 0 }, { "ITEM", "N", 4, 0 }, { "VALOR", "N", 10, 2 } } )
+
+   /*
+    * prefixo.dbf -- UM NOME QUE E PREFIXO DO OUTRO, trocados de lugar.
+    *
+    * Existe por um defeito real: `AScan( aNomes, cNome )` compara com `=`, que
+    * obedece ao SET EXACT -- nunca ligado neste projeto. Procurando `SYNC1`
+    * numa lista que comeca com `SYNC10`, o AScan devolvia a posicao do OUTRO
+    * campo, e a troca dos dois passava por "ninguem se moveu". `COD`/`CODIGO`
+    * e `CLI_NOME`/`CLI_NOME2` sao a cara de um DBF de verdade, entao isto nao
+    * e um caso de laboratorio.
+    *
+    * Aqui a ordem e SYNC10, SYNC1; na referencia e SYNC1, SYNC10. Os dois
+    * campos mudaram de lugar, e os dois tem de aparecer com `position`.
+    */
+   dbCreate( "prefixo.dbf", { { "SYNC10", "C", 8, 0 }, { "SYNC1", "C", 8, 0 } } )
    USE filho EXCLUSIVE NEW
    FOR i := 1 TO 20
       FOR j := 1 TO 3
@@ -173,6 +189,72 @@ STATIC PROCEDURE GeraRelacionadas()
    INDEX ON FIELD->COD TO filho
    ? "filho.dbf      " + hb_ntos( LastRec() ) + " registros + filho.ntx"
    dbCloseArea()
+
+   RETURN
+
+/*
+ * ref/ - a PASTA DE REFERENCIA do sincronizar estrutura (docs/20).
+ *
+ * A pasta de fixtures faz o papel de "cliente" e esta faz o de "homologacao":
+ * cada arquivo aqui existe para produzir UM diagnostico previsivel.
+ *
+ *   tipos.dbf   ACENTO e TXT trocados de lugar (position); TXT 40->60 (len,
+ *               cliente menor); NUM 12,2 -> 12,3 (dec); INT some da
+ *               referencia (extra no cliente); NOVO C 10 nasce (missing).
+ *               OBS memo continua, para o .dbt ir junto na copia.
+ *   pai.dbf     identico -> same
+ *   (filho.dbf) nao existe aqui -> onlyInTarget; nunca vira acao
+ *   extra.dbf   so aqui -> missingInTarget, cria vazio
+ *   larga.dbf   um C(300): o byte alto do tamanho mora nos decimais, e a
+ *               leitura do cabecalho tem de desfazer isso como o RDD faz
+ *   lixo.dbf    texto com extensao .dbf -> invalid, listado e nunca aplicado
+ */
+STATIC PROCEDURE GeraReferencia()
+
+   LOCAL i
+
+   IF ! hb_DirExists( "ref" )
+      hb_DirCreate( "ref" )
+   ENDIF
+   AEval( Directory( "ref" + hb_ps() + "*.*" ), {| a | FErase( "ref" + hb_ps() + a[ 1 ] ) } )
+
+   dbCreate( "ref/tipos.dbf", { ;
+      { "ACENTO", "C", 40, 0 }, ;
+      { "TXT",    "C", 60, 0 }, ;
+      { "SUJO",   "C", 20, 0 }, ;
+      { "NUM",    "N", 12, 3 }, ;
+      { "DATA",   "D",  8, 0 }, ;
+      { "LOGICO", "L",  1, 0 }, ;
+      { "OBS",    "M", 10, 0 }, ;
+      { "NOVO",   "C", 10, 0 } } )
+   dbUseArea( .T.,, "ref/tipos.dbf", "REFT", .F. )
+   dbAppend()
+   FIELD->TXT := "referencia" ; FIELD->NUM := 1.234 ; FIELD->NOVO := "novo"
+   dbCloseArea()
+
+   dbCreate( "ref/pai.dbf", { { "COD", "C", 5, 0 }, { "NOME", "C", 30, 0 } } )
+   dbUseArea( .T.,, "ref/pai.dbf", "REFP", .F. )
+   FOR i := 1 TO 3
+      dbAppend()
+      FIELD->COD := StrZero( i, 5 ) ; FIELD->NOME := "REF " + StrZero( i, 5 )
+   NEXT
+   dbCloseArea()
+
+   dbCreate( "ref/extra.dbf", { { "CODIGO", "C", 10, 0 }, { "QUANDO", "D", 8, 0 } } )
+
+   /* O outro lado do prefixo.dbf: mesma dupla, ordem invertida. Ver o
+      comentario na geracao do alvo. */
+   dbCreate( "ref/prefixo.dbf", { { "SYNC1", "C", 8, 0 }, { "SYNC10", "C", 8, 0 } } )
+
+   dbCreate( "ref/larga.dbf", { { "ID", "N", 6, 0 }, { "TEXTO", "C", 300, 0 } } )
+   dbUseArea( .T.,, "ref/larga.dbf", "REFL", .F. )
+   dbAppend()
+   FIELD->ID := 1 ; FIELD->TEXTO := Replicate( "x", 300 )
+   dbCloseArea()
+
+   hb_MemoWrit( "ref/lixo.dbf", "[secao]" + hb_eol() + "isto nao e um dbf" + hb_eol() )
+
+   ? "ref/           tipos, pai, extra, larga(C300), prefixo, lixo(invalido)"
 
    RETURN
 

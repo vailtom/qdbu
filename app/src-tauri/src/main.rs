@@ -1258,7 +1258,7 @@ fn selftest() -> i32 {
             "meta.copyfile",
             // `shared`: o bloco TA acima ainda tem a fixture aberta nesta mesma
             // VM, e a leitura exclusiva do copiador esbarraria nela.
-            &format!(r#"{{"source":"{origem_s}","dest":"{copia_s}","shared":true}}"#),
+            &format!(r#"{{"source":"{origem_s}","dest":"{copia_s}","shared":true,"replace":true}}"#),
         )
         .map(|r| r.contains("\"ok\":true"))
         .unwrap_or(false);
@@ -1405,7 +1405,7 @@ fn selftest() -> i32 {
         let copiou = rpc_bruto(
             &hb,
             "meta.copyfile",
-            &format!(r#"{{"source":"{origem_s}","dest":"{ed_s}","shared":true}}"#),
+            &format!(r#"{{"source":"{origem_s}","dest":"{ed_s}","shared":true,"replace":true}}"#),
         )
         .map(|r| r.contains("\"ok\":true"))
         .unwrap_or(false);
@@ -1972,9 +1972,9 @@ fn selftest() -> i32 {
                 let dbt_de = |dbf: &str| dbf.strip_suffix(".dbf").map(|b| format!("{b}.dbt")).unwrap_or_default();
                 // o conjunto: DBF e o DBT do memo -- sem o .dbt, o open recusa
                 let _ = rpc_bruto(&hb, "meta.copyfile",
-                    &format!(r#"{{"source":"{ed_s}","dest":"{ed2_s}","shared":true}}"#));
+                    &format!(r#"{{"source":"{ed_s}","dest":"{ed2_s}","shared":true,"replace":true}}"#));
                 let _ = rpc_bruto(&hb, "meta.copyfile",
-                    &format!(r#"{{"source":"{}","dest":"{}","shared":true}}"#, dbt_de(&ed_s), dbt_de(&ed2_s)));
+                    &format!(r#"{{"source":"{}","dest":"{}","shared":true,"replace":true}}"#, dbt_de(&ed_s), dbt_de(&ed2_s)));
 
                 // 1. SET EPOCH TO 1979 rodou na init da VM
                 let cfg = rpc_bruto(&hb, "config.get", "{}")
@@ -2852,6 +2852,480 @@ fn selftest() -> i32 {
     }
 
     /*
+     * ---- Sincronizar estrutura (SYNC) -- docs/20 --------------------------
+     *
+     * `struct.scan` le a estrutura de cada DBF da pasta pelo CABECALHO, sem
+     * abrir work area. O que se afirma e que essa leitura por conta propria
+     * diz o MESMO que o RDD -- e a unica fonte de verdade, e um byte lido no
+     * lugar errado produziria uma comparacao inteira baseada em campos que
+     * nao existem. Por isso o scan e conferido contra `file.info fields:true`
+     * do mesmo arquivo, e o C(300) da fixture cobre o byte alto do tamanho.
+     */
+    saida("");
+    {
+        let fixtures = raiz_projeto()
+            .map(|raiz| raiz.join("tests").join("fixtures"))
+            .filter(|p| p.join("TIPOS.DBF").exists() && p.join("ref").join("tipos.dbf").exists());
+        if let Some(fx) = fixtures {
+            let fx_s = fx.to_string_lossy().replace('\\', "/");
+            let ref_s = format!("{fx_s}/ref");
+
+            // A estrutura como o RDD a ve, pelo caminho normal.
+            let aberto = rpc_bruto(&hb, "file.open", &format!(r#"{{"path":"{fx_s}/TIPOS.DBF"}}"#))
+                .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+            let h = aberto.as_ref()
+                .and_then(|v| v.pointer("/result/h").and_then(|x| x.as_str()))
+                .unwrap_or("").to_string();
+            let assinatura = |campos: &serde_json::Value| -> String {
+                campos.as_array().map(|a| a.iter().map(|c| format!(
+                    "{}:{}:{}:{}",
+                    c.pointer("/name").and_then(|x| x.as_str()).unwrap_or(""),
+                    c.pointer("/type").and_then(|x| x.as_str()).unwrap_or(""),
+                    c.pointer("/len").and_then(|x| x.as_i64()).unwrap_or(-1),
+                    c.pointer("/dec").and_then(|x| x.as_i64()).unwrap_or(-1),
+                )).collect::<Vec<_>>().join(",")).unwrap_or_default()
+            };
+            let pelo_rdd = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h}","fields":true}}"#))
+                .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                .and_then(|v| v.pointer("/result/fields").cloned())
+                .map(|c| assinatura(&c)).unwrap_or_default();
+            let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h}"}}"#));
+
+            // A mesma estrutura pelo cabecalho, sem abrir nada.
+            let scan = rpc_bruto(&hb, "struct.scan", &format!(r#"{{"dir":"{fx_s}"}}"#))
+                .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+            let arquivo = |v: &Option<serde_json::Value>, nome: &str| -> Option<serde_json::Value> {
+                v.as_ref()?.pointer("/result/files")?.as_array()?
+                    .iter().find(|f| f.pointer("/name").and_then(|n| n.as_str())
+                        .map(|n| n.eq_ignore_ascii_case(nome)).unwrap_or(false)).cloned()
+            };
+            let tipos = arquivo(&scan, "tipos.dbf");
+            let pelo_cabecalho = tipos.as_ref()
+                .and_then(|f| f.pointer("/fields").cloned())
+                .map(|c| assinatura(&c)).unwrap_or_default();
+            t.ok(
+                "SYNC: struct.scan le a estrutura do cabecalho e diz o MESMO que o RDD (file.info)",
+                !pelo_rdd.is_empty() && pelo_rdd == pelo_cabecalho
+                    && tipos.as_ref().and_then(|f| f.pointer("/valid").and_then(|b| b.as_bool())) == Some(true),
+                &format!("rdd={pelo_rdd} | cabecalho={pelo_cabecalho}"),
+            );
+
+            // A pasta de referencia: o C(300), o invalido e o que nao esta la.
+            let rscan = rpc_bruto(&hb, "struct.scan", &format!(r#"{{"dir":"{ref_s}"}}"#))
+                .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+            let larga = arquivo(&rscan, "larga.dbf");
+            let texto_len = larga.as_ref()
+                .and_then(|f| f.pointer("/fields/1/len").and_then(|x| x.as_i64()));
+            let texto_dec = larga.as_ref()
+                .and_then(|f| f.pointer("/fields/1/dec").and_then(|x| x.as_i64()));
+            let lixo = arquivo(&rscan, "lixo.dbf");
+            let lixo_valido = lixo.as_ref().and_then(|f| f.pointer("/valid").and_then(|b| b.as_bool()));
+            let lixo_motivo = lixo.as_ref()
+                .and_then(|f| f.pointer("/reason").and_then(|x| x.as_str())).unwrap_or("").to_string();
+            t.ok(
+                "SYNC: C(300) sai com o tamanho inteiro (byte alto nos decimais), e o .dbf que e texto sai invalido com motivo",
+                texto_len == Some(300) && texto_dec == Some(0)
+                    && lixo_valido == Some(false) && !lixo_motivo.is_empty()
+                    && arquivo(&rscan, "extra.dbf").is_some()
+                    && arquivo(&rscan, "filho.dbf").is_none(),
+                &format!("TEXTO len={texto_len:?} dec={texto_dec:?} | lixo valid={lixo_valido:?} motivo={lixo_motivo} | extra={} filho={}",
+                         arquivo(&rscan, "extra.dbf").is_some(), arquivo(&rscan, "filho.dbf").is_some()),
+            );
+
+            /* EM USO: o arquivo tomado por outro programa entra na lista com
+               `inUse`, e os vizinhos continuam listados. Sumir da lista seria
+               indistinguivel de "esta igual". */
+            {
+                use std::os::windows::fs::OpenOptionsExt;
+                let seguro = std::fs::OpenOptions::new()
+                    .read(true).share_mode(0).open(fx.join("ref").join("pai.dbf"));
+                let tomou = seguro.is_ok();
+                let uscan = rpc_bruto(&hb, "struct.scan", &format!(r#"{{"dir":"{ref_s}"}}"#))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let pai = arquivo(&uscan, "pai.dbf");
+                let em_uso = pai.as_ref().and_then(|f| f.pointer("/inUse").and_then(|b| b.as_bool()));
+                let n = uscan.as_ref().and_then(|v| v.pointer("/result/files")?.as_array().map(|a| a.len())).unwrap_or(0);
+                drop(seguro);
+                t.ok(
+                    "SYNC: arquivo em uso entra na lista como inUse, e os demais continuam listados",
+                    tomou && em_uso == Some(true) && n >= 5,
+                    &format!("tomou {tomou} / inUse {em_uso:?} / listados {n}"),
+                );
+            }
+
+            /*
+             * struct.diff -- cada diagnostico UMA vez, na fixture desenhada
+             * para isso (gen_fixtures.prg, GeraReferencia).
+             */
+            let diff = |by_pos: bool| -> Option<serde_json::Value> {
+                rpc_bruto(&hb, "struct.diff", &format!(
+                    r#"{{"source":{{"dir":"{ref_s}"}},"target":{{"dir":"{fx_s}"}},"byPosition":{by_pos}}}"#))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+            };
+            let d = diff(true);
+            let status_de = |d: &Option<serde_json::Value>, nome: &str| -> String {
+                d.as_ref().and_then(|v| v.pointer("/result/files")?.as_array()?
+                    .iter().find(|f| f.pointer("/name").and_then(|n| n.as_str())
+                        .map(|n| n.eq_ignore_ascii_case(nome)).unwrap_or(false))
+                    .and_then(|f| f.pointer("/status")?.as_str().map(String::from)))
+                    .unwrap_or_default()
+            };
+            let kinds_de = |d: &Option<serde_json::Value>, nome: &str, campo: &str| -> String {
+                d.as_ref().and_then(|v| v.pointer("/result/files")?.as_array()?
+                    .iter().find(|f| f.pointer("/name").and_then(|n| n.as_str())
+                        .map(|n| n.eq_ignore_ascii_case(nome)).unwrap_or(false))
+                    .and_then(|f| f.pointer("/diagnostics")?.as_array()?
+                        .iter().find(|x| x.pointer("/field").and_then(|n| n.as_str()) == Some(campo))
+                        .and_then(|x| x.pointer("/kinds")?.as_array().map(|a|
+                            a.iter().filter_map(|k| k.as_str()).collect::<Vec<_>>().join("+")))))
+                    .unwrap_or_default()
+            };
+            t.ok(
+                "SYNC: struct.diff classifica cada arquivo -- same, differs, onlyInTarget, missingInTarget, invalid",
+                status_de(&d, "pai.dbf") == "same"
+                    && status_de(&d, "tipos.dbf") == "differs"
+                    && status_de(&d, "filho.dbf") == "onlyInTarget"
+                    && status_de(&d, "vazio.dbf") == "onlyInTarget"
+                    && status_de(&d, "extra.dbf") == "missingInTarget"
+                    && status_de(&d, "larga.dbf") == "missingInTarget"
+                    && status_de(&d, "lixo.dbf") == "invalid",
+                &format!("pai={} tipos={} filho={} extra={} lixo={}",
+                         status_de(&d, "pai.dbf"), status_de(&d, "tipos.dbf"), status_de(&d, "filho.dbf"),
+                         status_de(&d, "extra.dbf"), status_de(&d, "lixo.dbf")),
+            );
+            t.ok(
+                "SYNC: os diagnosticos por campo -- len, dec, extra, missing, e position so com byPosition",
+                kinds_de(&d, "tipos.dbf", "TXT") == "len+position"
+                    && kinds_de(&d, "tipos.dbf", "ACENTO") == "position"
+                    && kinds_de(&d, "tipos.dbf", "NUM") == "dec"
+                    && kinds_de(&d, "tipos.dbf", "INT") == "extra"
+                    && kinds_de(&d, "tipos.dbf", "NOVO") == "missing"
+                    && kinds_de(&d, "tipos.dbf", "SUJO").is_empty()
+                    // Sem byPosition, a troca ACENTO/TXT deixa de ser diferenca.
+                    && kinds_de(&diff(false), "tipos.dbf", "TXT") == "len"
+                    && kinds_de(&diff(false), "tipos.dbf", "ACENTO").is_empty(),
+                &format!("TXT={} ACENTO={} NUM={} INT={} NOVO={} | sem posicao: TXT={} ACENTO={}",
+                         kinds_de(&d, "tipos.dbf", "TXT"), kinds_de(&d, "tipos.dbf", "ACENTO"),
+                         kinds_de(&d, "tipos.dbf", "NUM"), kinds_de(&d, "tipos.dbf", "INT"),
+                         kinds_de(&d, "tipos.dbf", "NOVO"),
+                         kinds_de(&diff(false), "tipos.dbf", "TXT"), kinds_de(&diff(false), "tipos.dbf", "ACENTO")),
+            );
+            let mesma = rpc_bruto(&hb, "struct.diff", &format!(
+                r#"{{"source":{{"dir":"{fx_s}"}},"target":{{"dir":"{fx_s}"}}}}"#)).unwrap_or_default();
+            t.ok(
+                "SYNC: a mesma pasta dos dois lados recusa (ERROR_SYNC_SAME_DIR)",
+                mesma.contains("ERROR_SYNC_SAME_DIR"),
+                &mesma[..mesma.len().min(120)],
+            );
+
+            /*
+             * struct.compose -- PURA, entao os casos sao inline. O que se afirma
+             * e a ORDEM, o `from` por nome, as perdas e a recusa sem escolha.
+             */
+            let campo = |n: &str, t: &str, l: i64, d: i64| format!(r#"{{"name":"{n}","type":"{t}","len":{l},"dec":{d}}}"#);
+            let src = format!("[{},{},{}]", campo("ACENTO","C",40,0), campo("TXT","C",60,0), campo("NOVO","C",10,0));
+            let tgt = format!("[{},{},{}]", campo("TXT","C",40,0), campo("ACENTO","C",40,0), campo("INT","N",8,0));
+            let comp = |choices: &str, by_pos: bool| -> String {
+                rpc_bruto(&hb, "struct.compose", &format!(
+                    r#"{{"source":{src},"target":{tgt},"choices":{choices},"byPosition":{by_pos}}}"#))
+                    .unwrap_or_default()
+            };
+            let nomes = |r: &str| -> String {
+                serde_json::from_str::<serde_json::Value>(r).ok()
+                    .and_then(|v| v.pointer("/result/fields")?.as_array().map(|a|
+                        a.iter().map(|f| format!("{}<{}",
+                            f.pointer("/name").and_then(|x| x.as_str()).unwrap_or("?"),
+                            f.pointer("/from").and_then(|x| x.as_str()).unwrap_or("?"))).collect::<Vec<_>>().join(" ")))
+                    .unwrap_or_default()
+            };
+            let c1 = comp(r#"{"TXT":"adopt","INT":"keep"}"#, true);
+            let c2 = comp(r#"{"TXT":"keep","INT":"drop"}"#, false);
+            let c3 = comp(r#"{"TXT":"adopt"}"#, true);
+            let c4 = comp(r#"{"TXT":"drop","INT":"keep"}"#, true);
+            t.ok(
+                "SYNC: struct.compose -- ordem da referencia com byPosition, extra mantido no FIM, NOVO nasce sem `from`",
+                nomes(&c1) == "ACENTO<ACENTO TXT<TXT NOVO< INT<INT"
+                    && c1.contains(r#""len":60"#)
+                    && c1.contains(r#""losses":[]"#)
+                    && c1.contains(r#""changed":true"#),
+                &nomes(&c1),
+            );
+            t.ok(
+                "SYNC: struct.compose -- ordem do alvo sem byPosition, `drop` some e conta como perda, `keep` guarda o C(40)",
+                nomes(&c2) == "TXT<TXT ACENTO<ACENTO NOVO<"
+                    && c2.contains(r#""field":"INT","kind":"drop""#)
+                    && !c2.contains(r#""len":60"#),
+                &format!("{} | {}", nomes(&c2), &c2[..c2.len().min(160)]),
+            );
+            t.ok(
+                "SYNC: struct.compose -- campo divergente sem escolha recusa nomeando o campo; `drop` no que a referencia tem e invalido",
+                c3.contains("ERROR_SYNC_CHOICE_MISSING") && c3.contains(r#""field":"INT""#)
+                    && c4.contains("ERROR_SYNC_CHOICE_INVALID") && c4.contains(r#""field":"TXT""#),
+                &format!("{} | {}", &c3[..c3.len().min(120)], &c4[..c4.len().min(120)]),
+            );
+            // Encolher e mudar tipo sao perdas -- e so quando se ADOTA.
+            let src2 = format!("[{},{}]", campo("A","C",10,0), campo("B","N",8,0));
+            let tgt2 = format!("[{},{}]", campo("A","C",30,0), campo("B","C",8,0));
+            let c5 = rpc_bruto(&hb, "struct.compose", &format!(
+                r#"{{"source":{src2},"target":{tgt2},"choices":{{"A":"adopt","B":"adopt"}}}}"#)).unwrap_or_default();
+            let c6 = rpc_bruto(&hb, "struct.compose", &format!(
+                r#"{{"source":{src2},"target":{tgt2},"choices":{{"A":"keep","B":"keep"}}}}"#)).unwrap_or_default();
+            t.ok(
+                "SYNC: struct.compose -- adotar um campo menor marca `shrink`, tipo diferente marca `type`, manter nao marca nada",
+                c5.contains(r#""field":"A","kind":"shrink""#) && c5.contains(r#""field":"B","kind":"type""#)
+                    && c6.contains(r#""losses":[]"#) && c6.contains(r#""changed":false"#),
+                &format!("{} | {}", &c5[..c5.len().min(160)], &c6[..c6.len().min(120)]),
+            );
+
+            /*
+             * PONTA A PONTA: compose -> struct.modify -> scan de volta.
+             *
+             * E a prova do que o desenho inteiro promete: a estrutura de
+             * destino sai na ORDEM da referencia, e os DADOS chegam pelo NOME
+             * -- TXT continua sendo "primeiro registro" depois de trocar de
+             * lugar com ACENTO. Casar por posicao, como o ERP do autor faz,
+             * poria o ACENTO dentro do TXT em todos os registros, sem erro.
+             */
+            {
+                let alvo = dir_run().join("sync_e2e.dbf");
+                let alvo_dbt = dir_run().join("sync_e2e.dbt");
+                let _ = std::fs::copy(fx.join("TIPOS.DBF"), &alvo);
+                let _ = std::fs::copy(fx.join("TIPOS.DBT"), &alvo_dbt);
+                let alvo_s = alvo.to_string_lossy().replace('\\', "/");
+                let run_s = dir_run().to_string_lossy().replace('\\', "/");
+
+                let h2 = rpc_bruto(&hb, "file.open", &format!(r#"{{"path":"{alvo_s}"}}"#))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/h").and_then(|x| x.as_str()).map(String::from))
+                    .unwrap_or_default();
+                let alvo_campos = rpc_bruto(&hb, "file.info", &format!(r#"{{"h":"{h2}","fields":true}}"#))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/fields").cloned())
+                    .unwrap_or(serde_json::Value::Array(vec![]));
+                let ref_campos = arquivo(&rscan, "tipos.dbf")
+                    .and_then(|f| f.pointer("/fields").cloned())
+                    .unwrap_or(serde_json::Value::Array(vec![]));
+                let composto = rpc_bruto(&hb, "struct.compose", &format!(
+                    r#"{{"source":{ref_campos},"target":{alvo_campos},"choices":{{"TXT":"adopt","NUM":"adopt","INT":"keep"}},"byPosition":true}}"#))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/fields").cloned())
+                    .unwrap_or(serde_json::Value::Array(vec![]));
+                let modificou = rpc_bruto(&hb, "struct.modify", &format!(
+                    r#"{{"h":"{h2}","fields":{composto},"backup":false}}"#)).unwrap_or_default();
+
+                let depois = rpc_bruto(&hb, "struct.scan", &format!(r#"{{"dir":"{run_s}"}}"#))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let novo = arquivo(&depois, "sync_e2e.dbf");
+                let ordem = novo.as_ref().and_then(|f| f.pointer("/fields")?.as_array().map(|a|
+                    a.iter().filter_map(|c| c.pointer("/name").and_then(|x| x.as_str())).collect::<Vec<_>>().join(",")))
+                    .unwrap_or_default();
+                let txt_len = novo.as_ref().and_then(|f| f.pointer("/fields")?.as_array()?
+                    .iter().find(|c| c.pointer("/name").and_then(|x| x.as_str()) == Some("TXT"))
+                    .and_then(|c| c.pointer("/len")?.as_i64()));
+                let reg1 = rpc_bruto(&hb, "data.record", &format!(
+                    r#"{{"h":"{h2}","recno":1,"fields":["TXT","ACENTO","NUM"]}}"#)).unwrap_or_default();
+
+                t.ok(
+                    "SYNC: ponta a ponta -- compose + struct.modify deixam a ordem da referencia, INT no fim, e os DADOS chegam pelo NOME",
+                    modificou.contains("\"ok\":true")
+                        && ordem == "ACENTO,TXT,SUJO,NUM,DATA,LOGICO,OBS,NOVO,INT"
+                        && txt_len == Some(60)
+                        && reg1.contains("primeiro registro") && reg1.contains("JOAO ACUCAR ANGULO")
+                        && reg1.contains("1234.56"),
+                    &format!("modify {} | ordem {ordem} | TXT len {txt_len:?} | reg1 {}",
+                             &modificou[..modificou.len().min(80)], &reg1[..reg1.len().min(160)]),
+                );
+
+                let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h2}"}}"#));
+                let _ = std::fs::remove_file(&alvo);
+                let _ = std::fs::remove_file(&alvo_dbt);
+                // A copia de trabalho do struct.modify, se ficou.
+                for extra in ["sync_e2e.tmp", "sync_e2e.dbf.bak"] {
+                    let _ = std::fs::remove_file(dir_run().join(extra));
+                }
+            }
+
+            /* A preferencia da ordem vai e volta pelo config global -- e volta
+               DESLIGADA por omissao, porque e o que nao inventa diagnostico. */
+            let cfg_pos = |v: &str| -> String {
+                let _ = rpc_bruto(&hb, "config.set", &format!(r#"{{"syncByPosition":{v}}}"#));
+                rpc_bruto(&hb, "config.get", "{}")
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|x| x.pointer("/result/syncByPosition").map(|b| b.to_string()))
+                    .unwrap_or("ausente".into())
+            };
+            let liga = cfg_pos("true");
+            let desliga = cfg_pos("false");
+            t.ok(
+                "SYNC: `syncByPosition` vai e volta no config global",
+                liga == "true" && desliga == "false",
+                &format!("liga {liga} / desliga {desliga}"),
+            );
+
+            /*
+             * CRIAR A TABELA COM OS DADOS e uma COPIA DE ARQUIVO, e nao
+             * criar-e-importar.
+             *
+             * Pedido do autor olhando a NETBANL.DBF -- a tabela de bancos, que
+             * nao existe no cliente e tem 471 linhas de dominio na referencia.
+             * Uma copia fiel leva estrutura, registros, marcas de exclusao e o
+             * byte de codepage de uma vez; criar vazio e importar reabriria as
+             * tres perguntas da importacao para nada.
+             *
+             * O que se afirma e que o arquivo criado e IDENTICO ao da
+             * referencia -- byte a byte, contagem e estrutura --, porque
+             * "copiou" que perde um registro no caminho e pior que nao copiar.
+             */
+            {
+                let destino = dir_run().join("sync_copia.dbf");
+                let _ = std::fs::remove_file(&destino);
+                let origem = fx.join("ref").join("larga.dbf");
+                let copiou = rpc_bruto(&hb, "meta.copyfile", &format!(
+                    r#"{{"source":"{}","dest":"{}","shared":true,"replace":true}}"#,
+                    origem.to_string_lossy().replace('\\', "/"),
+                    destino.to_string_lossy().replace('\\', "/"))).unwrap_or_default();
+
+                let conta = |p: &std::path::Path| -> (i64, i64) {
+                    rpc_bruto(&hb, "workspace.count", &format!(
+                        r#"{{"path":"{}"}}"#, p.to_string_lossy().replace('\\', "/")))
+                        .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                        .map(|v| (v.pointer("/result/records").and_then(|x| x.as_i64()).unwrap_or(-1),
+                                  v.pointer("/result/fields").and_then(|x| x.as_i64()).unwrap_or(-1)))
+                        .unwrap_or((-2, -2))
+                };
+                let a = conta(&origem);
+                let b = conta(&destino);
+                let mesmos_bytes = std::fs::read(&origem).ok() == std::fs::read(&destino).ok();
+
+                t.ok(
+                    "SYNC: criar a tabela COM OS DADOS e copia de arquivo -- registros, campos e bytes identicos",
+                    copiou.contains("\"ok\":true") && a == b && a.0 > 0 && mesmos_bytes,
+                    &format!("origem {a:?} / destino {b:?} / bytes iguais {mesmos_bytes} / {}",
+                             &copiou[..copiou.len().min(90)]),
+                );
+                let _ = std::fs::remove_file(&destino);
+            }
+
+            /*
+             * NOME QUE E PREFIXO DE OUTRO -- o campo parado saindo como movido,
+             * e o movido como parado.
+             *
+             * `AScan( aNomes, cNome )` compara com `=`, que obedece ao SET
+             * EXACT (nunca ligado aqui): procurando "SYNC1" numa lista que
+             * comeca com "SYNC10", ele devolve a posicao do OUTRO campo. A
+             * fixture troca os dois de lugar entre as pastas, entao a resposta
+             * certa e `position` nos DOIS -- com o defeito, SYNC1 vinha limpo.
+             */
+            t.ok(
+                "SYNC: nome que e prefixo de outro nao engana o diagnostico de posicao",
+                status_de(&d, "prefixo.dbf") == "differs"
+                    && kinds_de(&d, "prefixo.dbf", "SYNC1") == "position"
+                    && kinds_de(&d, "prefixo.dbf", "SYNC10") == "position"
+                    // Sem byPosition a ordem nao e diferenca, e o arquivo confere.
+                    && status_de(&diff(false), "prefixo.dbf") == "same",
+                &format!("status={} SYNC1={} SYNC10={} | sem posicao: {}",
+                         status_de(&d, "prefixo.dbf"),
+                         kinds_de(&d, "prefixo.dbf", "SYNC1"),
+                         kinds_de(&d, "prefixo.dbf", "SYNC10"),
+                         status_de(&diff(false), "prefixo.dbf")),
+            );
+
+            /*
+             * AS DUAS LEITURAS DO CABECALHO TEM DE CONCORDAR.
+             *
+             * `workspace.files` (a arvore) e `struct.scan` (esta tela) chamam a
+             * mesma funcao com `lCampos` diferente, e o ramo sem lista contava
+             * campos por `(nHdr-33)/32` -- a conta que o backlink do FoxPro
+             * infla em oito. Um arquivo aparecia com 127 campos na arvore e 119
+             * aqui, na mesma sessao. Nenhuma das duas se denuncia sozinha; so a
+             * comparacao acusa.
+             */
+            {
+                let arv = rpc_bruto(&hb, "workspace.files", &format!(r#"{{"dir":"{fx_s}"}}"#))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let esc = rpc_bruto(&hb, "struct.scan", &format!(r#"{{"dir":"{fx_s}"}}"#))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok());
+                let campos_da_arvore = |v: &serde_json::Value, nome: &str| -> i64 {
+                    v.pointer("/result/files").and_then(|f| f.as_array())
+                        .and_then(|a| a.iter().find(|x| x.get("name").and_then(|n| n.as_str())
+                                                        .map(|n| n.eq_ignore_ascii_case(nome)).unwrap_or(false)))
+                        .and_then(|x| x.get("fields")).and_then(|x| x.as_i64()).unwrap_or(-1)
+                };
+                let campos_do_scan = |v: &serde_json::Value, nome: &str| -> i64 {
+                    v.pointer("/result/files").and_then(|f| f.as_array())
+                        .and_then(|a| a.iter().find(|x| x.get("name").and_then(|n| n.as_str())
+                                                        .map(|n| n.eq_ignore_ascii_case(nome)).unwrap_or(false)))
+                        .and_then(|x| x.get("fields")).and_then(|x| x.as_array())
+                        .map(|a| a.len() as i64).unwrap_or(-1)
+                };
+                let (a, e) = (arv.unwrap_or(serde_json::Value::Null), esc.unwrap_or(serde_json::Value::Null));
+                let iguais: Vec<(String, i64, i64)> = ["tipos.dbf", "pai.dbf", "filho.dbf", "prefixo.dbf"]
+                    .iter().map(|n| (n.to_string(), campos_da_arvore(&a, n), campos_do_scan(&e, n))).collect();
+                t.ok(
+                    "SYNC: a arvore e o scan contam o MESMO numero de campos no mesmo arquivo",
+                    iguais.iter().all(|(_, x, y)| *x == *y && *x > 0),
+                    &format!("{iguais:?}"),
+                );
+            }
+
+            /*
+             * `meta.copyfile` NAO SOBRESCREVE POR OMISSAO, e nao escreve por
+             * cima de arquivo aberto.
+             *
+             * Deixou de ser gancho de diagnostico no dia em que o sincronizar
+             * passou a CRIAR a tabela do cliente por ele. Entre o Comparar e o
+             * Aplicar cabe o ERP criando o arquivo que faltava -- e a copia
+             * passava por cima, sem backup e sem recusa. As duas conferencias
+             * sao as mesmas do `struct.create`, que e o outro ramo do mesmo
+             * botao.
+             */
+            {
+                let destino = dir_run().join("sync_naosobrescreve.dbf");
+                let _ = std::fs::remove_file(&destino);
+                let origem = fx.join("ref").join("larga.dbf");
+                let (o_s, d_s) = (origem.to_string_lossy().replace('\\', "/"),
+                                  destino.to_string_lossy().replace('\\', "/"));
+                let copia = |extra: &str| rpc_bruto(&hb, "meta.copyfile", &format!(
+                    r#"{{"source":"{o_s}","dest":"{d_s}","shared":true{extra}}}"#)).unwrap_or_default();
+
+                let primeira = copia("");
+                let segunda = copia("");
+                let com_replace = copia(r#","replace":true"#);
+
+                // Com o destino ABERTO numa aba, nem com `replace`.
+                let h = rpc_bruto(&hb, "file.open", &format!(r#"{{"path":"{d_s}"}}"#))
+                    .ok().and_then(|r| serde_json::from_str::<serde_json::Value>(&r).ok())
+                    .and_then(|v| v.pointer("/result/h").and_then(|x| x.as_str()).map(String::from));
+                let aberto = copia(r#","replace":true"#);
+                if let Some(h) = &h {
+                    let _ = rpc_bruto(&hb, "file.close", &format!(r#"{{"h":"{h}"}}"#));
+                }
+
+                t.ok(
+                    "SYNC: meta.copyfile recusa destino que ja existe e destino aberto numa aba",
+                    primeira.contains("\"ok\":true")
+                        && segunda.contains("ERROR_FILE_EXISTS")
+                        && com_replace.contains("\"ok\":true")
+                        && aberto.contains("ERROR_FILE_IS_OPEN"),
+                    &format!("1a={} 2a={} replace={} aberto={}",
+                             &primeira[..primeira.len().min(30)], &segunda[..segunda.len().min(60)],
+                             &com_replace[..com_replace.len().min(30)], &aberto[..aberto.len().min(60)]),
+                );
+                let _ = std::fs::remove_file(&destino);
+            }
+
+            let nao_ha = rpc_bruto(&hb, "struct.scan", r#"{"dir":"Z:/nao/existe"}"#).unwrap_or_default();
+            t.ok(
+                "SYNC: pasta inexistente recusa com ERROR_DIR_NOT_FOUND, nao ERR:",
+                nao_ha.contains("ERROR_DIR_NOT_FOUND") && !nao_ha.starts_with("ERR:"),
+                &nao_ha[..nao_ha.len().min(100)],
+            );
+        } else {
+            saida("  --   SYNC: fixtures ausentes (rode tests/fixtures/fixtures.bat), pulando");
+        }
+    }
+
+    /*
      * ---- Somente leitura (RO) ------------------------------------------
      *
      * A garantia e do RDD, nao da tela: a work area e aberta com o 6o
@@ -2877,7 +3351,7 @@ fn selftest() -> i32 {
                 rpc_bruto(
                     &hb,
                     "meta.copyfile",
-                    &format!(r#"{{"source":"{fonte_s}","dest":"{ro_s}","shared":true}}"#),
+                    &format!(r#"{{"source":"{fonte_s}","dest":"{ro_s}","shared":true,"replace":true}}"#),
                 )
                 .map(|r| r.contains("\"ok\":true"))
                 .unwrap_or(false)
@@ -2997,7 +3471,7 @@ fn selftest() -> i32 {
                 let memo = p.with_extension("dbt");
                 if memo.exists() { let _ = std::fs::copy(&memo, &ex_memo); }
                 rpc_bruto(&hb, "meta.copyfile",
-                    &format!(r#"{{"source":"{fonte_s}","dest":"{ex_s}","shared":true}}"#))
+                    &format!(r#"{{"source":"{fonte_s}","dest":"{ex_s}","shared":true,"replace":true}}"#))
                     .map(|r| r.contains("\"ok\":true")).unwrap_or(false)
             }
             None => false,

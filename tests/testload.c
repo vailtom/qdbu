@@ -178,6 +178,63 @@ int main( int argc, char * argv[] )
    printf( "\n-- workspace.files sem name e sem dir = recusa --\n" );
    Try_( "rpc", "{\"id\":\"r-6\",\"method\":\"workspace.files\",\"params\":{}}", 8192 );
 
+   /* SINCRONIZAR ESTRUTURA (docs/20): a estrutura de cada DBF da pasta, lida
+      do CABECALHO e nao de uma work area. O contrato inteiro do recurso passa
+      por aqui -- se a forma mudar, a comparacao e o compose quebram juntos. */
+   printf( "\n-- struct.scan: estrutura de cada DBF da pasta, lida do cabecalho --\n" );
+   Try_( "rpc", "{\"id\":\"r-7\",\"method\":\"struct.scan\",\"params\":{\"dir\":\"tests/fixtures/ref\"}}", 65536 );
+   printf( "\n-- struct.scan em pasta inexistente = recusa, nao ERR: --\n" );
+   Try_( "rpc", "{\"id\":\"r-8\",\"method\":\"struct.scan\",\"params\":{\"dir\":\"Z:/nao/existe\"}}", 8192 );
+
+   /* struct.compose e PURA: recebe as duas estruturas e as escolhas, devolve
+      a estrutura de destino com `from` por nome. Sem escolha para um campo
+      divergente, recusa nomeando o campo -- a DLL nao decide por ninguem. */
+   printf( "\n-- struct.compose: adota TXT, mantem INT no fim, NOVO nasce em branco --\n" );
+   Try_( "rpc", "{\"id\":\"r-9\",\"method\":\"struct.compose\",\"params\":{\"byPosition\":true,"
+                "\"source\":[{\"name\":\"TXT\",\"type\":\"C\",\"len\":60,\"dec\":0},{\"name\":\"NOVO\",\"type\":\"C\",\"len\":10,\"dec\":0}],"
+                "\"target\":[{\"name\":\"INT\",\"type\":\"N\",\"len\":8,\"dec\":0},{\"name\":\"TXT\",\"type\":\"C\",\"len\":40,\"dec\":0}],"
+                "\"choices\":{\"TXT\":\"adopt\",\"INT\":\"keep\"}}}", 16384 );
+   printf( "\n-- struct.compose sem escolha para INT = recusa nomeando o campo --\n" );
+   Try_( "rpc", "{\"id\":\"r-10\",\"method\":\"struct.compose\",\"params\":{"
+                "\"source\":[{\"name\":\"TXT\",\"type\":\"C\",\"len\":60,\"dec\":0}],"
+                "\"target\":[{\"name\":\"INT\",\"type\":\"N\",\"len\":8,\"dec\":0},{\"name\":\"TXT\",\"type\":\"C\",\"len\":40,\"dec\":0}],"
+                "\"choices\":{\"TXT\":\"adopt\"}}}", 8192 );
+
+   /* Escolha INVALIDA tem de dizer INVALIDA. Com o `$` sobre "keep,adopt,drop"
+      a string vazia passava por escolha valida e o campo caia em
+      CHOICE_MISSING -- "decida" para quem tinha decidido. */
+   printf( "\n-- struct.compose com escolha vazia = CHOICE_INVALID, nao CHOICE_MISSING --\n" );
+   Try_( "rpc", "{\"id\":\"r-11\",\"method\":\"struct.compose\",\"params\":{"
+                "\"source\":[{\"name\":\"TXT\",\"type\":\"C\",\"len\":60,\"dec\":0}],"
+                "\"target\":[{\"name\":\"TXT\",\"type\":\"C\",\"len\":40,\"dec\":0}],"
+                "\"choices\":{\"TXT\":\"\"}}}", 8192 );
+
+   /* "Adotar a referencia" num campo que a referencia NAO TEM e remover. */
+   printf( "\n-- struct.compose: adopt num campo extra remove, e nao recusa --\n" );
+   Try_( "rpc", "{\"id\":\"r-12\",\"method\":\"struct.compose\",\"params\":{"
+                "\"source\":[{\"name\":\"TXT\",\"type\":\"C\",\"len\":40,\"dec\":0}],"
+                "\"target\":[{\"name\":\"TXT\",\"type\":\"C\",\"len\":40,\"dec\":0},"
+                "{\"name\":\"NP_SYNC\",\"type\":\"C\",\"len\":8,\"dec\":0}],"
+                "\"choices\":{\"NP_SYNC\":\"adopt\"}}}", 8192 );
+
+   /* NOME QUE E PREFIXO DE OUTRO. `!=` sobre texto obedece ao SET EXACT, que
+      este projeto nunca liga: a troca de CLI_NOME com CLI_NOME2 respondia
+      "nada mudou" e o arquivo era pulado no lote. */
+   printf( "\n-- struct.compose: reordenar CLI_NOME/CLI_NOME2 e MUDANCA (changed:true) --\n" );
+   Try_( "rpc", "{\"id\":\"r-13\",\"method\":\"struct.compose\",\"params\":{\"byPosition\":true,"
+                "\"source\":[{\"name\":\"CLI_NOME\",\"type\":\"C\",\"len\":30,\"dec\":0},"
+                "{\"name\":\"CLI_NOME2\",\"type\":\"C\",\"len\":30,\"dec\":0}],"
+                "\"target\":[{\"name\":\"CLI_NOME2\",\"type\":\"C\",\"len\":30,\"dec\":0},"
+                "{\"name\":\"CLI_NOME\",\"type\":\"C\",\"len\":30,\"dec\":0}],"
+                "\"choices\":{}}}", 8192 );
+
+   /* Parametro malformado e RECUSA DE NEGOCIO. Sem a conferencia de forma, o
+      `h["name"]` sobre um numero subia pelo RECOVER e virava "ERR:" -- que
+      neste projeto significa bug a corrigir. */
+   printf( "\n-- struct.compose com source malformado = recusa, nao ERR: --\n" );
+   Try_( "rpc", "{\"id\":\"r-14\",\"method\":\"struct.compose\",\"params\":{"
+                "\"source\":[1,2],\"target\":[]}}", 8192 );
+
    printf( "\n-- buffer pequeno de proposito (8 bytes), deve realocar --\n" );
    Try_( "Api_Meta_Version", "", 8 );
 

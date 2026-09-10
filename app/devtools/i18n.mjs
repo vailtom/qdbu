@@ -45,6 +45,17 @@ const chaves = new Set(Object.keys(DIC[REF]));
 
 /** Chaves montadas em tempo de execucao; procurar pelo nome inteiro nao acha. */
 const IMPLICITAS = [
+  // Sincronizar estrutura (docs/20): status e diagnostico vem da DLL como
+  // dado (`same`, `differs`, `missing`, `len`...), e a UI monta
+  // `"UI_SYNC_STATUS_" + status`, `"UI_SYNC_KIND_" + kind`,
+  // `"UI_SYNC_LOSS_" + kind`, `"UI_SYNC_SIDE_" + side` e o titulo do seletor
+  // de pasta por lado. Os resultados do lote sao `"UI_SYNC_RESULT_" + tipo`.
+  /^UI_SYNC_STATUS_[A-Za-z]+$/,
+  /^UI_SYNC_KIND_[a-z]+$/,
+  /^UI_SYNC_LOSS_[a-z]+$/,
+  /^UI_SYNC_SIDE_[a-z]+$/,
+  /^UI_SYNC_RESULT_[a-z]+$/,
+  /^UI_SYNC_PICK_TITLE_[A-Z]+$/,
   // Terminal: o rotulo e montado como `"UI_TERM_" + id.toUpperCase()`, e os
   // ids vem do Rust (`TERMINAIS` em main.rs), nao do JS.
   /^UI_TERM_[A-Z0-9]+$/,
@@ -143,10 +154,29 @@ for (const f of fontes) {
   }
 }
 
+// Chaves de recurso DESLIGADO -- existem no dicionario e nao tem chamador DE
+// PROPOSITO. Cada uma com o motivo e a data, para a lista nao virar um deposito
+// de chave esquecida: quem tirar o recurso do ar poe aqui, quem devolver tira
+// daqui.
+//
+// E outra coisa que o IMPLICITAS: la e "viva, montada em runtime"; aqui e
+// "parada, esperando decisao". Misturar as duas faria esta desculpa esconder
+// aquela.
+const PARADAS = {
+  // Os dois botoes "em todos os arquivos" do sincronizar estrutura sairam da
+  // tela em 09/09/2026 (decisao do autor: "achei perigoso" -- eles decidem por
+  // arquivo que ninguem olhou, e `Atualizar` num campo extra REMOVE coluna).
+  // O markup esta comentado no index.html; a traducao fica para a volta ser um
+  // descomentar.
+  UI_SYNC_ALL_FILES: "linha 'em todos os arquivos' comentada no index.html",
+};
+
 const implicita = (k) => IMPLICITAS.some((r) => r.test(k));
+const parada = (k) => Object.prototype.hasOwnProperty.call(PARADAS, k);
 
 const orfas = [...usadas].filter((k) => !chaves.has(k)).sort();
-const mortas = [...chaves].filter((k) => !usadas.has(k) && !implicita(k)).sort();
+const mortas = [...chaves].filter((k) => !usadas.has(k) && !implicita(k) && !parada(k)).sort();
+const paradas = [...chaves].filter((k) => !usadas.has(k) && parada(k)).sort();
 
 const atrasados = {};
 for (const idioma of Object.keys(DIC)) {
@@ -267,6 +297,12 @@ if (rotulos.length) {
 }
 
 console.log("");
+if (paradas.length) {
+  // Nao e defeito: e um lembrete de que ha recurso desligado esperando decisao.
+  console.log(`PARADAS -- desligadas de proposito (${paradas.length}):` +
+              lista(paradas.map((k) => `${k}  <- ${PARADAS[k]}`)));
+}
+
 if (mortas.length) {
   console.log(`MORTAS -- no dicionario, sem chamador (${mortas.length}):${lista(mortas)}`);
   console.log("  (se for montada em runtime, declare o padrao em IMPLICITAS)");

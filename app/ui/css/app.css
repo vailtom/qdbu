@@ -2095,6 +2095,205 @@ dialog .swal2-popup textarea {
 
 /* ------------------------------------------------ T13: operações em massa */
 
+/* ---------------------------------------- sincronizar estrutura (docs/20) */
+/*
+ * Largo de proposito: sao duas listas lado a lado, e a da direita e uma tabela
+ * de cinco colunas. O `max-width: none` e o mesmo do em-massa -- o `dialog`
+ * generico tem so `min-width`.
+ */
+#dlg-sync { width: min(1040px, 96vw); max-width: none; }
+
+.sy-cab { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 8px; }
+.sy-lado { flex: 1 1 0; min-width: 0; margin: 0; }
+.sy-lado > span { display: block; font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+.sy-lado select { width: 100%; }
+/* O botao de trocar fica ENTRE os dois seletores, alinhado a eles: e o unico
+   controle cujo significado vem da posicao. */
+.sy-trocar { flex: none; height: 30px; padding: 0 10px; font-size: 15px; align-self: flex-end; }
+
+.sy-opcoes { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+.sy-opcoes .ms-check { margin: 0; }
+.sy-msg { flex-basis: 100%; font-family: inherit; font-size: 12px; margin: 0; min-height: 0; }
+.sy-msg:empty { display: none; }
+
+.sy-corpo {
+  display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: 10px;
+  /* Altura fixa: a lista da esquerda pode ter 227 itens e a da direita 120
+     linhas; sem teto o dialogo cresceria ate fora da janela. */
+  height: min(56vh, 520px);
+}
+.sy-painel {
+  display: flex; flex-direction: column; min-height: 0;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--bg);
+}
+.sy-painel .ex-cols-topo input[type="search"] {
+  flex: 1 1 auto; min-width: 0; margin: 0; padding: 3px 7px; font-size: 11.5px;
+  background: var(--bg3); color: var(--fg); border: 1px solid var(--line); border-radius: 4px;
+}
+.sy-so-dif { margin-left: auto; font-size: 11px; color: var(--dim); display: flex; align-items: center; gap: 4px; }
+.sy-so-dif input { margin: 0; }
+/* Duas linhas alinhadas: rotulo de alcance, e os dois verbos. A grade e o que
+   deixa "em tipos.dbf:" e "em todos os arquivos:" comecarem na mesma coluna --
+   sem isso os botoes dancam entre uma linha e outra conforme o nome do
+   arquivo, e a comparacao entre os dois alcances fica dificil de ler. */
+.sy-lote {
+  display: grid; grid-template-columns: max-content max-content max-content 1fr;
+  gap: 4px 6px; align-items: center; padding: 6px 9px 0;
+}
+/* A resposta do clique, na mesma linha e um passo a direita dos botoes. O
+   recuo e o que a separa deles sem precisar de outra linha; `1fr` deixa a
+   coluna tomar a sobra, entao a frase nao empurra os botoes. */
+.sy-lote-eco {
+  margin-left: 10px; font-size: 11.5px; color: var(--dim);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sy-lote-eco.ok    { color: var(--ok); }
+.sy-lote-eco.aviso { color: var(--aviso); }
+.sy-lote-onde {
+  font-size: 11.5px; color: var(--dim); justify-self: end;
+  max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sy-lote button { font-size: 11.5px; padding: 3px 9px; }
+.sy-lote-sep { margin-left: 8px; font-size: 10.5px; color: var(--dim2); }
+
+.sy-arquivos { list-style: none; margin: 0; padding: 4px 0; overflow: auto; flex: 1 1 auto; min-height: 0; }
+.sy-arq {
+  display: flex; align-items: center; gap: 7px; padding: 3px 9px;
+  font-size: 12px; cursor: pointer; white-space: nowrap;
+}
+.sy-arq:hover { background: var(--bg3); }
+.sy-arq.sel { background: var(--amber); color: var(--acento-texto); }
+/* A REGRA `dialog input { display:block; width:100% }` DE NOVO -- terceira vez
+   nesta base. Ela foi escrita para os campos de texto do dialogo de conexao;
+   num checkbox faz dele um bloco de largura total e empurra nome e selo para
+   fora da lista, com barra de rolagem horizontal. O DOM estava correto; so o
+   screenshot mostrou. Vale para os radios da tabela pelo mesmo motivo. */
+#dlg-sync .sy-marca, #dlg-sync .sy-radio input, #dlg-sync .sy-so-dif input, #dlg-sync .ms-check input {
+  display: inline-block; width: auto; margin: 0;
+}
+.sy-arq .sy-marca { flex: none; }
+.sy-nome { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; }
+/* O selo diz a OPERACAO, e a cor a acompanha: o que vai mudar em ambar, o que
+   vai nascer em verde, o que nao da para tocar em cinza, o que esta fora do
+   alcance (so no alvo, em uso, invalido) sem cor. */
+.sy-selo {
+  flex: none; font-size: 10px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 9px; border: 1px solid var(--line2); color: var(--dim);
+}
+/*
+ * A COR AQUI TEM SIGNIFICADO, ENTAO E FIXA -- e `--amber` NAO serve.
+ *
+ * `--amber` e o ACENTO DO TEMA: no tema azul do autor o selo "difere" saiu
+ * AZUL, e azul le como "pronto, conferido" -- o oposto do que ele diz. E a
+ * regra que este projeto ja tinha escrita ("cor com significado nao entra no
+ * tema") sendo quebrada por mim. Apanhado pelo autor em 09/09/2026.
+ *
+ * A hierarquia usa COR E FORMA, porque so a cor confunde dois vermelhos:
+ *
+ *   difere        vermelho PREENCHIDO   e o unico que exige decisao e muda dado
+ *   falta no alvo laranja               vai nascer: atencao, sem risco
+ *   em uso/invalido vermelho TRACEJADO  bloqueado, nao "a resolver"
+ *   igual / so no alvo  cinza           nada a fazer
+ *
+ * O preenchido e o unico com peso visual cheio: e o que a pessoa tem de ver
+ * primeiro ao correr os olhos por 227 linhas.
+ */
+.sy-selo.differs {
+  background: var(--erro); border-color: var(--erro); color: #fff; font-weight: 600;
+}
+.sy-selo.missingInTarget { border-color: var(--aviso); color: var(--aviso); }
+.sy-selo.same, .sy-selo.onlyInTarget { color: var(--dim2); }
+.sy-selo.inUse, .sy-selo.invalid { border-style: dashed; border-color: var(--erro); color: var(--erro); }
+/* Na linha selecionada o selo segue o texto do acento -- MENOS o "difere",
+   que e preenchido: apagar a cor dele justamente na linha em foco tiraria o
+   sinal de quem esta olhando para ela. */
+.sy-arq.sel .sy-selo { border-color: var(--acento-texto); color: var(--acento-texto); }
+.sy-arq.sel .sy-selo.differs { background: var(--erro); border-color: var(--erro); color: #fff; }
+.sy-pend {
+  flex: none; min-width: 16px; text-align: center; font-size: 10px; font-weight: 600;
+  padding: 0 4px; border-radius: 8px; background: var(--red); color: #fff;
+}
+
+/* As tres visoes: tiras, e nao um <select>. Sao tres, cabem na linha, e ver
+   as outras duas e o que ensina que existem -- mesma razao das quatro abas do
+   em-massa. */
+.sy-visao { display: inline-flex; gap: 3px; margin-left: 10px; }
+.sy-visao button {
+  background: var(--bg3); border: 1px solid var(--line); color: var(--dim);
+  font: inherit; font-size: 11px; padding: 2px 8px; border-radius: 4px; cursor: pointer;
+}
+.sy-visao button:hover { border-color: var(--line2); color: var(--fg); }
+.sy-visao button.ativa { background: var(--amber); border-color: var(--amber); color: var(--acento-texto); }
+
+/* Copiar os dados junto -- so aparece na tabela que vai nascer. Fica ACIMA da
+   lista de campos porque e a decisao sobre o arquivo inteiro, e as linhas
+   abaixo sao o detalhe dela. */
+.sy-copiar {
+  margin: 0 0 10px; padding: 8px 10px;
+  background: var(--bg3); border: 1px solid var(--line); border-radius: 5px;
+}
+/* `margin-bottom: 0` porque `dialog label { margin-bottom: 12px }` vaza para
+   ca -- e sem aviso embaixo (tabela de referencia vazia) sobrava uma faixa
+   morta dentro da caixa. Mesma familia do `dialog input` que quebrou os
+   checkboxes desta tela; regra de formulario alcancando o que nao e campo
+   do formulario. */
+.sy-copiar label {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 0; font-size: 12.5px; cursor: pointer;
+}
+#dlg-sync .sy-copiar input { display: inline-block; width: auto; margin: 0; }
+.sy-copiar-aviso { margin: 6px 0 0 22px; font-size: 11.5px; color: var(--dim); line-height: 1.45; }
+/* A seta na lista da esquerda: quem leva dados junto se distingue de relance
+   de quem nasce vazia. */
+/* A seta e DECORACAO, e por isso mora aqui e nao no JS: um simbolo posto por
+   `textContent` seria acusado -- com razao -- como literal indo para a tela
+   sem passar pelo dicionario. O que a marca significa esta no `title`, que
+   e traduzido. */
+.sy-comdados { flex: none; color: var(--ok); font-size: 12px; font-weight: 600; }
+.sy-comdados::after { content: "↓"; }
+.sy-arq.sel .sy-comdados { color: var(--acento-texto); }
+
+.sy-campos { overflow: auto; flex: 1 1 auto; min-height: 0; padding: 6px 9px; }
+/* O que confere fica discreto: na visao "todos" ele e o fundo contra o qual as
+   diferencas aparecem, nao o assunto. */
+.sy-tabela tr.confere td { color: var(--dim2); }
+.sy-tabela tr.confere td.mono { color: var(--dim); }
+.sy-nota { margin: 6px 0; color: var(--dim); font-size: 12px; line-height: 1.5; }
+.sy-nota.aviso { color: var(--aviso); }
+.sy-defs { margin: 4px 0 0; padding-left: 18px; font-family: var(--mono); font-size: 12px; color: var(--fg); }
+.sy-tabela { width: 100%; border-collapse: collapse; font-size: 12px; }
+.sy-tabela th {
+  text-align: left; font-weight: 500; color: var(--dim); font-size: 10.5px;
+  letter-spacing: .05em; text-transform: uppercase; padding: 4px 6px; border-bottom: 1px solid var(--line);
+}
+.sy-tabela td { padding: 5px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.sy-tabela td.mono { font-family: var(--mono); white-space: nowrap; }
+/* A POSICAO do campo: mono para os digitos alinharem em coluna, estreita,
+   e discreta -- e uma referencia para achar o campo depois, nao o assunto
+   da linha. Numerada sobre a lista inteira, entao na visao filtrada ela
+   pula: o pulo diz onde o campo esta. */
+.sy-tabela .sy-pos-col {
+  width: 1%; text-align: right; padding-right: 8px;
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  color: var(--dim2); white-space: nowrap;
+}
+/* Campo marcado para remover nao ganha numero: ele nao vai existir no arquivo.
+   O travessao ja diz isso; a cor de erro diz o que vai acontecer com ele. */
+.sy-tabela .sy-pos-col.sai { color: var(--erro); }
+.sy-tabela tr.pendente td:first-child { color: var(--aviso); font-weight: 600; }
+.sy-escolha { white-space: nowrap; }
+.sy-escolha.auto { color: var(--dim2); font-style: italic; white-space: normal; }
+.sy-radio { display: inline-flex; align-items: center; margin-right: 10px; cursor: pointer; }
+.sy-radio input { margin: 0 3px 0 0; }
+.sy-radio.risco { color: var(--red); }
+
+.sy-rodape { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+.sy-resumo { flex: 1 1 auto; font-size: 12px; color: var(--dim); }
+.sy-confirma li { margin-bottom: 4px; }
+.sy-resultado li.ok { color: var(--green); }
+.sy-resultado li.fail { color: var(--red); }
+.sy-resultado li.stop, .sy-resultado li.skip { color: var(--dim); }
+
 #dlg-massa { width: min(680px, 94vw); max-width: none; }
 
 /* As quatro operações como tiras, e não como um <select>: são quatro, cabem na

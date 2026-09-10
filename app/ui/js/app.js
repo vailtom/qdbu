@@ -3500,6 +3500,7 @@ async function gravarConfig() {
 
 $("btn-config").addEventListener("click", abrirConfig);
 $("cfg-cancelar").addEventListener("click", () => $("dlg-config").close());
+$("btn-sync").addEventListener("click", () => window.Sync.open(""));
 
 /*
  * Listar os modelos que o servico oferece, em vez de digitar o nome de cor.
@@ -7320,6 +7321,7 @@ function menuConexao(botao) {
       );
     });
     itemMenu(cx, ">_", "UI_MENU_OPEN_TERMINAL", () => abrirTerminalNaPasta(avulsa.dir));
+    itemMenu(cx, "⇄", "UI_MENU_SYNC", () => window.Sync.open(avulsa.dir));
 
     cx.appendChild(elemento("div", "mc-linha"));
 
@@ -7365,6 +7367,13 @@ function menuConexao(botao) {
     const n = (arquivosDe.get(nome) || []).length;
     hint(nome + ": " + T("UI_FILES_COUNT", { n: n }));
   });
+
+  /* SINCRONIZAR ESTRUTURA entra pela conexao com o ALVO ja escolhido: e esta
+     pasta que vai mudar, e quem clicou aqui ja disse qual. Pelo botao da barra
+     escolhem-se os dois lados. Some quando a pasta nao existe, como o resto. */
+  if (con.exists) {
+    itemMenu(cx, "⇄", "UI_MENU_SYNC", () => window.Sync.open(con.dir));
+  }
 
   /*
    * CRIAR ENTRA PELA CONEXÃO, e não por um "Novo arquivo" no cabeçalho.

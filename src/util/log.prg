@@ -64,6 +64,14 @@
  * dado SAI da maquina. E exatamente o que trilha de auditoria existe para
  * responder.
  *
+ * `meta.copyfile` entrou em 09/09/2026, quando DEIXOU DE SER GANCHO. Ele nasceu
+ * para exercitar a copia de bytes e medir o tamanho de bloco -- nada que
+ * merecesse log. Com o sincronizar estrutura (docs/20) ele virou o caminho de
+ * producao que CRIA uma tabela no cliente ja com os dados da pasta de
+ * referencia: bytes novos no disco de quem opera, vindos de outra base. E o
+ * inverso do `export.*` -- ali o dado sai da maquina, aqui ele ENTRA -- e a
+ * pergunta que o log responde e a mesma.
+ *
  * A LISTA CRESCEU COM T10/T13/T14, como este comentario mandava -- com atraso:
  * as sete nasceram nas telas e nenhuma entrou aqui no commit em que nasceram.
  * Corrigido em 03/09/2026, a pedido do autor. Se uma operacao ALTERA o arquivo,
@@ -78,7 +86,7 @@ STATIC FUNCTION MetodosRegistrados()
    RETURN { ;
       "index.create", ;
       "export.csv", "export.json", "export.xlsx", "export.dbf", ;
-      "backup.run", ;
+      "backup.run", "meta.copyfile", ;
       "struct.create", "struct.modify", ;
       "bulk.pack", "bulk.zap", ;
       "mass.replace", "mass.delete", "mass.recall", "mass.appendfrom", ;

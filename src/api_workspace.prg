@@ -377,7 +377,7 @@ FUNCTION Api_Workspace_Remove( hP )
  */
 FUNCTION Api_Workspace_Files( hP )
 
-   LOCAL cDir := ConnectionDir( hP )
+   LOCAL cDir := ResolveFolder( hP )
    LOCAL aDir, aItem, aRet := {}
    LOCAL cName, cPath, hHdr
 
@@ -450,88 +450,16 @@ FUNCTION Api_Workspace_Count( hP )
                 "recordSize" => hHdr[ "recordSize" ] } )
 
 /*
- * Le e VALIDA o cabecalho de 32 bytes de um DBF.
+ * Le e VALIDA o cabecalho de 32 bytes de um DBF -- sem abrir work area.
  *
- * Validar nao e paranoia: na pasta de homologacao J:/bases/base01 ha 7
- * arquivos com extensao .DBF que sao INI/texto (assinatura 0x5B = '['). Confiar
- * cegamente nos bytes 4..7 faria a arvore anunciar "1.380.013.134 registros".
- *
- * Quatro checagens:
- *   1. assinatura conhecida do formato xBase
- *   2. tamanho do cabecalho e do registro plausiveis
- *   3. cabecalho + registros*tamanho bate com o tamanho real do arquivo
- *   4. le 32 bytes de verdade
+ * A leitura mora em `src/util/dbfhdr.prg` (`ReadDbfHeader`), compartilhada
+ * com o `struct.scan`, que precisa tambem dos descritores de campo. Ficou aqui
+ * como nome porque e assim que a arvore e o `workspace.count` a chamam, e
+ * porque so eles a chamam sem os campos: 32 bytes por campo vezes 227
+ * arquivos a cada repintura seria trabalho jogado fora.
  */
 STATIC FUNCTION ReadHeader( cArq )
-
-   LOCAL hFile, cBuf
-   LOCAL nSig, nRegs, nHdr, nRec, nTam, nEsperado
-   /*
-    * `inUse` E DIFERENTE DE `valid`, e a arvore precisa dos dois.
-    *
-    * O `Directory()` acabou de listar o arquivo, entao ele existe. Se o
-    * `hb_vfOpen` falha aqui, e acesso negado -- quase sempre outro programa
-    * com ele aberto em exclusivo, que e o normal numa pasta de cliente com o
-    * ERP rodando. Sem esta distincao a arvore marcava o arquivo como INVALIDO
-    * e o riscava, dizendo "nao e um DBF" sobre um DBF perfeito. Uma pasta
-    * inteira aparecia condenada enquanto o sistema do cliente estava aberto.
-    */
-   LOCAL hRet := { "valid" => .F., "inUse" => .F., "reason" => "", "records" => 0, ;
-                   "fields" => 0, "recordSize" => 0, "memo" => .F. }
-
-   hFile := hb_vfOpen( cArq, FO_READ + FO_SHARED )
-
-   IF hFile == NIL
-      hRet[ "inUse" ] := .T.
-      hRet[ "reason" ] := "nao foi possivel abrir para leitura"
-      RETURN hRet
-   ENDIF
-
-   cBuf := Space( 32 )
-
-   IF hb_vfRead( hFile, @cBuf, 32 ) < 32
-      hb_vfClose( hFile )
-      hRet[ "reason" ] := "menor que 32 bytes"
-      RETURN hRet
-   ENDIF
-
-   hb_vfClose( hFile )
-
-   nSig  := hb_BPeek( cBuf, 1 )
-   nRegs := hb_BPeek( cBuf, 5 ) + hb_BPeek( cBuf, 6 ) * 256 + ;
-            hb_BPeek( cBuf, 7 ) * 65536 + hb_BPeek( cBuf, 8 ) * 16777216
-   nHdr  := hb_BPeek( cBuf, 9 )  + hb_BPeek( cBuf, 10 ) * 256
-   nRec  := hb_BPeek( cBuf, 11 ) + hb_BPeek( cBuf, 12 ) * 256
-
-   IF AScan( { 0x02, 0x03, 0x04, 0x05, 0x30, 0x31, 0x32, 0x43, 0x63, ;
-               0x83, 0x8B, 0x8E, 0xB3, 0xCB, 0xE5, 0xF5, 0xFB }, nSig ) == 0
-      hRet[ "reason" ] := "assinatura 0x" + hb_NumToHex( nSig, 2 ) + " nao e xBase"
-      RETURN hRet
-   ENDIF
-
-   IF nHdr < 33 .OR. nRec < 1
-      hRet[ "reason" ] := "cabecalho ou registro com tamanho impossivel"
-      RETURN hRet
-   ENDIF
-
-   nTam := hb_FSize( cArq )
-   nEsperado := nHdr + nRegs * nRec
-
-   /* tolera lixo no fim (EOF marker, padding), mas nao ordem de grandeza errada */
-   IF nRegs > 0 .AND. Abs( nEsperado - nTam ) > nRec + 8
-      hRet[ "reason" ] := "cabecalho anuncia " + hb_ntos( nRegs ) + ;
-                          " registros (" + hb_ntos( nEsperado ) + " bytes), " + ;
-                          "mas o arquivo tem " + hb_ntos( nTam )
-      RETURN hRet
-   ENDIF
-
-   hRet[ "valid" ]    := .T.
-   hRet[ "records" ] := nRegs
-   hRet[ "fields" ]    := Max( 0, Int( ( nHdr - 33 ) / 32 ) )
-   hRet[ "recordSize" ] := nRec
-   hRet[ "memo" ]      := hb_bitAnd( nSig, 0x80 ) != 0
-
-   RETURN hRet
+   RETURN ReadDbfHeader( cArq, .F. )
 
 /* ---------------------------------------------------------------- apoio */
 
@@ -554,8 +482,14 @@ STATIC FUNCTION Par( hP, cChave )
 
    RETURN iif( HB_ISSTRING( hP[ cChave ] ), hP[ cChave ], "" )
 
-/* Resolves the folder: accepts "name" (registered connection) or "dir". */
-STATIC FUNCTION ConnectionDir( hP )
+/*
+ * Resolves the folder: accepts "name" (registered connection) or "dir".
+ *
+ * PUBLICA porque `struct.scan` (api_struct.prg) resolve a pasta pelo mesmo
+ * par de chaves -- uma copia divergiria no dia em que a regra de `dir` cru
+ * mudasse, e foi a regra de `dir` cru que fez a pasta avulsa existir.
+ */
+FUNCTION ResolveFolder( hP )
 
    LOCAL cName := Par( hP, "name" )
    LOCAL cDir  := Par( hP, "dir" )
